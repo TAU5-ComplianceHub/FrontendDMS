@@ -118,6 +118,11 @@ const ManageRiskDefinitions = ({ closePopup, onClose, onUpdate, userID, setTermD
         onClose();
     };
 
+    const approverOptions = usersList.filter(u => {
+        const id = String(u?.id ?? u?._id ?? u ?? "");
+        return id && id !== String(userID);
+    });
+
     return (
         <div className="manDefs-popup-container">
             <div className="manDefs-popup-box">
@@ -150,7 +155,7 @@ const ManageRiskDefinitions = ({ closePopup, onClose, onUpdate, userID, setTermD
                                 placeholder="Select Approver"
                             >
                                 <option value="">Select Approver</option>
-                                {usersList.map((value, index) => (
+                                {approverOptions.map((value, index) => (
                                     <option key={index} value={value.id || value._id || value}>
                                         {value.username || value.label || value}
                                     </option>

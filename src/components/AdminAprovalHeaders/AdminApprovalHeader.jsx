@@ -122,6 +122,7 @@ const AdminApprovalHeader = ({ filters, onFilterChange }) => {
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {/* 👇 Clear button resets the filter */}
@@ -156,6 +157,7 @@ const AdminApprovalHeader = ({ filters, onFilterChange }) => {
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
                                     rangeHover={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {filters.suggestedTo && (
@@ -220,6 +222,7 @@ const AdminApprovalHeader = ({ filters, onFilterChange }) => {
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {filters.reviewFrom && (
@@ -251,6 +254,7 @@ const AdminApprovalHeader = ({ filters, onFilterChange }) => {
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
                                 {filters.reviewTo && (
                                     <button

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
 import '../IBRATable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlusCircle, faTableColumns, faTimes, faGripVertical, faInfoCircle, faArrowUpRightFromSquare, faCheck, faDownload, faArrowsUpDown, faCopy, faFilter, faCalendarDays, faArrowsLeftRight, faRotateLeft, faArrowsRotate, faFlag } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlusCircle, faTableColumns, faTimes, faGripVertical, faInfoCircle, faArrowUpRightFromSquare, faCheck, faDownload, faArrowsUpDown, faCopy, faFilter, faCalendarDays, faArrowsLeftRight, faRotateLeft, faArrowsRotate, faFlag, faX } from '@fortawesome/free-solid-svg-icons';
 import BLRAPopup from "./BLRAPopup";
 import IbraNote from "../RiskInfo/IbraNote";
 import UnwantedEvent from "../RiskInfo/UnwantedEvent";
@@ -39,6 +39,85 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     const [showFlagged, setShowFlagged] = useState(false);
 
     const excludedColumns = ["UE", "S", "H", "E", "C", "LR", "M", "R", "actions", "responsible", "dueDate"];
+    const initialOrderRef = useRef(new Map());
+
+    const BLANK = "(Blanks)";
+
+    // Return an array of "filter values" for a cell.
+    // - Scalars => ["value"] or ["(Blanks)"]
+    // - hazards/controls arrays => ["T1","T2", ...] or ["(Blanks)"]
+    const getFilterValuesForCell = (row, colId) => {
+        const raw = row?.[colId];
+
+        if (colId === "hazards") {
+            const vals = (raw || [])
+                .map(h => (typeof h === "string" ? h : h?.hazard))
+                .map(v => (v == null ? "" : String(v).trim()))
+                .filter(Boolean);
+            return vals.length ? vals : [BLANK];
+        }
+
+        if (colId === "controls") {
+            const vals = (raw || [])
+                .map(c => (typeof c === "string" ? c : c?.control))
+                .map(v => (v == null ? "" : String(v).trim()))
+                .filter(Boolean);
+            return vals.length ? vals : [BLANK];
+        }
+
+        // ✅ NEW: Risk Treatment children live in row.possible
+        if (colId === "actions") {
+            const vals = (row?.possible || [])
+                .flatMap(p => (p?.actions || []).map(a => a?.action))
+                .map(v => (v == null ? "" : String(v).trim()))
+                .filter(Boolean);
+            return vals.length ? vals : [BLANK];
+        }
+
+        if (colId === "responsible") {
+            const vals = (row?.possible || [])
+                .flatMap(p => (p?.responsible || []).map(r => r?.person))
+                .map(v => (v == null ? "" : String(v).trim()))
+                .filter(Boolean);
+            return vals.length ? vals : [BLANK];
+        }
+
+        if (colId === "dueDate") {
+            const vals = (row?.possible || [])
+                .flatMap(p => (p?.dueDate || []).map(d => d?.date))
+                .map(v => (v == null ? "" : String(v).trim()))
+                .filter(Boolean);
+            return vals.length ? vals : [BLANK];
+        }
+
+        const s = raw == null ? "" : String(raw).trim();
+        return s === "" ? [BLANK] : [s];
+    };
+
+    const excelPopupRef = useRef(null);
+
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT; // click same sort again -> reset
+            }
+            return { colId, direction };
+        });
+    };
+
     const [filters, setFilters] = useState({});
 
     const [filterPopup, setFilterPopup] = useState({
@@ -131,63 +210,36 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         action: { min: 50, max: 50 },
     };
 
+    useEffect(() => {
+        // Only set once (or reset when rows are replaced with a different dataset)
+        if (!rows || rows.length === 0) return;
+
+        // If already captured for these rows, do nothing
+        const map = initialOrderRef.current;
+        const hasAll = rows.every(r => map.has(r.id));
+        if (hasAll) return;
+
+        // Capture order for any new rows
+        rows.forEach((r, idx) => {
+            if (!map.has(r.id)) map.set(r.id, map.size + idx);
+        });
+    }, [rows]);
+
     const filteredRows = useMemo(() => {
-        return rows.filter(row => {
-            // 1) Apply existing text filters
-            for (const [col, value] of Object.entries(filters)) {
-                const text = value.toLowerCase();
-                if (col === 'main') {
-                    if (!row.main.toLowerCase().includes(text)) return false;
-                } else if (col === 'sub') {
-                    if (!row.sub.toLowerCase().includes(text)) return false;
-                } else if (col === 'owner') {
-                    if (!row.owner.toLowerCase().includes(text)) return false;
-                } else if (col === 'odds') {
-                    if (!row.odds.toLowerCase().includes(text)) return false;
-                } else if (col === 'riskRank') {
-                    if (!row.riskRank.toLowerCase().includes(text)) return false;
-                } else if (col === 'hazards') {
-                    if (!row.hazards?.some(h => {
-                        if (typeof h === 'string') return h.toLowerCase().includes(text);
-                        if (typeof h === 'object' && h.hazard) return h.hazard.toLowerCase().includes(text);
-                        return false;
-                    })) return false;
-                } else if (col === 'controls') {
-                    if (!row.controls?.some(c => {
-                        if (typeof c === 'string') return c.toLowerCase().includes(text);
-                        if (typeof c === 'object' && c.control) return c.control.toLowerCase().includes(text);
-                        return false;
-                    })) return false;
-                } else if (['S', 'H', 'E', 'C', 'LR', 'M', 'R'].includes(col)) {
-                    if (!String(row[col]).toLowerCase().includes(text)) return false;
-                } else if (col === 'source') {
-                    if (!row.source.toLowerCase().includes(text)) return false;
-                } else if (col === 'material') {
-                    if (!row.material.toLowerCase().includes(text)) return false;
-                } else if (col === 'priority') {
-                    if (!row.priority.toLowerCase().includes(text)) return false;
-                } else if (col === 'UE') {
-                    if (!row.UE.toLowerCase().includes(text)) return false;
-                } else if (col === 'additional') {
-                    if (!row.additional.toLowerCase().includes(text)) return false;
-                } else if (col === 'maxConsequence') {
-                    if (!row.maxConsequence.toLowerCase().includes(text)) return false;
-                } else if (col === 'actions') {
-                    if (!row.possible?.some(p =>
-                        p.actions?.some(a => a.action?.toLowerCase().includes(text))
-                    )) return false;
-                } else if (col === 'responsible') {
-                    if (!row.possible?.some(p =>
-                        p.responsible?.some(r => r.person?.toLowerCase().includes(text))
-                    )) return false;
-                } else if (col === 'dueDate') {
-                    if (!row.possible?.some(p =>
-                        p.dueDate?.some(d => d.date?.toLowerCase().includes(text))
-                    )) return false;
-                }
+        let current = [...rows];
+
+        // 1) Apply filtering (supports array columns via getFilterValuesForCell)
+        current = current.filter(row => {
+            for (const [colId, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+                if (!selected || !Array.isArray(selected)) continue;
+
+                const cellValues = getFilterValuesForCell(row, colId); // array
+                const match = cellValues.some(v => selected.includes(v));
+                if (!match) return false;
             }
 
-            // 2) If "show flagged only" is on, require at least one flag
+            // 2) flagged-only filter (unchanged)
             if (showFlagged) {
                 const isFlagged =
                     !!row.mainFlag ||
@@ -207,7 +259,72 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
 
             return true;
         });
-    }, [rows, filters, showFlagged]);
+
+        // 3) Sorting
+        const colId = sortConfig?.colId || "nr";
+
+        // ✅ When sorting is "reset" back to nr, restore original load order
+        if (colId === "nr") {
+            const order = initialOrderRef.current; // Map<rowId, originalIndex>
+            current.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+            current.forEach((r, i) => (r.nr = i + 1));
+            return current; // <-- DO NOT renumber here, to preserve original order
+        }
+
+        // Otherwise, apply active sort direction
+        const dir = sortConfig?.direction === "desc" ? -1 : 1;
+
+        const normalize = (v) => {
+            const s = v == null ? "" : String(v).trim();
+            return s === "" ? BLANK : s;
+        };
+
+        const tryNumber = (v) => {
+            const s = String(v).replace(/,/g, "").trim();
+            if (!/^[-+]?\d*(?:\.\d+)?$/.test(s) || s === "" || s === "." || s === "+" || s === "-") return null;
+            const n = Number(s);
+            return Number.isFinite(n) ? n : null;
+        };
+
+        const tryDate = (v) => {
+            // keep your dueDate sorting logic
+            if (colId !== "dueDate") return null;
+            const t = Date.parse(String(v));
+            return Number.isFinite(t) ? t : null;
+        };
+
+        current.sort((a, b) => {
+            const av = normalize(a?.[colId]);
+            const bv = normalize(b?.[colId]);
+
+            // blanks last
+            const aBlank = av === BLANK;
+            const bBlank = bv === BLANK;
+            if (aBlank && !bBlank) return 1;
+            if (!aBlank && bBlank) return -1;
+
+            // numeric if both numeric
+            const an = tryNumber(av);
+            const bn = tryNumber(bv);
+            if (an != null && bn != null) return (an - bn) * dir;
+
+            // date sort for dueDate
+            const ad = tryDate(av);
+            const bd = tryDate(bv);
+            if (ad != null && bd != null) return (ad - bd) * dir;
+
+            // string sort
+            return String(av).localeCompare(String(bv), undefined, {
+                sensitivity: "base",
+                numeric: true,
+            }) * dir;
+        });
+
+        // Optional: only renumber when sorting by a column other than "nr"
+        current.forEach((r, i) => (r.nr = i + 1));
+
+        return current;
+    }, [rows, filters, showFlagged, sortConfig]);
 
     function openFilterPopup(colId, e) {
         if (colId === "nr" || colId === "action") return;
@@ -390,6 +507,22 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         ...(readOnly ? [] : [{ id: "action", title: "Action", className: "ibraCent ibraAct", icon: null }]),
     ];
 
+    const updatePossibleBlock = (rowId, possibleId, updater) => {
+        const newRows = rows.map(row => {
+            if (row.id !== rowId) return row;
+
+            return {
+                ...row,
+                possible: (row.possible || []).map(p => {
+                    if (p.id !== possibleId) return p;
+                    return updater(p);
+                })
+            };
+        });
+
+        updateRow(newRows);
+    };
+
     const handleSaveWithRiskTreatment = (rowId, updatedData) => {
         // 1) Push the new data up to the parent
         updateRows(rowId, updatedData);
@@ -492,40 +625,31 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     };
 
     const handleResponsibleChange = (rowId, possibleId, responsibleId, value) => {
-        const { rowIndex, possibleIndex } = findRowAndPossibleById(rowId, possibleId);
-        if (rowIndex === -1 || possibleIndex === -1) return;
-
-        const newRows = [...rows];
-        const block = newRows[rowIndex].possible[possibleIndex];
-        const responsible = block.responsible.find(r => r.id === responsibleId);
-        if (responsible) {
-            responsible.person = value;
-            updateRow(newRows);
-        }
+        updatePossibleBlock(rowId, possibleId, (p) => ({
+            ...p,
+            responsible: (p.responsible || []).map(r =>
+                r.id === responsibleId ? { ...r, person: value } : r
+            )
+        }));
     };
 
     const handleActionChange = (rowId, possibleId, actionId, value) => {
-        const { rowIndex, possibleIndex } = findRowAndPossibleById(rowId, possibleId);
-        if (rowIndex === -1 || possibleIndex === -1) return;
-
-        const newRows = [...rows];
-        const block = newRows[rowIndex].possible[possibleIndex];
-        const action = block.actions.find(a => a.id === actionId);
-        if (action) action.action = value;
-
-        updateRow(newRows);
+        updatePossibleBlock(rowId, possibleId, (p) => ({
+            ...p,
+            actions: (p.actions || []).map(a =>
+                a.id === actionId ? { ...a, action: value } : a
+            )
+        }));
     };
 
+
     const handleDueDateChange = (rowId, possibleId, dueDateId, value) => {
-        const { rowIndex, possibleIndex } = findRowAndPossibleById(rowId, possibleId);
-        if (rowIndex === -1 || possibleIndex === -1) return;
-
-        const newRows = [...rows];
-        const block = newRows[rowIndex].possible[possibleIndex];
-        const due = block.dueDate.find(d => d.id === dueDateId);
-        if (due) due.date = value;
-
-        updateRow(newRows);
+        updatePossibleBlock(rowId, possibleId, (p) => ({
+            ...p,
+            dueDate: (p.dueDate || []).map(d =>
+                d.id === dueDateId ? { ...d, date: value } : d
+            )
+        }));
     };
 
     useEffect(() => {
@@ -641,11 +765,13 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     useEffect(() => {
         const popupSelector = '.floating-dropdown';
         const columnSelector = '.column-selector-popup';
+        const excelSelector = '.excel-filter-popup';
 
         const handleClickOutside = (e) => {
             const outside =
                 !e.target.closest(popupSelector) &&
                 !e.target.closest(columnSelector) &&
+                !e.target.closest(excelSelector) &&
                 !e.target.closest('input');
             if (outside) {
                 closeDropdowns();
@@ -653,7 +779,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         };
 
         const handleScroll = (e) => {
-            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(columnSelector);
+            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(columnSelector) || e.target.closest(excelSelector);
             if (!isInsidePopup) {
                 closeDropdowns();
             }
@@ -665,6 +791,8 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
 
         const closeDropdowns = () => {
             setShowColumnSelector(null);
+            setShowExeDropdown(null);
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
         };
 
         document.addEventListener('mousedown', handleClickOutside);
@@ -676,7 +804,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
             document.removeEventListener('touchstart', handleClickOutside);
             window.removeEventListener('scroll', handleScroll, true);
         };
-    }, [showColumnSelector]);
+    }, [showColumnSelector, showExeDropdown, excelFilter]);
 
     useEffect(() => {
         if (!filterPopup.visible) return;
@@ -1058,6 +1186,74 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         setShowFlagged(prev => !prev);
     };
 
+    function openExcelFilterPopup(colId, e) {
+        if (colId === "nr" || colId === "action") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Build unique values across ALL rows for this column
+        const values = Array.from(
+            new Set(
+                (rows || []).flatMap(r => getFilterValuesForCell(r, colId))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        // if bottom off-screen -> place above header if possible
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
+        }
+
+        // keep within left/right bounds
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
+
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
     return (
         <div className="input-row-risk-ibra">
             <div className={`ibra-box ${error ? "error-create" : ""}`} ref={ibraBoxRef}>
@@ -1093,7 +1289,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 >
                     <FontAwesomeIcon icon={faArrowsRotate} className="icon-um-search" />
                 </button>)}
-                
+
                 <button
                     className={`${resetBtnClass}`}
                     title={showFlagged ? "Show All Items" : "Show Flagged Items Only"}
@@ -1187,7 +1383,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                         return (
                                             <th
                                                 key={idx}
-                                                className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? 'jra-filter-active' : ''}`}
+                                                className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
                                                 rowSpan={2}
                                                 onClick={e => {
                                                     // If resizing just happened → ignore this click
@@ -1196,7 +1392,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                     // Only open when clicking the TH itself
                                                     if (e.target !== e.currentTarget) return;
 
-                                                    openFilterPopup(columnId, e);
+                                                    openExcelFilterPopup(columnId, e);
                                                 }}
                                                 style={{
                                                     position: 'relative',
@@ -1206,9 +1402,14 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                 }}
                                             >
                                                 <span style={{ width: "100%" }}>{col.title}</span>
-                                                {filters[columnId] && (
-                                                    <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                                )}
+                                                {columnId !== "nr" &&
+                                                    (filters[columnId] || sortConfig.colId === columnId) && (
+                                                        <FontAwesomeIcon
+                                                            icon={faFilter}
+                                                            className="active-filter-icon"
+                                                            style={{ marginLeft: "10px" }}
+                                                        />
+                                                    )}
 
                                                 {/* Resize handle */}
                                                 {!readOnly && (
@@ -1236,7 +1437,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                         return (
                                             <th
                                                 key={idx}
-                                                className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? 'jra-filter-active' : ''}`}
+                                                className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
                                                 onClick={e => {
                                                     // If resizing just happened → ignore this click
                                                     if (isResizingRef.current) return;
@@ -1244,7 +1445,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                     // Only open when clicking the TH itself
                                                     if (e.target !== e.currentTarget) return;
 
-                                                    openFilterPopup(columnId, e);
+                                                    openExcelFilterPopup(columnId, e);
                                                 }}
                                                 style={{
                                                     position: 'relative',
@@ -1254,7 +1455,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                 }}
                                             >
                                                 {col.icon ? <FontAwesomeIcon icon={col.icon} /> : col.title}
-                                                {filters[columnId] && (
+                                                {(filters[columnId] || sortConfig.colId === col.id) && (
                                                     <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
                                                 )}
 
@@ -1338,7 +1539,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                                             placeholder="Insert Required Action"
                                                                             onChange={e => handleActionChange(row.id, p.id, a.id, e.target.value)}
                                                                             className="ibra-textarea-PI"
-                                                                            style={{ fontSize: "14px" }}
+                                                                            style={{ fontSize: "14px", resize: "none" }}
                                                                             readOnly={readOnly}
                                                                         />
                                                                         {!readOnly && (<>
@@ -1409,11 +1610,42 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                                         containerStyle={{ width: "100%" }}
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        style={{
+                                                                            backgroundColor: "#fff",
+                                                                            borderColor: "#BFBFBF",
+                                                                            color: "#002060",         // text color
+                                                                            "--rmdp-primary-color": "#002060",  // ← highlight color (selected day, header accent)
+                                                                            "--rmdp-secondary-color": "#E6ECFF", // ← hover background color
+                                                                            pointerEvents: "auto",
+                                                                            zIndex: "5"
+                                                                        }}
+                                                                        onOpenPickNewDate={false}
                                                                     />
-                                                                    <FontAwesomeIcon
-                                                                        icon={faCalendarDays}
-                                                                        className="date-input-calendar-icon"
-                                                                    />
+                                                                    {!!d.date ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            className="due-date-icon-btn"
+                                                                            title="Clear date"
+                                                                            disabled={readOnly}
+                                                                            onMouseDown={(e) => {
+                                                                                // prevent the datepicker opening and prevent wrapper drag
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                            }}
+                                                                            onClick={(e) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                if (readOnly) return;
+                                                                                handleDueDateChange(row.id, p.id, d.id, "");
+                                                                            }}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faX} />
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span className="due-date-icon-span" aria-hidden="true">
+                                                                            <FontAwesomeIcon icon={faCalendarDays} />
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             ))}
                                                         </td>
@@ -1677,47 +1909,137 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                     ))}
                 </ul>
             )}
-            {filterPopup.visible && (
+            {excelFilter.open && (
                 <div
-                    className="jra-filter-popup"
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
                     style={{
-                        position: 'fixed',
-                        top: filterPopup.pos.top,
-                        left: filterPopup.pos.left - 10,
-                        width: filterPopup.pos.width,
-                        zIndex: 10000
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
                     }}
                 >
-                    <input
-                        className="jra-filter-input"
-                        type="text"
-                        placeholder="Filter..."
-                        defaultValue={filters[filterPopup.column] || ''}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') applyFilter(e.target.value);
-                        }}
-                    />
-                    <div className="jra-filter-buttons">
+                    <div className="excel-filter-sortbar">
                         <button
                             type="button"
-                            className="jra-filter-apply"
-                            onClick={() => {
-                                const val = document
-                                    .querySelector('.jra-filter-input')
-                                    .value;
-                                applyFilter(val);
-                            }}
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
                         >
-                            Apply
+                            Sort A to Z
                         </button>
+
                         <button
                             type="button"
-                            className="jra-filter-clear"
-                            onClick={clearFilter}
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
                         >
-                            Clear
+                            Sort Z to A
                         </button>
                     </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+
+                        const allValues = Array.from(
+                            new Set((rows || []).flatMap(r => getFilterValuesForCell(r, colId)))
+                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const allVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                            setFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = { selected: selectedArr };
+                                return next;
+                            });
+
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             )}
         </div>

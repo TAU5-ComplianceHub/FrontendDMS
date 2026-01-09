@@ -12,6 +12,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
     const [selectedRowData, setSelectedRowData] = useState();
     const ceaSavedWidthRef = useRef(null);
     const caeBoxRef = useRef(null);
+    const excelPopupRef = useRef(null);
     const ceaTableWrapperRef = useRef(null);
     const [armedDragRow, setArmedDragRow] = useState(null);
     const [draggedRowIndex, setDraggedRowIndex] = useState(null);
@@ -24,6 +25,20 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         column: null,
         pos: { top: 0, left: 0, width: 0 }
     });
+    const [showBlankFilterPopup, setShowBlankFilterPopup] = useState(false);
+    const [blankFilterColumns, setBlankFilterColumns] = useState([]); // array of column ids
+
+    const BLANK = "(Blanks)";
+
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set()); // values checked in popup
+    const [sortConfig, setSortConfig] = useState([{ colId: "control", direction: "asc" }]);
 
     const availableColumns = [
         { id: "nr", title: "Nr", className: "control-analysis-nr", icon: null },
@@ -44,6 +59,8 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         ...(!readOnly
             ? [{ id: "actions", title: "Action", className: "control-analysis-nr", icon: null }] : []),
     ];
+
+    const DEFAULT_SORT = { colId: "control", direction: "asc" };
 
     const initialColumnWidths = {
         nr: 55,
@@ -396,34 +413,87 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
         // 1. Apply Filtering
         currentRows = currentRows.filter(row => {
-            for (const [col, value] of Object.entries(filters)) {
-                const text = value.toLowerCase();
-                if (col === 'control' || col === 'critical' || col === 'act' ||
-                    col === 'activation' || col === 'hierarchy' || col === 'cons' ||
-                    col === 'notes' || col === 'dueDate' || col === 'responsible' || col === 'action') {
-                    if (!String(row[col] ?? '').toLowerCase().includes(text)) return false;
-                } else if (col === 'quality' || col === 'cer') {
-                    if (!String(row[col]).toLowerCase().includes(text)) return false;
-                }
+            for (const [col, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+
+                // if no filter, allow all
+                if (!selected || !Array.isArray(selected)) continue;
+
+                const raw = row?.[col];
+                const s = raw == null ? "" : String(raw).trim();
+                const v = s === "" ? BLANK : s;
+
+                if (!selected.includes(v)) return false;
             }
             return true;
         });
 
-        // 2. Apply Sorting (from existing getSortedRows logic)
-        currentRows.sort((a, b) => {
-            const controlA = a.control.toUpperCase();
-            const controlB = b.control.toUpperCase();
+        // 1b. Apply BLANK filters (OR logic across selected columns)
+        if (blankFilterColumns.length > 0) {
+            currentRows = currentRows.filter(row => {
+                return blankFilterColumns.some(colId => {
+                    const v = row?.[colId];
 
-            if (controlA < controlB) return -1;
-            if (controlA > controlB) return 1;
-            return 0;
+                    // treat null/undefined/""/"   " as blank
+                    if (v == null) return true;
+                    if (typeof v === "string") return v.trim() === "";
+                    return String(v).trim() === "";
+                });
+            });
+        }
+
+        // 2. Apply Sorting (from existing getSortedRows logic)
+        // 2. Apply Sorting (Excel-like A→Z / Z→A from the popup)
+        const colId = sortConfig?.colId || "control";
+        const dir = sortConfig?.direction === "desc" ? -1 : 1;
+
+        const normalize = (raw) => {
+            const s = raw == null ? "" : String(raw).trim();
+            return s === "" ? BLANK : s;
+        };
+
+        const tryNumber = (v) => {
+            const s = String(v).replace(/,/g, "").trim();
+            if (!/^[-+]?\d*(?:\.\d+)?$/.test(s) || s === "" || s === "." || s === "+" || s === "-") return null;
+            const n = Number(s);
+            return Number.isFinite(n) ? n : null;
+        };
+
+        const tryDate = (v) => {
+            if (colId !== "dueDate") return null;
+            const t = Date.parse(String(v));
+            return Number.isFinite(t) ? t : null;
+        };
+
+        currentRows.sort((a, b) => {
+            const av = normalize(a?.[colId]);
+            const bv = normalize(b?.[colId]);
+
+            // Put blanks at the bottom
+            const aBlank = av === BLANK;
+            const bBlank = bv === BLANK;
+            if (aBlank && !bBlank) return 1;
+            if (!aBlank && bBlank) return -1;
+
+            // Numeric sort if both numeric
+            const an = tryNumber(av);
+            const bn = tryNumber(bv);
+            if (an != null && bn != null) return (an - bn) * dir;
+
+            // Date sort for dueDate
+            const ad = tryDate(av);
+            const bd = tryDate(bv);
+            if (ad != null && bd != null) return (ad - bd) * dir;
+
+            // String sort
+            return String(av).localeCompare(String(bv), undefined, { sensitivity: "base", numeric: true }) * dir;
         });
 
         // 3. Renumber
         currentRows.forEach((r, i) => (r.nr = i + 1));
 
         return currentRows;
-    }, [rows, filters]);
+    }, [rows, filters, blankFilterColumns, sortConfig]);
 
     const getSortedRows = () => {
         // Create a copy of the rows array
@@ -452,17 +522,37 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
     // Calculate the rows to display: always the sorted version
     const rowsToDisplay = filteredRows;
 
-    function openFilterPopup(colId, e) {
-        if (colId === "nr" || colId === "actions") return; // Don't filter Nr or Action columns
-        const rect = e.target.closest('th').getBoundingClientRect(); // Find the <th> to get correct position
-        setFilterPopup({
-            visible: true,
-            column: colId,
+    function openExcelFilterPopup(colId, e) {
+        if (colId === "nr" || colId === "actions") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Build unique values from CURRENT rows (or filteredRows if you prefer Excel-like behavior)
+        const values = Array.from(
+            new Set((rows || []).map(r => {
+                const raw = r?.[colId];
+                const s = raw == null ? "" : String(raw).trim();
+                return s === "" ? BLANK : s;
+            }))
+        ).sort((a, b) => a.localeCompare(b));
+
+        // Preselect: if filter exists use it, else select all
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect, // ✅ add this
             pos: {
                 top: rect.bottom + window.scrollY + 4,
                 left: rect.left + window.scrollX,
-                width: rect.width
-            }
+                width: Math.max(220, rect.width),
+            },
         });
     }
 
@@ -488,11 +578,13 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
     useEffect(() => {
         const popupSelector = '.column-selector-popup';
         const filterSelector = '.jra-filter-popup';
+        const excelSelector = '.excel-filter-popup';
 
         const handleClickOutside = (e) => {
             const outside =
                 !e.target.closest(popupSelector) &&
                 !e.target.closest(filterSelector) &&
+                !e.target.closest(excelSelector) &&
                 !e.target.closest('input');
             if (outside) {
                 closeDropdowns();
@@ -500,7 +592,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         };
 
         const handleScroll = (e) => {
-            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(filterSelector);
+            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(filterSelector) || e.target.closest(excelSelector);
             if (!isInsidePopup) {
                 closeDropdowns();
             }
@@ -511,7 +603,9 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         };
 
         const closeDropdowns = () => {
+            setShowBlankFilterPopup(null);
             setShowColumnSelector(null);
+            setExcelFilter({ open: false, colId: null, pos: { top: 0, left: 0, width: 0 } });
             setFilterPopup({ visible: false, column: null, pos: {} });
         };
 
@@ -524,7 +618,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
             document.removeEventListener('touchstart', handleClickOutside);
             window.removeEventListener('scroll', handleScroll, true);
         };
-    }, [showColumnSelector, filterPopup.visible]);
+    }, [showColumnSelector, filterPopup.visible, excelFilter.open]);
 
     const startColumnResize = (e, columnId) => {
         e.preventDefault();
@@ -724,6 +818,86 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         hasFittedOnce &&
         (!isUsingDefaultColumns || !isTableFitted);
 
+    const blankFilterableColumns = useMemo(() => {
+        // show all “real” columns except nr/actions
+        return availableColumns
+            .map(c => c.id)
+            .filter(id => id !== "nr" && id !== "actions");
+    }, [availableColumns]);
+
+    const toggleBlankFilterColumn = (colId) => {
+        setBlankFilterColumns(prev =>
+            prev.includes(colId) ? prev.filter(id => id !== colId) : [...prev, colId]
+        );
+    };
+
+    const setAllBlankFilterColumns = (selectAll) => {
+        setBlankFilterColumns(selectAll ? blankFilterableColumns : []);
+    };
+
+    const areAllBlankFiltersSelected = () =>
+        blankFilterColumns.length > 0 &&
+        blankFilterableColumns.every(id => blankFilterColumns.includes(id));
+
+    const clearBlankFilters = () => setBlankFilterColumns([]);
+
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        if (!excelPopupRef.current) return;
+
+        const popupEl = excelPopupRef.current;
+        const popupRect = popupEl.getBoundingClientRect();
+
+        const margin = 8;
+        const viewportH = window.innerHeight;
+        const viewportW = window.innerWidth;
+
+        // Current fixed position (relative to viewport) is popupRect
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        // If bottom goes off-screen -> flip upwards using the anchor
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const popupHeight = popupRect.height;
+                const desiredTop = anchor.top + window.scrollY - popupHeight - 4; // above header
+                newTop = Math.max(window.scrollY + margin, desiredTop);
+            }
+        }
+
+        // If right goes off-screen -> shift left
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+
+        // If left goes off-screen -> shift right
+        if (popupRect.left < margin) {
+            newLeft = margin;
+        }
+
+        // Only update if changed
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft },
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            // If clicking the SAME active sort → reset to default
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT;
+            }
+
+            // Otherwise apply the requested sort
+            return { colId, direction };
+        });
+    };
+
     return (
         <div className="input-row-risk-create">
             <div className={`input-box-attendance ${error ? "error-create" : ""}`} ref={caeBoxRef}>
@@ -825,6 +999,83 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                         <FontAwesomeIcon icon={faArrowsRotate} className="icon-um-search" />
                     </button>
                 )}
+
+                {false && (<button
+                    className={showFitButton ? showResetButton ? "top-right-button-ibra5" : "top-right-button-ibra4" : showResetButton ? "top-right-button-ibra4" : "top-right-button-ibra3"}
+                    title="Filter blanks"
+                    onClick={() => setShowBlankFilterPopup(!showBlankFilterPopup)}
+                >
+                    <FontAwesomeIcon icon={faFilter} className="icon-um-search" />
+                </button>)}
+
+                {showBlankFilterPopup && (
+                    <div className="column-selector-popup">
+                        <div className="column-selector-header">
+                            <h4>Filter Blanks</h4>
+                            <button
+                                className="close-popup-btn"
+                                onClick={() => setShowBlankFilterPopup(false)}
+                            >
+                                <FontAwesomeIcon icon={faTimes} />
+                            </button>
+                        </div>
+
+                        <div className="column-selector-content">
+                            <p className="column-selector-note">
+                                Show rows where <b>any</b> selected column is blank.
+                            </p>
+
+                            <div className="select-all-container">
+                                <label className="select-all-checkbox">
+                                    <input
+                                        type="checkbox"
+                                        checked={areAllBlankFiltersSelected()}
+                                        onChange={(e) => setAllBlankFilterColumns(e.target.checked)}
+                                    />
+                                    <span className="select-all-text">Select All</span>
+                                </label>
+                            </div>
+
+                            <div className="column-checkbox-container">
+                                {availableColumns
+                                    .filter(c => c.id !== "nr" && c.id !== "actions")
+                                    .map(column => (
+                                        <div className="column-checkbox-item" key={column.id}>
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={blankFilterColumns.includes(column.id)}
+                                                    onChange={() => toggleBlankFilterColumn(column.id)}
+                                                />
+                                                <span>{column.title}</span>
+                                            </label>
+                                        </div>
+                                    ))}
+                            </div>
+
+                            <div className="column-selector-footer">
+                                <p>{blankFilterColumns.length} columns selected</p>
+                                <div style={{ display: "flex", gap: "10px" }}>
+                                    <button
+                                        className="apply-columns-btn"
+                                        type="button"
+                                        onClick={() => setShowBlankFilterPopup(false)}
+                                    >
+                                        Apply
+                                    </button>
+                                    <button
+                                        className="apply-columns-btn"
+                                        type="button"
+                                        onClick={clearBlankFilters}
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="table-wrapper-cea" ref={ceaTableWrapperRef}>
                     <table className="table-borders-ibra-table" >
                         <thead className="control-analysis-head">
@@ -838,11 +1089,11 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                         return (
                                             <th
                                                 key={idx}
-                                                className={`${col.className} ${isFilterable && filters[columnId] ? 'jra-filter-active' : ''}`}
+                                                className={`${col.className} ${isFilterable && (filters[columnId] || sortConfig.colId === columnId) ? '' : ''}`}
                                                 rowSpan={1}
                                                 onClick={
                                                     isFilterable && !isResizingRef.current
-                                                        ? (e) => openFilterPopup(columnId, e)
+                                                        ? (e) => openExcelFilterPopup(columnId, e)
                                                         : undefined
                                                 }
                                                 style={{
@@ -860,7 +1111,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                                     }}
                                                 >
                                                     {col.icon ? <FontAwesomeIcon icon={col.icon} /> : col.title}
-                                                    {isFilterable && filters[columnId] && (
+                                                    {isFilterable && (filters[columnId] || sortConfig.colId === columnId) && (
                                                         <FontAwesomeIcon
                                                             icon={faFilter}
                                                             className="active-filter-icon"
@@ -989,53 +1240,168 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                     </table>
                 </div>
 
-                {filterPopup.visible && (
+                {excelFilter.open && (
                     <div
-                        className="jra-filter-popup" // Reuse the IBRA class
+                        ref={excelPopupRef}
+                        className="excel-filter-popup"
                         style={{
-                            position: 'fixed',
-                            top: filterPopup.pos.top,
-                            left: filterPopup.pos.left - 10,
-                            width: filterPopup.pos.width,
+                            position: "fixed",
+                            top: excelFilter.pos.top,
+                            left: excelFilter.pos.left,
+                            width: excelFilter.pos.width,
                             zIndex: 10000
                         }}
                     >
-                        <input
-                            className="jra-filter-input"
-                            type="text"
-                            placeholder="Filter..."
-                            defaultValue={filters[filterPopup.column] || ''}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter') applyFilter(e.target.value);
-                            }}
-                        />
-                        <div className="jra-filter-buttons">
+                        <div className="excel-filter-sortbar">
                             <button
                                 type="button"
-                                className="jra-filter-apply"
-                                onClick={() => {
-                                    // Note: This grabs the input value from the document, which is fine for a one-off popup.
-                                    const val = document
-                                        .querySelector('.jra-filter-input')
-                                        .value;
-                                    applyFilter(val);
-                                }}
+                                className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                    sortConfig.direction === "asc" ? "active" : ""
+                                    }`}
+                                onClick={() => toggleSort(excelFilter.colId, "asc")}
                             >
-                                Apply
+                                Sort A to Z
                             </button>
+
                             <button
                                 type="button"
-                                className="jra-filter-clear"
-                                onClick={clearFilter}
+                                className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                    sortConfig.direction === "desc" ? "active" : ""
+                                    }`}
+                                onClick={() => toggleSort(excelFilter.colId, "desc")}
                             >
-                                Clear
+                                Sort Z to A
                             </button>
                         </div>
+
+                        <input
+                            type="text"
+                            className="excel-filter-search"
+                            placeholder="Search"
+                            value={excelSearch}
+                            onChange={(e) => setExcelSearch(e.target.value)}
+                        />
+
+                        {(() => {
+                            const colId = excelFilter.colId;
+                            const allValues = Array.from(
+                                new Set((rows || []).map(r => {
+                                    const raw = r?.[colId];
+                                    const s = raw == null ? "" : String(raw).trim();
+                                    return s === "" ? BLANK : s;
+                                }))
+                            ).sort((a, b) => a.localeCompare(b));
+
+                            const visibleValues = allValues.filter(v =>
+                                v.toLowerCase().includes(excelSearch.toLowerCase())
+                            );
+
+                            const allVisibleSelected =
+                                visibleValues.length > 0 &&
+                                visibleValues.every(v => excelSelected.has(v));
+
+                            const toggleValue = (v) => {
+                                setExcelSelected(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(v)) next.delete(v);
+                                    else next.add(v);
+                                    return next;
+                                });
+                            };
+
+                            const toggleAllVisible = (checked) => {
+                                setExcelSelected(prev => {
+                                    const next = new Set(prev);
+                                    visibleValues.forEach(v => {
+                                        if (checked) next.add(v);
+                                        else next.delete(v);
+                                    });
+                                    return next;
+                                });
+                            };
+
+                            const onOk = () => {
+                                const selectedArr = Array.from(excelSelected);
+
+                                // If everything is selected, treat as "no filter"
+                                const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                                setFilters(prev => {
+                                    const next = { ...prev };
+                                    if (isAllSelected) {
+                                        delete next[colId];
+                                    } else {
+                                        next[colId] = { selected: selectedArr };
+                                    }
+                                    return next;
+                                });
+
+                                setExcelFilter({ open: false, colId: null, pos: { top: 0, left: 0, width: 0 } });
+                            };
+
+                            const onCancel = () => {
+                                setExcelFilter({ open: false, colId: null, pos: { top: 0, left: 0, width: 0 } });
+                            };
+
+                            return (
+                                <>
+                                    <div className="excel-filter-list">
+                                        <label className="excel-filter-item">
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={allVisibleSelected}
+                                                    onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">(Select All)</span>
+                                        </label>
+
+                                        {visibleValues.map(v => (
+                                            <label className="excel-filter-item">
+                                                <span className="excel-filter-checkbox">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="checkbox-excel-attend"
+                                                        checked={excelSelected.has(v)}
+                                                        onChange={() => toggleValue(v)}
+                                                    />
+                                                </span>
+                                                <span className="excel-filter-text">{v}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+
+                                    <div className="excel-filter-actions">
+                                        <button
+                                            type="button"
+                                            className="excel-filter-btn"
+                                            onClick={onOk}
+                                        >
+                                            Apply
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            className="excel-filter-btn-cnc"
+                                            onClick={onCancel}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 )}
             </div>
             {deletePopupVisible && (<DeleteControlPopup controlName={controlToDelete.controlName} deleteControl={confirmDeleteControl} closeModal={closeDeletePopup} />)}
-            {insertPopup && (<ControlEAPopup data={selectedRowData} onClose={closeInsertPopup} onSave={updateRows} onControlRename={onControlRename} readOnly={readOnly} />)}
+            {insertPopup && (<ControlEAPopup data={selectedRowData} onClose={closeInsertPopup} onSave={updateRows} onControlRename={onControlRename} readOnly={readOnly}
+                existingControlNames={(rows || [])
+                    .map(r => String(r.control ?? "").trim())
+                    .filter(Boolean)}
+            />)}
         </div>
     );
 };

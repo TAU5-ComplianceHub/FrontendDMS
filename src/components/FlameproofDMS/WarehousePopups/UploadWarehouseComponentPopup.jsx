@@ -595,6 +595,7 @@ const UploadWarehouseComponentPopup = ({ onClose, uploadSite }) => {
                                             hideIcon={false}
                                             inputClass='ump-input-select-new-3'
                                             maxDate={todayString()}
+                                            onOpenPickNewDate={false}
                                         />
                                         <FontAwesomeIcon
                                             icon={faCalendarDays}
@@ -621,6 +622,7 @@ const UploadWarehouseComponentPopup = ({ onClose, uploadSite }) => {
                                             hideIcon={false}
                                             inputClass='ump-input-select-new-3'
                                             minDate={issueDate}
+                                            onOpenPickNewDate={false}
                                         />
                                         <FontAwesomeIcon
                                             icon={faCalendarDays}

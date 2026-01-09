@@ -507,6 +507,7 @@ const VisitorManagementPage = () => {
                                                                         inputClass="filter-input-date"
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        onOpenPickNewDate={false}
                                                                     />
 
                                                                     {colFilters[cfg.fromKey] && (
@@ -542,6 +543,7 @@ const VisitorManagementPage = () => {
                                                                         inputClass="filter-input-date"
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        onOpenPickNewDate={false}
                                                                     />
 
                                                                     {colFilters[cfg.toKey] && (

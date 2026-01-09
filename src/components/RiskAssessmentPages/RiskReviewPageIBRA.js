@@ -1685,6 +1685,7 @@ const RiskReviewPageIBRA = () => {
                                         }))
                                     }}
                                     style={{ width: "100%" }}
+                                    onOpenPickNewDate={false}
                                 />
                                 <FontAwesomeIcon
                                     icon={faCalendarDays}

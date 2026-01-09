@@ -518,6 +518,7 @@ const VisitorManagementDevices = () => {
                                                                         inputClass="filter-input-date"
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        onOpenPickNewDate={false}
                                                                     />
 
                                                                     {/* 👇 Clear button resets the filter */}
@@ -554,6 +555,7 @@ const VisitorManagementDevices = () => {
                                                                         inputClass="filter-input-date"
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        onOpenPickNewDate={false}
                                                                     />
 
                                                                     {/* 👇 Clear button resets the filter */}

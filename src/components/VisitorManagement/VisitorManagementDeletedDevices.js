@@ -520,6 +520,7 @@ const VisitorManagementDeletedDevices = () => {
                                                                         inputClass="filter-input-date"
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        onOpenPickNewDate={false}
                                                                     />
 
                                                                     {/* 👇 Clear button resets the filter */}
@@ -556,6 +557,7 @@ const VisitorManagementDeletedDevices = () => {
                                                                         inputClass="filter-input-date"
                                                                         placeholder="YYYY-MM-DD"
                                                                         hideIcon={false}
+                                                                        onOpenPickNewDate={false}
                                                                     />
 
                                                                     {/* 👇 Clear button resets the filter */}

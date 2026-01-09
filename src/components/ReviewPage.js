@@ -54,6 +54,7 @@ const ReviewPage = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
     const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
     const [draftNote, setDraftNote] = useState(null);
+    const procedureTableRef = useRef(null);
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -807,6 +808,21 @@ const ReviewPage = () => {
 
         updatedChangeTable.push(newChange);
 
+
+        let flowchartImages = [];
+
+        // 1. Fetch Images from Flowchart
+        if (procedureTableRef.current) {
+            console.log("Generating flowchart images for backend...");
+            try {
+                flowchartImages = await procedureTableRef.current.getFlowchartImages();
+                console.log(`Captured ${flowchartImages.length} images.`);
+            } catch (err) {
+                console.error("Error capturing flowchart images:", err);
+                // Optional: Decide if you want to stop or continue without images
+            }
+        }
+
         setFormData((prevFormData) => {
             const updatedFormData = {
                 ...prevFormData,
@@ -824,7 +840,8 @@ const ReviewPage = () => {
                 usedMaterials,
                 formData: updatedFormData, // Use the updated formData here
                 userID,
-                azureFN
+                azureFN,
+                flowchartImages: flowchartImages
             };
 
             sendUpdatedFormData(dataToStore, documentName);
@@ -886,8 +903,22 @@ const ReviewPage = () => {
     };
 
     const handleGenerateProcedureDocument = async (generateData) => {
+        let flowchartImages = [];
+
+        // 1. Fetch Images from Flowchart
+        if (procedureTableRef.current) {
+            console.log("Generating flowchart images for backend...");
+            try {
+                flowchartImages = await procedureTableRef.current.getFlowchartImages();
+                console.log(`Captured ${flowchartImages.length} images.`);
+            } catch (err) {
+                console.error("Error capturing flowchart images:", err);
+                // Optional: Decide if you want to stop or continue without images
+            }
+        }
         const dataToStore = {
             formData: generateData,
+            flowchartImages: flowchartImages
         };
 
         const documentName = (formData.title) + ' ' + formData.documentType;
@@ -1038,7 +1069,7 @@ const ReviewPage = () => {
                     <MaterialsTable formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
                     <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
                     <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
-                    <ProcedureTable procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
+                    <ProcedureTable ref={procedureTableRef} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
                     <ChapterTable formData={formData} setFormData={setFormData} />
                     <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
                     <SupportingDocumentTable formData={formData} setFormData={setFormData} />

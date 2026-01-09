@@ -60,6 +60,7 @@ const CreatePageStandards = () => {
   const [showWorkflow, setShowWorkflow] = useState(null);
   const [readOnly, setReadOnly] = useState(false);
   const [lockUser, setLockUser] = useState(null);
+  const scrollBoxRef = useRef(null);
 
   const openWorkflow = () => {
     setShowWorkflow(true);
@@ -504,6 +505,10 @@ const CreatePageStandards = () => {
       loadedIDRef.current = loadID;
 
       setReadOnly(readOnly);
+
+      requestAnimationFrame(() => {
+        scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      });
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -1260,7 +1265,7 @@ const CreatePageStandards = () => {
 
         </div>
 
-        <div className={`scrollable-box`}>
+        <div className={`scrollable-box`} ref={scrollBoxRef}>
           {readOnly && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
               The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}

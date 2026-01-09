@@ -73,6 +73,20 @@
     field-sizing: content;
 }
 
+.cea-popup-page-textarea-imp {
+    width: calc(100% - 22px);
+    min-height: 14px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    color: #555;
+    font-size: 14px;
+    resize: vertical;
+    font-family: Arial, sans-serif;
+    field-sizing: content;
+}
+
 .cea-popup-page-component-wrapper label {
     font-weight: 500;
     color: #444;

@@ -103,6 +103,11 @@ const RiskAbbreviationPopup = ({ isOpen, onClose, userID, setAbbrData, onAdd }) 
 
     if (!isOpen) return null;
 
+    const approverOptions = usersList.filter(u => {
+        const id = String(u?.id ?? u?._id ?? u ?? "");
+        return id && id !== String(userID);
+    });
+
     return (
         <div className="abbr-popup-overlay">
             <div className="abbr-popup-content">
@@ -150,7 +155,7 @@ const RiskAbbreviationPopup = ({ isOpen, onClose, userID, setAbbrData, onAdd }) 
                                 placeholder="Select Approver"
                             >
                                 <option value="">Select Approver</option>
-                                {usersList.map((value, index) => (
+                                {approverOptions.map((value, index) => (
                                     <option key={index} value={value.id || value._id || value}>
                                         {value.username || value.label || value}
                                     </option>

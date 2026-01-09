@@ -528,7 +528,7 @@ const OnlineCourseCreationPage = () => {
       if (!response.ok) throw new Error("Failed to generate document");
       const data = await response.json();
 
-      toast.success(`Induction Successfully Approved.`, {
+      toast.success(`Course Successfully Approved.`, {
         closeButton: true,
         autoClose: 800, // 1.5 seconds
         style: {
@@ -841,7 +841,7 @@ const OnlineCourseCreationPage = () => {
 
       if (!response.ok) throw new Error("Failed to generate document");
 
-      toast.success(`Induction Published`, {
+      toast.success(`Course Published`, {
         closeButton: true,
         autoClose: 800, // 1.5 seconds
         style: {
@@ -1014,11 +1014,11 @@ const OnlineCourseCreationPage = () => {
                 </div>
 
                 {!inApproval && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
-                  <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} title="Publish" />
+                  <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
                 </div>)}
 
                 {inApproval && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
-                  <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} title="Approve Draft" />
+                  <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
                 </div>)}
               </>
             )}

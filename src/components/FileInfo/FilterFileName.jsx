@@ -144,6 +144,7 @@ const FilterFileName = ({ access, canIn, filters, onFilterChange, trashed }) => 
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {/* 👇 Clear button resets the filter */}
@@ -179,6 +180,7 @@ const FilterFileName = ({ access, canIn, filters, onFilterChange, trashed }) => 
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {/* 👇 Clear button resets the filter */}
@@ -258,6 +260,7 @@ const FilterFileName = ({ access, canIn, filters, onFilterChange, trashed }) => 
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {/* 👇 Clear button resets the filter */}
@@ -293,6 +296,7 @@ const FilterFileName = ({ access, canIn, filters, onFilterChange, trashed }) => 
                                     inputClass="filter-input-date"
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                 />
 
                                 {/* 👇 Clear button resets the filter */}

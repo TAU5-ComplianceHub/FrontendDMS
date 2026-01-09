@@ -71,6 +71,7 @@ const RiskManagementPageJRA = () => {
     const [showWorkflow, setShowWorkflow] = useState(null);
     const [readOnly, setReadOnly] = useState(false);
     const [lockUser, setLockUser] = useState(null);
+    const scrollableRef = useRef(null);
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -413,6 +414,10 @@ const RiskManagementPageJRA = () => {
             loadedIDRef.current = loadID;
 
             setReadOnly(readOnly);
+
+            requestAnimationFrame(() => {
+                scrollableRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+            });
         } catch (error) {
             console.error('Error loading data:', error);
         }
@@ -1345,7 +1350,7 @@ const RiskManagementPageJRA = () => {
                     <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
                 </div>
 
-                <div className={`scrollable-box-risk-create`}>
+                <div className={`scrollable-box-risk-create`} ref={scrollableRef}>
                     {readOnly && (<div className="input-row">
                         <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
                             The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
@@ -1410,6 +1415,7 @@ const RiskManagementPageJRA = () => {
                                         }))
                                     }}
                                     style={{ width: "100%" }}
+                                    onOpenPickNewDate={false}
                                 />
                                 <FontAwesomeIcon
                                     icon={faCalendarDays}

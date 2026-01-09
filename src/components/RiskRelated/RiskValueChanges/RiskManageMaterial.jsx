@@ -112,6 +112,11 @@ const RiskManageMaterial = ({ closePopup, onClose, onUpdate, setMatData, onAdd, 
         onClose();
     };
 
+    const approverOptions = usersList.filter(u => {
+        const id = String(u?.id ?? u?._id ?? u ?? "");
+        return id && id !== String(userID);
+    });
+
     return (
         <div className="manMat-popup-container">
             <div className="manMat-popup-box">
@@ -148,7 +153,7 @@ const RiskManageMaterial = ({ closePopup, onClose, onUpdate, setMatData, onAdd, 
                             placeholder="Select Approver"
                         >
                             <option value="">Select Approver</option>
-                            {usersList.map((value, index) => (
+                            {approverOptions.map((value, index) => (
                                 <option key={index} value={value.id || value._id || value}>
                                     {value.username || value.label || value}
                                 </option>

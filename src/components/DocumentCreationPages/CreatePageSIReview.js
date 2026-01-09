@@ -1070,6 +1070,7 @@ const CreatePageSIReview = () => {
                       placeholder="YYYY-MM-DD"
                       hideIcon={false}
                       style={{ width: "100%" }}
+                      onOpenPickNewDate={false}
                     />
                     <FontAwesomeIcon
                       icon={faCalendarDays}
@@ -1093,6 +1094,7 @@ const CreatePageSIReview = () => {
                       hideIcon={false}
                       style={{ width: "100%" }}
                       minDate={formData.dateConducted}
+                      onOpenPickNewDate={false}
                     />
 
                     {!formData.expiryDate && (

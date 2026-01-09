@@ -1040,6 +1040,7 @@ const FlameProofDigitalWarehouse = () => {
                                   inputClass="filter-input-date"
                                   placeholder="YYYY-MM-DD"
                                   hideIcon={false}
+                                  onOpenPickNewDate={false}
                                 />
                                 {colFilters.issueFrom && (
                                   <button
@@ -1065,6 +1066,7 @@ const FlameProofDigitalWarehouse = () => {
                                   inputClass="filter-input-date"
                                   placeholder="YYYY-MM-DD"
                                   hideIcon={false}
+                                  onOpenPickNewDate={false}
                                 />
                                 {colFilters.issueTo && (
                                   <button
@@ -1111,6 +1113,7 @@ const FlameProofDigitalWarehouse = () => {
                                   inputClass="filter-input-date"
                                   placeholder="YYYY-MM-DD"
                                   hideIcon={false}
+                                  onOpenPickNewDate={false}
                                 />
                                 {colFilters.expiryFrom && (
                                   <button
@@ -1136,6 +1139,7 @@ const FlameProofDigitalWarehouse = () => {
                                   inputClass="filter-input-date"
                                   placeholder="YYYY-MM-DD"
                                   hideIcon={false}
+                                  onOpenPickNewDate={false}
                                 />
                                 {colFilters.expiryTo && (
                                   <button

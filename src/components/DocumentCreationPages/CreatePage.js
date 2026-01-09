@@ -64,6 +64,8 @@ const CreatePage = () => {
   const [showWorkflow, setShowWorkflow] = useState(null);
   const [readOnly, setReadOnly] = useState(false);
   const [lockUser, setLockUser] = useState(null);
+  const procedureTableRef = useRef(null);
+  const scrollBoxRef = useRef(null);
 
   const openWorkflow = () => {
     setShowWorkflow(true);
@@ -515,6 +517,11 @@ const CreatePage = () => {
       loadedIDRef.current = loadID;
 
       setReadOnly(readOnly);
+
+      requestAnimationFrame(() => {
+        scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      });
+
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -1071,6 +1078,22 @@ const CreatePage = () => {
 
   // Send data to backend to generate a Word document
   const handleGeneratePDF = async () => {
+    let flowchartImages = [];
+
+    // 1. Fetch Images from Flowchart
+    if (procedureTableRef.current) {
+      console.log("Generating flowchart images for backend...");
+      try {
+        flowchartImages = await procedureTableRef.current.getFlowchartImages();
+        console.log(`Captured ${flowchartImages.length} images.`);
+      } catch (err) {
+        console.error("Error capturing flowchart images:", err);
+        // Optional: Decide if you want to stop or continue without images
+      }
+    }
+
+    console.log(flowchartImages)
+
     const dataToStore = {
       usedAbbrCodes,       // your current state values
       usedTermCodes,
@@ -1081,7 +1104,8 @@ const CreatePage = () => {
       usedMaterials,
       formData,
       userID,
-      azureFN: ""
+      azureFN: "",
+      flowchartImages: flowchartImages
     };
 
     if (generatePopup) {
@@ -1113,6 +1137,20 @@ const CreatePage = () => {
   };
 
   const handlePublish = async () => {
+    let flowchartImages = [];
+
+    // 1. Fetch Images from Flowchart
+    if (procedureTableRef.current) {
+      console.log("Generating flowchart images for backend...");
+      try {
+        flowchartImages = await procedureTableRef.current.getFlowchartImages();
+        console.log(`Captured ${flowchartImages.length} images.`);
+      } catch (err) {
+        console.error("Error capturing flowchart images:", err);
+        // Optional: Decide if you want to stop or continue without images
+      }
+    }
+
     const dataToStore = {
       usedAbbrCodes,       // your current state values
       usedTermCodes,
@@ -1124,6 +1162,7 @@ const CreatePage = () => {
       formData,
       userID,
       azureFN: "",
+      flowchartImages: flowchartImages,
       draftID: loadedIDRef.current
     };
 
@@ -1288,7 +1327,7 @@ const CreatePage = () => {
           <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} loadOfflineDraft={loadOfflineData} />
         </div>
 
-        <div className={`scrollable-box`}>
+        <div className={`scrollable-box`} ref={scrollBoxRef}>
           {readOnly && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
               The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
@@ -1418,7 +1457,7 @@ const CreatePage = () => {
           <MaterialsTable formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} readOnly={readOnly} />
           <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
           <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-          <ProcedureTable formData={formData} setFormData={setFormData} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} readOnly={readOnly} />
+          <ProcedureTable ref={procedureTableRef} formData={formData} setFormData={setFormData} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} readOnly={readOnly} />
           <ChapterTable formData={formData} setFormData={setFormData} readOnly={readOnly} />
           <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} readOnly={readOnly} />
           <SupportingDocumentTable formData={formData} setFormData={setFormData} readOnly={readOnly} />

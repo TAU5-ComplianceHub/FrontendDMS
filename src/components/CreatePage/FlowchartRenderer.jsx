@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import cytoscape from "cytoscape";
 import dagre from "cytoscape-dagre";
 import axios from "axios";
@@ -11,7 +11,7 @@ import Modal from "react-modal";
 
 cytoscape.use(dagre);
 
-const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
+const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, ref) => {
     const cyRef = useRef(null);
     const [cy, setCy] = useState(null);
     const [pages, setPages] = useState([]);
@@ -22,6 +22,117 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [previewCy, setPreviewCy] = useState(null);
     const [modalSize, setModalSize] = useState({ width: '70%', height: '70%' });
+
+    useImperativeHandle(ref, () => ({
+        downloadImages: async () => {
+            if (!procedureRows || procedureRows.length < 2) return;
+
+            // 1. Generate Fresh Data
+            const { cyInstance: freshCy, paginatedFlowchart: freshPages } = await prepareFlowchartData() || {};
+
+            if (freshCy && freshPages && freshPages.length > 0) {
+                const toastId = toast.info("Downloading flowchart images...", { autoClose: false });
+
+                for (let i = 0; i < freshPages.length; i++) {
+                    toast.update(toastId, { render: `Downloading image ${i + 1} of ${freshPages.length}...` });
+
+                    // Render page on hidden canvas
+                    renderPage(i, freshCy, freshPages);
+
+                    // Wait for layout to settle
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Style for export
+                    freshCy.zoomingEnabled(false);
+                    freshCy.style().selector("core").css({ "background-color": "#fff" }).update();
+
+                    // Generate PNG Base64
+                    const pngData = freshCy.png({
+                        full: true,
+                        bg: "#ffffff",
+                        scale: 2,
+                        maxWidth: 1200,
+                        maxHeight: 960,
+                        padding: 180,
+                    });
+
+                    // Convert Base64 to Blob
+                    const byteCharacters = atob(pngData.split(',')[1]);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let j = 0; j < byteCharacters.length; j++) {
+                        byteNumbers[j] = byteCharacters.charCodeAt(j);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: "image/png" });
+
+                    // Save Individually
+                    saveAs(blob, `${capitalizeWords(title)}_${documentType}_Page_${i + 1}.png`);
+
+                    // Small delay to ensure browser doesn't block multiple downloads
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                }
+            }
+        },
+        getImages: async () => {
+            return await performCapture();
+        }
+    }));
+
+    const performCapture = async () => {
+        if (!procedureRows || procedureRows.length < 2) return [];
+
+        // 1. Generate Fresh Data
+        const { cyInstance: freshCy, paginatedFlowchart: freshPages, container: tempDiv } = await prepareFlowchartData(true) || {};
+        const capturedImages = [];
+
+        if (freshCy && freshPages && freshPages.length > 0) {
+            try {
+                for (let i = 0; i < freshPages.length; i++) {
+                    // Render page on hidden canvas
+                    renderPage(i, freshCy, freshPages);
+
+                    // Wait for layout
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Style for export
+                    freshCy.zoomingEnabled(false);
+                    freshCy.style().selector("core").css({ "background-color": "#fff" }).update();
+
+                    // Generate PNG Base64
+                    const pngData = freshCy.png({
+                        full: true,
+                        bg: "#ffffff",
+                        scale: 2,
+                        maxWidth: 1200,
+                        maxHeight: 960,
+                        padding: 180,
+                    });
+
+                    // Add to array
+                    capturedImages.push(pngData);
+                }
+            } catch (err) {
+                console.error("Error capturing flowchart images:", err);
+            } finally {
+                // Cleanup
+                if (tempDiv && document.body.contains(tempDiv)) {
+                    document.body.removeChild(tempDiv);
+                }
+            }
+        }
+        return capturedImages; // Returns array of "data:image/png;base64..." strings
+    };
+
+    const dataURItoBlob = (dataURI) => {
+        const byteString = atob(dataURI.split(',')[1]);
+        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+        }
+        return new Blob([ab], { type: mimeString });
+    };
 
     const openModal = async () => {
         await prepareFlowchartData();
@@ -320,13 +431,14 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
     };
 
     const prepareFlowchartData = async () => {
-
         return new Promise((resolve, reject) => {
-            if (!procedureRows || procedureRows.length === 0) return resolve();
+            if (!procedureRows || procedureRows.length === 0) {
+                return resolve({ cyInstance: null, paginatedFlowchart: [] });
+            }
 
             const numberedProcedureRows = procedureRows.map((row, index) => ({
                 ...row,
-                mainStep: `${index + 1}. ${row.mainStep.trim()}`, // Add numbering and ensure no extra spaces
+                mainStep: `${index + 1}. ${row.mainStep.trim()}`,
             }));
 
             axios.post(`${process.env.REACT_APP_URL}/api/flowIMG/generate`, {
@@ -355,7 +467,6 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                         container: hiddenDiv,
                         elements: paginatedFlowchart.length > 0 ? paginatedFlowchart[0].elements : [],
                         style: [
-                            // Styling for the Document Title Node
                             {
                                 selector: "[id='DocumentNode']",
                                 style: {
@@ -363,8 +474,8 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "content": "data(label)",
                                     "text-valign": "center",
                                     "text-halign": "center",
-                                    "background-color": "#002060", // Dark blue
-                                    "color": "#fff", // White text
+                                    "background-color": "#002060",
+                                    "color": "#fff",
                                     "border-width": 2,
                                     "border-color": "#002850",
                                     "font-weight": "bold",
@@ -375,7 +486,6 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "text-wrap": "wrap",
                                 }
                             },
-                            // Styling for Regular Nodes (Steps)
                             {
                                 selector: "node",
                                 style: {
@@ -383,7 +493,7 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "content": "data(label)",
                                     "text-valign": "center",
                                     "text-halign": "center",
-                                    "background-color": "#D9D9D9", // Gray background
+                                    "background-color": "#D9D9D9",
                                     "color": "#000",
                                     "border-width": 2,
                                     "border-color": "#8a8a8a",
@@ -403,10 +513,10 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "content": "data(label)",
                                     "text-valign": "center",
                                     "text-halign": "center",
-                                    "background-color": "#008000", // Green color
-                                    "color": "#fff", // White text
+                                    "background-color": "#008000",
+                                    "color": "#fff",
                                     "border-width": 2,
-                                    "border-color": "#8a8a8a", // Dark green border
+                                    "border-color": "#8a8a8a",
                                     "font-weight": "bold",
                                     "font-size": "16px",
                                     "width": "300px",
@@ -415,7 +525,6 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "text-wrap": "wrap",
                                 }
                             },
-                            // Styling for Continuation Nodes (Circles with Labels)
                             {
                                 selector: "[id^='continuation-']",
                                 style: {
@@ -433,7 +542,6 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "height": "40px",
                                 }
                             },
-                            // Keep existing circular node styling
                             {
                                 selector: "[shape='circle']",
                                 style: {
@@ -451,7 +559,6 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                     "height": "40px",
                                 }
                             },
-                            // Styling for Edges (Connections)
                             {
                                 selector: "edge",
                                 style: {
@@ -477,8 +584,8 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
 
                         if (documentNode.length > 0) {
                             documentNode.style({
-                                "background-color": "#002060", // Dark blue
-                                "color": "#fff", // White text
+                                "background-color": "#002060",
+                                "color": "#fff",
                                 "font-weight": "bold",
                                 "border-color": "#002850",
                                 "text-valign": "center",
@@ -486,14 +593,12 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                 "font-size": "16px",
                                 "text-max-width": "300px",
                             });
-                        } else {
-                            console.error("DocumentNode not found");
                         }
 
                         if (completedNode.length > 0) {
                             completedNode.style({
-                                "background-color": "#7F7F7F", // Dark blue
-                                "color": "#fff", // White text
+                                "background-color": "#7F7F7F",
+                                "color": "#fff",
                                 "font-weight": "bold",
                                 "text-valign": "center",
                                 "text-halign": "center",
@@ -501,32 +606,53 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                                 "text-max-width": "300px",
                                 "border-color": "#8a8a8a",
                             });
-                        } else {
-                            console.error("CompletedNode not found");
                         }
+
+                        // Apply edge styling for continuation nodes
+                        cyInstance.edges().forEach(edge => {
+                            const sourceId = edge.source().id();
+                            const targetId = edge.target().id();
+
+                            if (sourceId.startsWith('continuation-') || targetId.startsWith('continuation-')) {
+                                edge.style({
+                                    "curve-style": "taxi",
+                                    "taxi-direction": "downward",
+                                    "line-color": "#000",
+                                    "width": 2,
+                                    "target-arrow-shape": sourceId.startsWith('continuation-') ? "triangle" : "none",
+                                    "target-arrow-color": "#000",
+                                });
+                            }
+                        });
+
+                        // Resolve with the NEW data
+                        resolve({ cyInstance, paginatedFlowchart });
                     });
-
-                    // Apply edge styling for continuation nodes
-                    cyInstance.edges().forEach(edge => {
-                        const sourceId = edge.source().id();
-                        const targetId = edge.target().id();
-
-                        if (sourceId.startsWith('continuation-') || targetId.startsWith('continuation-')) {
-                            edge.style({
-                                "curve-style": "taxi",
-                                "taxi-direction": "downward",
-                                "line-color": "#000",
-                                "width": 2,
-                                "target-arrow-shape": sourceId.startsWith('continuation-') ? "triangle" : "none",
-                                "target-arrow-color": "#000",
-                            });
-                        }
-                    });
-
-                    resolve();
                 })
-                .catch(error => console.error("Error fetching flowchart data:", error));
+                .catch(error => {
+                    console.error("Error fetching flowchart data:", error);
+                    resolve({ cyInstance: null, paginatedFlowchart: [] });
+                });
         });
+    };
+
+    const fetchFlowData = async () => {
+        if (!procedureRows || procedureRows.length === 0) return { elements: [] };
+        const numberedProcedureRows = procedureRows.map((row, index) => ({
+            ...row,
+            mainStep: `${index + 1}. ${row.mainStep.trim()}`,
+        }));
+        try {
+            const response = await axios.post(`${process.env.REACT_APP_URL}/api/flowIMG/generate`, {
+                procedureRows: numberedProcedureRows,
+                title: title,
+                documentType: documentType
+            });
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching flowchart data:", error);
+            return { elements: [] };
+        }
     };
 
     useEffect(() => {
@@ -680,20 +806,20 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
         }
     }, [currentPage, isModalOpen]);
 
-    const renderPage = (pageIndex) => {
-        if (!cy || !pages || pages.length === 0 || pageIndex < 0 || pageIndex >= pages.length) {
+    const renderPage = (pageIndex, targetCy = cy, targetPages = pages) => {
+        if (!targetCy || !targetPages || targetPages.length === 0 || pageIndex < 0 || pageIndex >= targetPages.length) {
             return;
         }
 
         // Update cytoscape with the elements for the selected page
-        cy.elements().remove();
-        cy.add(pages[pageIndex].elements);
+        targetCy.elements().remove();
+        targetCy.add(targetPages[pageIndex].elements);
 
         // Apply layout and styling
-        cy.layout({ name: 'dagre', rankDir: 'TB', nodeSep: 50 }).run();
+        targetCy.layout({ name: 'dagre', rankDir: 'TB', nodeSep: 50 }).run();
 
         // Apply specific node styling
-        cy.$("[id='DocumentNode']").style({
+        targetCy.$("[id='DocumentNode']").style({
             "background-color": "#002060",
             "color": "#fff",
             "font-weight": "bold",
@@ -704,7 +830,7 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             "text-max-width": "300px",
         });
 
-        cy.$("[id='CompletedNode']").style({
+        targetCy.$("[id='CompletedNode']").style({
             "background-color": "#7F7F7F",
             "color": "#fff",
             "font-weight": "bold",
@@ -716,7 +842,7 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
         });
 
         // Apply edge styling for continuation nodes
-        cy.edges().forEach(edge => {
+        targetCy.edges().forEach(edge => {
             const sourceId = edge.source().id();
             const targetId = edge.target().id();
 
@@ -732,16 +858,16 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             }
         });
 
-        cy.edges().forEach(edge => {
+        targetCy.edges().forEach(edge => {
             if (edge.source().data('shape') === 'circle') {
                 const targetPos = edge.target().position();
                 const sourcePos = edge.source().position();
 
                 const dx = targetPos.x - sourcePos.x;
-                const dy = targetPos.y - sourcePos.y;
+                // const dy = targetPos.y - sourcePos.y; // unused
 
                 // Determine bend direction based on target position
-                const bendDistance = dx > 0 ? 60 : -60; // Bend right if target is on the right, left otherwise
+                // const bendDistance = dx > 0 ? 60 : -60; // unused
 
                 edge.style({
                     "curve-style": "taxi",
@@ -754,16 +880,16 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             }
         });
 
-        cy.edges().forEach(edge => {
+        targetCy.edges().forEach(edge => {
             if (edge.target().data('shape') === 'circle') {
                 const targetPos = edge.target().position();
                 const sourcePos = edge.source().position();
 
                 const dx = targetPos.x - sourcePos.x;
-                const dy = targetPos.y - sourcePos.y;
+                // const dy = targetPos.y - sourcePos.y; // unused
 
                 // Determine bend direction based on target position
-                const bendDistance = dx > 0 ? 60 : -60; // Bend right if target is on the right, left otherwise
+                // const bendDistance = dx > 0 ? 60 : -60; // unused
 
                 edge.style({
                     "curve-style": "taxi",
@@ -776,7 +902,9 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             }
         });
 
-        setCurrentPage(pageIndex);
+        if (targetCy === cy) {
+            setCurrentPage(pageIndex);
+        }
     };
 
     const exportImage = async () => {
@@ -785,10 +913,8 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             toast.clearWaitingQueue();
             toast.warn("There should be at least two procedure steps or more.", {
                 closeButton: true,
-                autoClose: 800, // 1.5 seconds
-                style: {
-                    textAlign: 'center'
-                }
+                autoClose: 800,
+                style: { textAlign: 'center' }
             });
             return;
         }
@@ -798,25 +924,26 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             toast.clearWaitingQueue();
             toast.warn("All procedure main steps must have a value.", {
                 closeButton: true,
-                autoClose: 800, // 1.5 seconds
-                style: {
-                    textAlign: 'center'
-                }
+                autoClose: 800,
+                style: { textAlign: 'center' }
             });
             return;
         }
 
-        await prepareFlowchartData();
+        // 1. Get the FRESH data immediately
+        const { cyInstance: freshCy, paginatedFlowchart: freshPages } = await prepareFlowchartData() || {};
 
-        if (cy && pages && pages.length > 0) {
+        if (freshCy && freshPages && freshPages.length > 0) {
             // If only one page, download directly
-            if (pages.length === 1) {
-                renderPage(0);
-                setTimeout(() => {
-                    cy.zoomingEnabled(false);
-                    cy.style().selector("core").css({ "background-color": "#fff" }).update();
+            if (freshPages.length === 1) {
+                // Pass fresh data to renderPage
+                renderPage(0, freshCy, freshPages);
 
-                    const pngData = cy.png({
+                setTimeout(() => {
+                    freshCy.zoomingEnabled(false);
+                    freshCy.style().selector("core").css({ "background-color": "#fff" }).update();
+
+                    const pngData = freshCy.png({
                         full: true,
                         bg: "#ffffff",
                         scale: 2,
@@ -846,24 +973,24 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
                     style: { textAlign: 'center' }
                 });
 
-                for (let i = 0; i < pages.length; i++) {
+                for (let i = 0; i < freshPages.length; i++) {
                     // Update toast
                     toast.update(toastId, {
-                        render: `Generating page ${i + 1} of ${pages.length}...`,
+                        render: `Generating page ${i + 1} of ${freshPages.length}...`,
                         closeButton: true,
                         autoClose: 800
                     });
 
-                    // Render the page
-                    renderPage(i);
+                    // Pass fresh data to renderPage
+                    renderPage(i, freshCy, freshPages);
 
                     // Wait for layout to complete
                     await new Promise(resolve => setTimeout(resolve, 500));
 
-                    cy.zoomingEnabled(false);
-                    cy.style().selector("core").css({ "background-color": "#fff" }).update();
+                    freshCy.zoomingEnabled(false);
+                    freshCy.style().selector("core").css({ "background-color": "#fff" }).update();
 
-                    const pngData = cy.png({
+                    const pngData = freshCy.png({
                         full: true,
                         bg: "#ffffff",
                         scale: 2,
@@ -1018,6 +1145,6 @@ const FlowchartRenderer = ({ procedureRows, documentType, title }) => {
             </Modal>
         </div>
     );
-};
+});
 
 export default FlowchartRenderer;

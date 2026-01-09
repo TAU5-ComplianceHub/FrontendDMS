@@ -39,7 +39,7 @@ const PopupMenuOptions = ({ isOpen, setHoveredFileId, openDownloadModal, file, c
                     <ul>
                         <li onClick={() => navigate(`/FrontendDMS/previewCertificate/${file._id}`)}>Preview</li>
                     </ul>
-                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<li onClick={() => openUpdate(file._id)}>Update</li>)}
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<li onClick={() => openUpdate(file._id)}>Replace Certificate</li>)}
                     <ul>
                         <li onClick={() => navigate(`/FrontendDMS/flameVersionHistory/${file._id}/${img}/${txt}`)}>Version History</li>
                     </ul>

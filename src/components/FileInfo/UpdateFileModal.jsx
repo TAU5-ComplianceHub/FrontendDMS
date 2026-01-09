@@ -225,6 +225,7 @@ const UpdateFileModal = ({ isModalOpen, closeModal, fileID }) => {
                                     editable={false}
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    onOpenPickNewDate={false}
                                     inputClass='update-file-input-file-new'
                                 />
                                 <FontAwesomeIcon

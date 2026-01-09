@@ -40,6 +40,36 @@
     position: relative;
 }
 
+/* clickable clear icon */
+.due-date-icon-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 50;
+    cursor: pointer !important;
+
+    background: transparent;
+    border: none;
+    padding: 4px;
+    line-height: 1;
+}
+
+/* non-clickable calendar icon (display only) */
+.due-date-icon-span {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 20;
+    pointer-events: none;
+}
+
+/* make sure the input leaves room for the icon */
+.ibra-input-date {
+    padding-right: 34px;
+}
+
 .active-filter-icon {
     font-size: 14px;
     margin-left: 6px;

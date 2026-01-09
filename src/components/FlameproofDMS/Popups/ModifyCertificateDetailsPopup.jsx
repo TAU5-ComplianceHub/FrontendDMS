@@ -8,25 +8,45 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 import ComponentDateUpdates from './ComponentDateUpdates';
 import DatePicker from 'react-multi-date-picker';
-import UploadWithoutFile from './UploadWithoutFile';
-import UploadWithoutFileValues from './UploadWithoutFileValues';
 
-const UploadCertifierLicense = ({ onClose }) => {
-    const [selectedFile, setSelectedFile] = useState(null);
+const ModifyCertificateDetailsPopup = ({ onClose, refresh, data }) => {
     const [certificateAuth, setCertificateAuth] = useState('');
+    const [certificateNum, setCertificateNum] = useState('');
     const [issueDate, setIssueDate] = useState('');
+    const [expiryDate, setExpiryDate] = useState('');
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [userID, setUserID] = useState('');
     const [errors, setErrors] = useState({});
-    const [licenseNumber, setLicenseNumber] = useState("");
-    const [expiryDate, setExpiryDate] = useState("");
-    const navigate = useNavigate();
+    const [certifiers, setCertifiers] = useState([]);
+    const [id, setId] = useState('');
+
+    useEffect(() => {
+        setCertificateAuth(data?.certAuth || "");
+        setCertificateNum(data?.certNr || "");
+        setId(data?._id);
+        setExpiryDate(data?.certificateExipryDate || "");
+        setIssueDate(data?.issueDate || "");
+    }, [data])
+
+    const fetchCertifiers = async () => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/flameWarehouse/getCertifiers`);
+            if (!response.ok) {
+                throw new Error("Failed to fetch users");
+            }
+            const data = await response.json();
+
+            setCertifiers(data.certifiers);
+        } catch (error) {
+            setError(error.message);
+        }
+    };
 
     const todayString = () => {
         const d = new Date();
         d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        return d.toISOString().slice(0, 10);
+        return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
     };
 
     useEffect(() => {
@@ -39,10 +59,9 @@ const UploadCertifierLicense = ({ onClose }) => {
 
     const validateForm = () => {
         const newErrors = {};
-        if (!licenseNumber) newErrors.licenseNumber = true;
         if (!certificateAuth) newErrors.certificateAuth = true;
+        if (!certificateNum) newErrors.certificateNum = true;
         if (!issueDate) newErrors.issueDate = true;
-        if (!expiryDate) newErrors.expiryDate = true;
         return newErrors;
     };
 
@@ -51,7 +70,7 @@ const UploadCertifierLicense = ({ onClose }) => {
             const newErrors = validateForm();
             setErrors(newErrors);
         }
-    }, [licenseNumber, certificateAuth, issueDate, expiryDate]);
+    }, [certificateAuth, certificateNum, issueDate]);
 
     const isFormValid = () => {
         const newErrors = validateForm();
@@ -71,56 +90,40 @@ const UploadCertifierLicense = ({ onClose }) => {
         if (!isFormValid()) return;
 
         const formData = new FormData();
-        formData.append('file', selectedFile);
         formData.append('certificationAuthority', certificateAuth);
-        formData.append('licenseNumber', licenseNumber);
+        formData.append('certificateNr', certificateNum);
         formData.append('issueDate', issueDate);
         formData.append('expiryDate', expiryDate);
 
         try {
             setLoading(true);
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/flameProofCertifiers/uploadLicense`, {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/flameproof/updateCertificateDetails/${id}`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
                 body: formData,
             });
+            if (!response.ok) throw new Error(response.error || 'Failed to upload file');
             const data = await response.json();
 
-            if (!response.ok) {
-                toast.error(data.message, { autoClose: 2000, closeButton: "true" })
-                setLoading(false);
-                return;
-            };
-
-            setSelectedFile(null);
-            setLicenseNumber('');
             setCertificateAuth('');
+            setCertificateNum('');
+            setIssueDate("");
             setIssueDate('');
-            setExpiryDate("");
 
             setError(null);
             setLoading(false);
 
-            toast.success("Accreditation Certificate Uploaded Successfully", {
+            toast.success("Component Updated Successfully", {
                 closeButton: false, autoClose: 2000, style: { textAlign: 'center' }
             });
 
             setTimeout(() => {
+                refresh();
                 onClose();
-            }, 3000);
+            }, 2000);
         } catch (error) {
             setError(error.message);
             setLoading(false);
-        }
-    };
-
-    const handleFileSelect = (file) => {
-        if (file) setSelectedFile(file);
-    };
-
-    const handleFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            handleFileSelect(e.target.files[0]);
         }
     };
 
@@ -129,60 +132,55 @@ const UploadCertifierLicense = ({ onClose }) => {
         if (isFormValid()) handleFileUpload();
     };
 
+    useEffect(() => {
+        fetchCertifiers();
+    }, [])
+
     return (
         <div className="ump-container">
             <div className="ump-overlay">
                 <div className="ump-content">
                     <div className="review-date-header">
-                        <h2 className="review-date-title">Add Certification Body</h2>
+                        <h2 className="review-date-title">Update Component</h2>
                         <button className="review-date-close" onClick={() => onClose(null, null, false)} title="Close Popup">×</button>
                     </div>
-
-                    <div className="ump-form-group-container">
-                        <div className="ump-file-name">{selectedFile ? selectedFile.name : "No Accreditation Certification Selected"}</div>
-                        <div className="ump-actions">
-                            <label className="ump-choose-button" style={{ width: "40%" }}>
-                                {'Choose Accreditation Certification'}
-                                <input type="file" onChange={handleFileChange} style={{ display: 'none' }} />
-                            </label>
-                        </div>
-                    </div>
-
                     <div className="ump-form-group-main">
-                        <div className="ump-section-header">
-                            <h2>Certification Body Information</h2>
-                        </div>
-
                         <form className="ump-form" onSubmit={handleSubmit}>
                             <div className="ump-form-row">
                                 <div className={`ump-form-group ${errors.certificateAuth ? "ump-error" : ""}`}>
                                     <label>Certification Body <span className="ump-required">*</span></label>
-                                    <input
-                                        type="text"
-                                        name="assetNr"
-                                        value={certificateAuth}
-                                        onChange={(e) => setCertificateAuth(e.target.value)}
-                                        autoComplete="off"
-                                        className="ump-input-select font-fam"
-                                        placeholder="Insert Certification Body"
-                                    />
+                                    <div className="ump-select-container">
+                                        <select
+                                            value={certificateAuth}
+                                            onChange={(e) => setCertificateAuth(e.target.value)}
+                                            className="upm-comp-input-select font-fam"
+                                            style={{ color: certificateAuth === "" ? "GrayText" : "black" }}
+                                        >
+                                            <option value="" className="def-colour">Select Certification Body</option>
+                                            {certifiers.map(s => (
+                                                <option key={s._id} value={s.authority} className="norm-colour">
+                                                    {s.authority}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className={`ump-form-group ${errors.licenseNumber ? "ump-error" : ""}`}>
-                                    <label>Accreditation Number <span className="ump-required">*</span></label>
+                                <div className={`ump-form-group ${errors.component ? "ump-error" : ""}`}>
+                                    <label>Certificate Number <span className="ump-required">*</span></label>
                                     <input
                                         type="text"
                                         name="assetNr"
-                                        value={licenseNumber}
-                                        onChange={(e) => setLicenseNumber(e.target.value)}
+                                        value={certificateNum}
+                                        onChange={(e) => setCertificateNum(e.target.value)}
                                         autoComplete="off"
                                         className="ump-input-select font-fam"
-                                        placeholder="Insert Accreditation Number"
+                                        placeholder="Insert Certificate Number"
                                     />
                                 </div>
                             </div>
                             <div className="ump-form-row">
                                 <div className={`ump-form-group ${errors.issueDate ? "ump-error" : ""}`}>
-                                    <label>Initial Accreditation Date <span className="ump-required">*</span></label>
+                                    <label>Issue Date <span className="ump-required">*</span></label>
 
                                     <div className='date-container-license' style={{ position: "relative" }}>
                                         <DatePicker
@@ -190,19 +188,15 @@ const UploadCertifierLicense = ({ onClose }) => {
                                             format="YYYY-MM-DD"
                                             onChange={(val) => {
                                                 const v = val?.format("YYYY-MM-DD");
-                                                const max = todayString();
-                                                setIssueDate(v && v > max ? max : v); // clamp to today if future picked/typed
+                                                setIssueDate(v); // clamp to today if future picked/typed
                                             }}
                                             rangeHover={false}
                                             highlightToday={false}
                                             editable={false}
-                                            placeholder="Select Intitial Accreditation Date"
+                                            placeholder="YYYY-MM-DD"
                                             hideIcon={false}
                                             inputClass='ump-input-select-new-3'
                                             maxDate={todayString()}
-                                            style={{
-                                                cursor: "pointer"
-                                            }}
                                             onOpenPickNewDate={false}
                                         />
                                         <FontAwesomeIcon
@@ -212,8 +206,8 @@ const UploadCertifierLicense = ({ onClose }) => {
                                     </div>
                                 </div>
 
-                                <div className={`ump-form-group ${errors.expiryDate ? "ump-error" : ""}`}>
-                                    <label>Expiry Date <span className="ump-required">*</span></label>
+                                <div className={`ump-form-group`}>
+                                    <label>Expiry Date</label>
 
                                     <div className='date-container-license' style={{ position: "relative" }}>
                                         <DatePicker
@@ -223,17 +217,13 @@ const UploadCertifierLicense = ({ onClose }) => {
                                                 const v = val?.format("YYYY-MM-DD");
                                                 setExpiryDate(v); // clamp to today if future picked/typed
                                             }}
-                                            style={{
-                                                width: "100%",
-                                                cursor: "pointer"
-                                            }}
                                             rangeHover={false}
                                             highlightToday={false}
                                             editable={false}
-                                            placeholder="Select Expiry Date"
+                                            placeholder="YYYY-MM-DD"
                                             hideIcon={false}
                                             inputClass='ump-input-select-new-3'
-                                            minDate={issueDate}
+                                            minDate={todayString()}
                                             onOpenPickNewDate={false}
                                         />
                                         <FontAwesomeIcon
@@ -248,8 +238,8 @@ const UploadCertifierLicense = ({ onClose }) => {
 
                     <div className="ump-form-footer">
                         <div className="ump-actions">
-                            <button className="ump-upload-button" disabled={!selectedFile} onClick={handleSubmit}>
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : 'Submit'}
+                            <button className="ump-upload-button" onClick={handleSubmit}>
+                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : 'Update Component'}
                             </button>
                         </div>
                     </div>
@@ -259,4 +249,4 @@ const UploadCertifierLicense = ({ onClose }) => {
     );
 };
 
-export default UploadCertifierLicense;
+export default ModifyCertificateDetailsPopup;

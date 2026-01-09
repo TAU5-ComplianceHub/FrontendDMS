@@ -60,6 +60,7 @@ const CreatePageSI = () => {
   const [showWorkflow, setShowWorkflow] = useState(null);
   const [readOnly, setReadOnly] = useState(false);
   const [lockUser, setLockUser] = useState(null);
+  const scrollBoxRef = useRef(null);
 
   const openWorkflow = () => {
     setShowWorkflow(true);
@@ -659,6 +660,10 @@ const CreatePageSI = () => {
 
       setReadOnly(readOnly);
       console.log(readOnly);
+
+      requestAnimationFrame(() => {
+        scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      });
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -1210,7 +1215,7 @@ const CreatePageSI = () => {
           <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} loadOfflineDraft={loadOfflineData} />
         </div>
 
-        <div className={`scrollable-box`}>
+        <div className={`scrollable-box`} ref={scrollBoxRef}>
           {readOnly && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
               The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
@@ -1276,6 +1281,7 @@ const CreatePageSI = () => {
                         dateConducted: false
                       }))}
                       style={{ width: "100%" }}
+                      onOpenPickNewDate={false}
                     />
                     <FontAwesomeIcon
                       icon={faCalendarDays}
@@ -1304,6 +1310,7 @@ const CreatePageSI = () => {
                       }))}
                       style={{ width: "100%" }}
                       minDate={formData.dateConducted}
+                      onOpenPickNewDate={false}
                     />
                     {!formData.expiryDate && (
                       <FontAwesomeIcon

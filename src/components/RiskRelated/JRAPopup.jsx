@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import './JRAPopup.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faMagicWandSparkles, faChevronRight, faChevronDown, faPlusCircle, faUndo } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faMagicWandSparkles, faChevronRight, faChevronDown, faPlusCircle, faUndo, faFlag } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { aiRewrite, aiRewriteWED } from "../../utils/jraAI";
@@ -974,6 +974,60 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
         }));
     };
 
+    const toggleMainStepFlag = () => {
+        if (readOnly) return;
+        setJraData(prev => ({
+            ...prev,
+            rowFlagged: !prev.rowFlagged
+        }));
+    };
+
+    const toggleHazardFlag = (stepIndex) => {
+        if (readOnly) return;
+        setJraData(prev => ({
+            ...prev,
+            jraBody: prev.jraBody.map((body, bIdx) => {
+                if (bIdx !== stepIndex) return body;
+                return {
+                    ...body,
+                    hazards: body.hazards.map((h, hIdx) =>
+                        hIdx === 0 ? { ...h, flagged: !h.flagged } : h
+                    )
+                };
+            })
+        }));
+    };
+
+    const toggleUEFlag = (stepIndex) => {
+        if (readOnly) return;
+        setJraData(prev => ({
+            ...prev,
+            jraBody: prev.jraBody.map((body, bIdx) => {
+                if (bIdx !== stepIndex) return body;
+                return {
+                    ...body,
+                    UE: body.UE.map((u, uIdx) =>
+                        uIdx === 0 ? { ...u, flagged: !u.flagged } : u
+                    )
+                };
+            })
+        }));
+    };
+
+    const toggleSubStepFlag = (stepIndex) => {
+        if (readOnly) return;
+        setJraData(prev => ({
+            ...prev,
+            jraBody: prev.jraBody.map((body, bIdx) => {
+                if (bIdx !== stepIndex) return body;
+                return {
+                    ...body,
+                    subStepFlagged: !body.subStepFlagged
+                };
+            })
+        }));
+    };
+
     return (
         <div className="jra-popup-page-container">
             <div className="jra-popup-page-overlay">
@@ -987,7 +1041,21 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
 
                         <div className="jra-popup-page-component-wrapper-main">
                             <div className={`ibra-popup-page-form-group inline-field`}>
-                                <label>Main Step</label>
+                                <label>
+                                    <FontAwesomeIcon
+                                        icon={faFlag}
+                                        onClick={toggleMainStepFlag}
+                                        style={{
+                                            marginRight: "5px",
+                                            cursor: readOnly ? "default" : "pointer",
+                                            color: jraData.rowFlagged ? "#d4aa00" : "#ccc", // Gold if true, Grey if false
+                                            fontSize: "14px",
+                                            marginTop: "2px"
+                                        }}
+                                        title='Toggle Flag'
+                                    />
+                                    Main Step
+                                </label>
                                 <div className="jra-popup-page-select-container">
                                     <input
                                         type="text"
@@ -1028,9 +1096,24 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                             </div>
                                             <div className="jra-popup-page-additional-row" style={{ marginTop: si !== 0 ? "18px" : undefined }}>
                                                 <div className="jra-popup-page-column-half">
-                                                    <div className="jra-popup-page-component-wrapper">
+                                                    <div className="jra-popup-page-component-wrapper" style={{ backgroundColor: step.hazards[0]?.flagged ? "#FFFF89" : "#ffffff" }} >
                                                         <div className={`ibra-popup-page-form-group `}>
-                                                            <label>Hazard Classification / Energy Release</label>
+                                                            <label>
+                                                                <FontAwesomeIcon
+                                                                    icon={faFlag}
+                                                                    onClick={() => toggleHazardFlag(si)}
+                                                                    style={{
+                                                                        marginRight: "5px",
+                                                                        cursor: readOnly ? "default" : "pointer",
+                                                                        color: step.hazards[0]?.flagged ? "#d4aa00" : "#ccc",
+                                                                        fontSize: "14px",
+                                                                        marginTop: "2px"
+                                                                    }}
+                                                                    className="ibra-popup-label-icon"
+                                                                    title='Toggle Flag'
+                                                                />
+                                                                Hazard Classification / Energy Release
+                                                            </label>
                                                             <div className={si !== 0 ? `ibra-popup-page-select-container` : ""}>
                                                                 <div className={si !== 0 ? `ibra-popup-page-select-container` : ""}>
                                                                     <select
@@ -1056,9 +1139,24 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                     </div>
                                                 </div>
                                                 <div className="jra-popup-page-column-half">
-                                                    <div className="jra-popup-page-component-wrapper">
+                                                    <div className="jra-popup-page-component-wrapper" style={{ backgroundColor: step.UE[0]?.flagged ? "#FFFF89" : "#ffffff" }}>
                                                         <div className={`ibra-popup-page-form-group `}>
-                                                            <label>Unwanted Event</label>
+                                                            <label>
+                                                                <FontAwesomeIcon
+                                                                    icon={faFlag}
+                                                                    onClick={() => toggleUEFlag(si)}
+                                                                    style={{
+                                                                        marginRight: "5px",
+                                                                        cursor: readOnly ? "default" : "pointer",
+                                                                        color: step.UE[0]?.flagged ? "#d4aa00" : "#ccc",
+                                                                        fontSize: "14px",
+                                                                        marginTop: "2px"
+                                                                    }}
+                                                                    className="ibra-popup-label-icon"
+                                                                    title='Toggle Flag'
+                                                                />
+                                                                Unwanted Event
+                                                            </label>
                                                             <div className={si !== 0 ? `ibra-popup-page-select-container` : ""}>
                                                                 <div className={si !== 0 ? `ibra-popup-page-select-container` : ""}>
                                                                     <input
@@ -1094,8 +1192,20 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                             <div className="text-unwanted" style={{ marginBottom: "10px" }}>
                                                 Control Evaluation
                                             </div>
-                                            <div className="jra-popup-page-form-group-main-container-sub-controls" ref={el => controlsScrollRefs.current[si] = el}>
-
+                                            <div className="jra-popup-page-form-group-main-container-sub-controls" style={{ backgroundColor: step.subStepFlagged ? "#FFFF89" : "#ffffff" }} ref={el => controlsScrollRefs.current[si] = el}>
+                                                <FontAwesomeIcon
+                                                    icon={faFlag}
+                                                    onClick={() => toggleSubStepFlag(si)}
+                                                    style={{
+                                                        marginRight: "5px",
+                                                        cursor: readOnly ? "default" : "pointer",
+                                                        color: step.subStepFlagged ? "#d4aa00" : "#ccc",
+                                                        fontSize: "14px",
+                                                        marginTop: "2px"
+                                                    }}
+                                                    className="ibra-popup-label-icon"
+                                                    title='Toggle Flag'
+                                                />
                                                 {/* Labels row - separate from controls */}
                                                 <div className="jra-popup-page-form-group" style={{ position: "relative", marginTop: "0px", marginBottom: "5px" }}>
                                                     <div className="jra-popup-page-additional-row">
@@ -1131,7 +1241,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                     const goNoGoItem = step.go_noGo[idx] || {};
 
                                                     return (
-                                                        <div key={idx} className={`jra-popup-page-form-group`} style={{ position: "relative", marginTop: "5px" }}>
+                                                        <div key={idx} className={`jra-popup-page-form-group`} style={{ position: "relative", marginTop: "5px", paddingTop: "5px" }}>
                                                             <div className="jra-popup-page-additional-row">
                                                                 <div className="jra-popup-page-column-half">
                                                                     <div className="jra-popup-page-additional-row">
@@ -1141,7 +1251,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                                                 <div className={"jra-popup-page-control-container"}>
                                                                                     <textarea
                                                                                         type="text"
-                                                                                        style={{ color: "black", cursor: "text", fieldsizing: "content", minHeight: "19px", paddingRight: controlHistory[`${si}-${idx}`]?.length > 0 ? "60px" : "", resize: "vertical" }}
+                                                                                        style={{ resize: "none", color: "black", cursor: "text", fieldsizing: "content", minHeight: "19px", paddingRight: controlHistory[`${si}-${idx}`]?.length > 0 ? "60px" : "" }}
                                                                                         ref={el => {
                                                                                             const key = `${si}-${idx}`;
                                                                                             if (el) {
@@ -1222,7 +1332,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                                             <div className="jra-popup-page-control-container">
                                                                                 <textarea
                                                                                     type="text"
-                                                                                    style={{ color: "black", cursor: "text", paddingRight: wedHistory[`${si}-${idx}`]?.length > 0 ? "60px" : "40px", resize: "vertical" }}
+                                                                                    style={{ resize: "none", color: "black", cursor: "text", paddingRight: wedHistory[`${si}-${idx}`]?.length > 0 ? "60px" : "40px" }}
                                                                                     ref={ownersInputRef}
                                                                                     className="jra-popup-page-control-table jra-popup-page-row-input"
                                                                                     placeholder="Insert WED Question"

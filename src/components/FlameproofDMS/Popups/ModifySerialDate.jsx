@@ -144,6 +144,7 @@ const ModifySerialDate = ({
                             hideIcon={false}
                             maxDate={todayStr}
                             style={{ width: "100%" }}
+                            onOpenPickNewDate={false}
                         />
                         <FontAwesomeIcon
                             icon={faCalendarDays}

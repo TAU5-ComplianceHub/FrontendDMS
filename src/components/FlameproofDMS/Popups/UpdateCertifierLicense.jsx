@@ -189,8 +189,7 @@ const UpdateCertifierLicense = ({ onClose, certifierData }) => {
                                             format="YYYY-MM-DD"
                                             onChange={(val) => {
                                                 const v = val?.format("YYYY-MM-DD");
-                                                const max = todayString();
-                                                setIssueDate(v && v > max ? max : v); // clamp to today if future picked/typed
+                                                setIssueDate(v); // clamp to today if future picked/typed
                                             }}
                                             rangeHover={false}
                                             highlightToday={false}
@@ -200,6 +199,7 @@ const UpdateCertifierLicense = ({ onClose, certifierData }) => {
                                             inputClass='ump-input-select-new-3'
                                             maxDate={todayString()}
                                             style={{ cursor: "pointer" }}
+                                            onOpenPickNewDate={false}
                                         />
                                         <FontAwesomeIcon
                                             icon={faCalendarDays}
@@ -228,6 +228,7 @@ const UpdateCertifierLicense = ({ onClose, certifierData }) => {
                                             hideIcon={false}
                                             inputClass='ump-input-select-new-3'
                                             minDate={issueDate}
+                                            onOpenPickNewDate={false}
                                         />
                                         <FontAwesomeIcon
                                             icon={faCalendarDays}

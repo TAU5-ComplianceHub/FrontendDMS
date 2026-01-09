@@ -185,9 +185,9 @@ const Notifications = ({ setClose, getCount }) => {
                 if (targetPath) {
                     navigate(targetPath);
                 }
+                setClose(false);
             }
 
-            setClose(false);
         } catch (err) {
             console.error("Error handling notification click:", err);
         }

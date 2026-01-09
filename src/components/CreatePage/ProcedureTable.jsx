@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, forwardRef, useImperativeHandle } from "react";
 import './ProcedureTable.css';
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
@@ -7,7 +7,7 @@ import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkl
 import FlowchartRenderer from "./FlowchartRenderer";
 import { aiRewrite } from "../../utils/jraAI";
 
-const ProcedureTable = ({ procedureRows, addRow, removeRow, updateRow, error, title, documentType, updateProcRows, readOnly = false, setErrors, setFormData, formData }) => {
+const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow, error, title, documentType, updateProcRows, readOnly = false, setErrors, setFormData, formData }, ref) => {
     const [designationOptions, setDesignationOptions] = useState([]);
     const [showARDropdown, setShowARDropdown] = useState({ index: null, field: "" });
     const [dropdownOptions, setDropdownOptions] = useState([]);
@@ -25,6 +25,16 @@ const ProcedureTable = ({ procedureRows, addRow, removeRow, updateRow, error, ti
     const [draggedRowNr, setDraggedRowNr] = useState(null);
     const [dragOverRowNr, setDragOverRowNr] = useState(null);
     const draggedElRef = useRef(null);
+    const flowchartRef = useRef(null);
+
+    useImperativeHandle(ref, () => ({
+        getFlowchartImages: async () => {
+            if (flowchartRef.current) {
+                return await flowchartRef.current.getImages();
+            }
+            return [];
+        }
+    }));
 
     const handleAiRewriteMain = async (idx) => {
         const control = procedureRows[idx].mainStep;
@@ -508,7 +518,7 @@ const ProcedureTable = ({ procedureRows, addRow, removeRow, updateRow, error, ti
         <div className="input-row">
             <div className={`proc-box ${error ? "error-proc" : ""}`}>
                 <h3 className="font-fam-labels">Procedure <span className="required-field">*</span></h3>
-                {true && (<FlowchartRenderer procedureRows={procedureRows} title={title} documentType={documentType} />)}
+                {true && (<FlowchartRenderer ref={flowchartRef} procedureRows={procedureRows} title={title} documentType={documentType} />)}
 
                 {procedureRows.length > 0 && (
                     <table className="vcr-table table-borders">
@@ -779,6 +789,6 @@ const ProcedureTable = ({ procedureRows, addRow, removeRow, updateRow, error, ti
             )}
         </div>
     );
-};
+});
 
 export default ProcedureTable;

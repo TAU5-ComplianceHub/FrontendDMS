@@ -117,6 +117,11 @@ const RiskManageMobileMachines = ({ closePopup, onClose, onUpdate, setMachineDat
         onClose();
     };
 
+    const approverOptions = usersList.filter(u => {
+        const id = String(u?.id ?? u?._id ?? u ?? "");
+        return id && id !== String(userID);
+    });
+
     return (
         <div className="manMac-popup-container">
             <div className="manMac-popup-box">
@@ -153,7 +158,7 @@ const RiskManageMobileMachines = ({ closePopup, onClose, onUpdate, setMachineDat
                             placeholder="Select Approver"
                         >
                             <option value="">Select Approver</option>
-                            {usersList.map((value, index) => (
+                            {approverOptions.map((value, index) => (
                                 <option key={index} value={value.id || value._id || value}>
                                     {value.username || value.label || value}
                                 </option>

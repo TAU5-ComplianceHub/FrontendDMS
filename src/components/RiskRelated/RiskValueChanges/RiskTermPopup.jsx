@@ -102,6 +102,11 @@ const RiskTermPopup = ({ isOpen, onClose, userID, setTermData, onAdd }) => {
 
     if (!isOpen) return null;
 
+    const approverOptions = usersList.filter(u => {
+        const id = String(u?.id ?? u?._id ?? u ?? "");
+        return id && id !== String(userID);
+    });
+
     return (
         <div className="term-popup-overlay">
             <div className="term-popup-content">
@@ -156,7 +161,7 @@ const RiskTermPopup = ({ isOpen, onClose, userID, setTermData, onAdd }) => {
                                     placeholder="Select Approver"
                                 >
                                     <option value="">Select Approver</option>
-                                    {usersList.map((value, index) => (
+                                    {approverOptions.map((value, index) => (
                                         <option key={index} value={value.id || value._id || value}>
                                             {value.username || value.label || value}
                                         </option>

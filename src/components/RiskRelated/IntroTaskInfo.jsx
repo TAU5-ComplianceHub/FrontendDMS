@@ -562,6 +562,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         }
                                     }}
                                     readOnly={readOnly}
+                                    style={{ resize: "none" }}
                                 />
                             </td>
                         </tr>
@@ -587,6 +588,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         }
                                     }}
                                     readOnly={readOnly}
+                                    style={{ resize: "none" }}
                                 />
                             </td>
                         </tr>
@@ -612,6 +614,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         }
                                     }}
                                     readOnly={readOnly}
+                                    style={{ resize: "none" }}
                                 />
                             </td>
                         </tr>
@@ -628,6 +631,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         onChange={e => handleMainAreaInput(e.target.value)}
                                         onFocus={handleMainAreasFocus}
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     />
                                 </div>
                             </td>
@@ -645,6 +649,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         onChange={e => handleSubAreaInput(e.target.value)}
                                         onFocus={handleSubAreasFocus}
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     />
                                 </div>
                             </td>
@@ -662,6 +667,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         onChange={e => handleOwnerInput(e.target.value)}
                                         onFocus={handleOwnerFocus}
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     />
                                 </div>
                             </td>
@@ -679,6 +685,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                         onChange={e => handleLeaderInput(e.target.value)}
                                         onFocus={handleLeaderFocus}
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     />
                                 </div>
                             </td>
@@ -762,6 +769,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                     }
                                     value={formData.introInfo.howAffected}
                                     readOnly={formData.introInfo.otherAffected !== 'yes' || readOnly}
+                                    style={{ resize: "none" }}
                                 />
                             )}
                         </div>
@@ -930,6 +938,7 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
                                                             dateConducted: false
                                                         }))
                                                     }}
+                                                    onOpenPickNewDate={false}
                                                 />
                                                 <FontAwesomeIcon
                                                     icon={faCalendarDays}

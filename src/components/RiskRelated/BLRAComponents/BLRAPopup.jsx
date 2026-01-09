@@ -1073,7 +1073,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false }) => {
                                                                         <td>
                                                                             <div className="ibra-popup-page-row-actions">
                                                                                 <textarea
-                                                                                    style={{ color: "black", cursor: "text", resize: "vertical" }}
+                                                                                    style={{ color: "black", cursor: "text", resize: "none" }}
                                                                                     value={row.value}
                                                                                     className="ibra-popup-page-input-table-hazard-text-area ibra-popup-page-row-input"
                                                                                     onChange={(e) => handleHazardChange(row.id, e.target.value)}
@@ -1120,7 +1120,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false }) => {
                                                     <div className="ue-textarea-wrapper">
                                                         <textarea
                                                             type="text"
-                                                            style={{ color: "black", cursor: "text", fontFamily: "Arial" }}
+                                                            style={{ color: "black", cursor: "text", fontFamily: "Arial", resize: "none" }}
                                                             ref={ueInputRef}
                                                             key={"unwanted-event-textarea"}
                                                             className="ibra-popup-page-input-table-2-square"
@@ -1150,6 +1150,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false }) => {
                                                 onChange={(e) => setMaxConsequence(e.target.value)}
                                                 placeholder="Insert max reasonable consequence details"
                                                 readOnly={readOnly}
+                                                style={{ resize: "none" }}
                                             ></textarea>
                                         </div>
                                     </div>
@@ -1171,6 +1172,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false }) => {
                                                                             onChange={e => handleControlInput(row.id, e.target.value)}
                                                                             ref={el => inputRefs.current[`control-${row.id}`] = el}
                                                                             readOnly={readOnly}
+                                                                            style={{ resize: "none" }}
                                                                         />
                                                                     </div>
 
@@ -1329,6 +1331,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false }) => {
                                             onChange={(e) => setAdditionalComments(e.target.value)}
                                             placeholder="Insert additional notes for this specific unwanted event (Do not include future controls or improvements here, these should be listed at the end of the BLRA table)."
                                             readOnly={readOnly}
+                                            style={{ resize: "none" }}
                                         />
                                     </div>
                                 </div>

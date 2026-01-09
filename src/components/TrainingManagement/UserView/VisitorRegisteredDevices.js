@@ -28,6 +28,7 @@ const VisitorRegisteredDevices = () => {
     const [addDeviceContext, setAddDeviceContext] = useState(null);
     const [deleteContext, setDeleteContext] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [isAllowed, setIsAllowed] = useState(false);
 
     const downloadTemplateForm = () => {
         const link = document.createElement('a');
@@ -93,6 +94,8 @@ const VisitorRegisteredDevices = () => {
             }
             const data = await response.json();
             setDevices(data.devices || []);
+            console.log('Fetched devices:', data);
+            setIsAllowed(data.isAllowed || false);
         } catch (err) {
             console.error(err);
             setError(err.message || 'Error fetching devices');
@@ -310,7 +313,10 @@ const VisitorRegisteredDevices = () => {
                                         <th className="course-home-info-progress" style={{ width: "20%" }}>Serial Number</th>
                                         <th className="course-home-info-name" style={{ width: "15%" }}>Arrival Date</th>
                                         <th className="course-home-info-access" style={{ width: "15%" }}>Exit Date</th>
-                                        <th className="course-home-info-access" style={{ width: "10%" }}>Action</th>
+
+                                        {isAllowed && (
+                                            <th className="course-home-info-access" style={{ width: "10%" }}>Action</th>
+                                        )}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -384,41 +390,46 @@ const VisitorRegisteredDevices = () => {
                                                 >
                                                     {device.exitDate ? formatDate(device.exitDate) : "N/A"}
                                                 </td>
-                                                <td
-                                                    style={{
-                                                        fontSize: "14px",
-                                                        textAlign: "center",
-                                                        fontFamily: "Arial"
-                                                    }}
-                                                >
-                                                    <button
-                                                        className={"flame-delete-button-fi col-but-res"}
-                                                        style={{ width: "33%" }}
-                                                        onClick={() => handleEditDevice(device, index)}
+
+                                                {isAllowed && (
+                                                    <td
+                                                        style={{
+                                                            fontSize: "14px",
+                                                            textAlign: "center",
+                                                            fontFamily: "Arial"
+                                                        }}
                                                     >
-                                                        <FontAwesomeIcon icon={faEdit} title="Edit Device" />
-                                                    </button>
+                                                        <>
+                                                            <button
+                                                                className={"flame-delete-button-fi col-but-res"}
+                                                                style={{ width: "33%" }}
+                                                                onClick={() => handleEditDevice(device, index)}
+                                                            >
+                                                                <FontAwesomeIcon icon={faEdit} title="Edit Device" />
+                                                            </button>
 
-                                                    {(!isPlaceholder || hasData) && (
-                                                        <button
-                                                            className={"flame-delete-button-fi col-but"}
-                                                            style={{ width: "33%" }}
-                                                            onClick={() => handleDeleteDevice(device, index)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faTrash} title="Delete Device" />
-                                                        </button>
-                                                    )}
+                                                            {(!isPlaceholder || hasData) && (
+                                                                <button
+                                                                    className={"flame-delete-button-fi col-but"}
+                                                                    style={{ width: "33%" }}
+                                                                    onClick={() => handleDeleteDevice(device, index)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faTrash} title="Delete Device" />
+                                                                </button>
+                                                            )}
 
-                                                    {(!isPlaceholder || hasData) && (
-                                                        <button
-                                                            className={"flame-delete-button-fi col-but-res"}
-                                                            style={{ width: "33%" }}
-                                                            onClick={() => handleAddNewDeviceAfter(device, index)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faCirclePlus} title="Add Another Device" />
-                                                        </button>
-                                                    )}
-                                                </td>
+                                                            {(!isPlaceholder || hasData) && (
+                                                                <button
+                                                                    className={"flame-delete-button-fi col-but-res"}
+                                                                    style={{ width: "33%" }}
+                                                                    onClick={() => handleAddNewDeviceAfter(device, index)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faCirclePlus} title="Add Another Device" />
+                                                                </button>
+                                                            )}
+                                                        </>
+                                                    </td>
+                                                )}
                                             </tr>
                                         );
                                     })}

@@ -349,6 +349,7 @@ const UploadPopup = ({ onClose }) => {
                                             inputClass="upload-file-page-date"
                                             placeholder="YYYY-MM-DD"
                                             hideIcon={false}
+                                            onOpenPickNewDate={false}
                                             style={{ paddingBottom: "12px", paddingTop: "12px", "--rmdp-primary-color": "#002060" }}
                                         />
                                         <FontAwesomeIcon

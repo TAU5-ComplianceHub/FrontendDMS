@@ -1073,7 +1073,7 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
                                                                         <td>
                                                                             <div className="ibra-popup-page-row-actions">
                                                                                 <textarea
-                                                                                    style={{ color: "black", cursor: "text", resize: "vertical" }}
+                                                                                    style={{ color: "black", cursor: "text", resize: "vertical", resize: "none" }}
                                                                                     value={row.value}
                                                                                     className="ibra-popup-page-input-table-hazard-text-area ibra-popup-page-row-input"
                                                                                     onChange={(e) => handleHazardChange(row.id, e.target.value)}
@@ -1150,6 +1150,7 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
                                                 onChange={(e) => setMaxConsequence(e.target.value)}
                                                 placeholder="Insert max reasonable consequence details"
                                                 readOnly={readOnly}
+                                                style={{ resize: "none" }}
                                             ></textarea>
                                         </div>
                                     </div>
@@ -1171,6 +1172,7 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
                                                                             onChange={e => handleControlInput(row.id, e.target.value)}
                                                                             ref={el => inputRefs.current[`control-${row.id}`] = el}
                                                                             readOnly={readOnly}
+                                                                            style={{ resize: "none" }}
                                                                         />
                                                                     </div>
 
@@ -1329,6 +1331,7 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
                                             onChange={(e) => setAdditionalComments(e.target.value)}
                                             placeholder="Insert additional notes for this specific unwanted event (Do not include future controls or improvements here, these should be listed at the end of the IBRA table)."
                                             readOnly={readOnly}
+                                            style={{ resize: "none" }}
                                         />
                                     </div>
                                 </div>

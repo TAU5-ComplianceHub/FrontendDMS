@@ -12,8 +12,9 @@ import ControlQuality from './RiskInfo/ControlQuality';
 import ControlEffectiveness from './RiskInfo/ControlEffectiveness';
 import axios from 'axios';
 import DatePicker from 'react-multi-date-picker';
+import { toast } from "react-toastify";
 
-const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) => {
+const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, existingControlNames = [] }) => {
     const [initialControlName] = useState(data.control);
     const [controlName, setControlName] = useState("");
     const [criticalControl, setCriticalControl] = useState("");
@@ -111,6 +112,12 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
     };
 
     useEffect(() => {
+        if (!quality || !hierarchy) {
+            setCER("");
+            setFormattingColour("");
+            return;
+        }
+
         if (quality && hierarchy) {
             const hierarchyVal = parseInt(hierarchy.split('. ')[0]) - 1;
             console.log(hierarchyVal);
@@ -294,6 +301,32 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
             return;
         }
 
+        const oldName = String(initialControlName ?? "").trim();
+        const newName = String(controlName ?? "").trim();
+
+        if (!newName) {
+            toast.warn("Control name cannot be empty.", { autoClose: 1200 });
+            return;
+        }
+
+        if (newName.toLowerCase() !== oldName.toLowerCase()) {
+            console.log("Checking for existing control names...");
+            const exists = existingControlNames.some(n => {
+                const norm = String(n ?? "").trim().toLowerCase();
+                console.log(`Comparing existing control "${norm}" with new name "${newName.toLowerCase()}"`);
+                return norm && norm === newName.toLowerCase();
+            });
+
+            console.log("Exists:", exists);
+
+            if (exists) {
+                toast.error(`A control named "${newName}" already exists. Please choose a unique name.`, {
+                    autoClose: 3000,
+                });
+                return;
+            }
+        }
+
         const updatedData = {
             control: controlName,
             critical: criticalControl,
@@ -341,6 +374,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                         value={controlName}
                                         onChange={(e) => setControlName(e.target.value)}
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     />
                                 </div>
                             </div>
@@ -523,6 +557,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Insert Notes Regarding the Control"
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     ></textarea>
                                 </div>
                             </div>
@@ -536,6 +571,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Description of control"
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     ></textarea>
                                 </div>
                             </div>
@@ -549,6 +585,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Performance requirement of control"
                                         readOnly={readOnly}
+                                        style={{ resize: "none" }}
                                     ></textarea>
                                 </div>
                             </div>
@@ -561,17 +598,18 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                                 <div className="ibra-popup-page-form-group">
                                                     <label style={{ fontSize: "15px" }}>Control Improvement/ Action
                                                     </label>
-                                                    <input
-                                                        className="cea-popup-page-input"
+                                                    <textarea
+                                                        className="cea-popup-page-textarea-imp"
                                                         value={action}
                                                         onChange={(e) => setAction(e.target.value)}
                                                         placeholder="Insert Required Action to Improve Control"
                                                         readOnly={readOnly}
+                                                        style={{ resize: "none" }}
                                                     />
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="ibra-popup-page-column-half">
+                                        <div className="ibra-popup-page-column-half" style={{ display: "flex", alignItems: "center" }}>
                                             <div className="ibra-popup-page-additional-row">
                                                 <div className="ibra-popup-page-column-half">
                                                     <div className="ibra-popup-page-component-wrapper">
@@ -587,6 +625,10 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                                                     onFocus={() => handleResponsibleFocus()}
                                                                     placeholder="Select Responsible Person"
                                                                     readOnly={readOnly}
+                                                                    style={{
+                                                                        height: "16px",
+                                                                        marginBottom: "4px"
+                                                                    }}
                                                                 />
                                                             </div>
                                                         </div>
@@ -618,8 +660,11 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly }) =>
                                                                         }))
                                                                     }}
                                                                     style={{
-                                                                        width: "calc(100% - 6px)"
+                                                                        width: "calc(100% - 6px)",
+                                                                        height: "16px",
+                                                                        marginBottom: "4px"
                                                                     }}
+                                                                    onOpenPickNewDate={false}
                                                                 />
                                                                 <FontAwesomeIcon
                                                                     icon={faCalendarDays}

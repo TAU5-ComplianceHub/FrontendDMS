@@ -9,11 +9,10 @@ import { useNavigate } from 'react-router-dom';
 import ComponentDateUpdates from './ComponentDateUpdates';
 import DatePicker from 'react-multi-date-picker';
 
-const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", assetType = "" }) => {
+const NewComponentCertificateDigitalWarehouse = ({ onClose, refresh, assetNumber = "", site = "", assetType = "", newComponent = "", oldId = "" }) => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [certificateAuth, setCertificateAuth] = useState('');
     const [certificateNum, setCertificateNum] = useState('');
-    const [component, setComponent] = useState('');
     const [issueDate, setIssueDate] = useState('');
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -40,6 +39,7 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
     const [assetNumberR, setAssetNumberR] = useState("");
     const navigate = useNavigate();
     const [certifiers, setCertifiers] = useState([]);
+    const [component, setComponent] = useState(newComponent || "");
 
     const fetchCertifiers = async () => {
         try {
@@ -57,14 +57,14 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
 
     const todayString = () => {
         const d = new Date();
-        // shift for timezone so the ISO date matches local date
         d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+        return d.toISOString().slice(0, 10);
     };
 
     const normStr = (s = "") => s.toLowerCase().trim();
     const siteLocked = !!site;
     const assetLocked = !!assetNumber;
+    const componentLocked = !!newComponent;
     const assetTypeFilter = normStr(assetType || "");
 
     useEffect(() => {
@@ -74,142 +74,6 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
             setUserID(decodedToken.userId);
         }
     }, []);
-
-    const toStringList = (arr) =>
-        (Array.isArray(arr) ? arr : [])
-            .map(v => typeof v === 'string' ? v : (v?.name ?? v?.component ?? ''))
-            .map(s => String(s || '').trim())
-            .filter(Boolean);
-
-    // pull the required components stored on the asset
-    const getRequiredFromAsset = (asset) =>
-        toStringList(
-            asset?.requiredComponents ??
-            asset?.componentsList ??
-            asset?.componentsRequired ??
-            asset?.components ??              // <- if your asset stores required components here
-            []
-        );
-
-    // pull the components that already have certificates for this asset
-    const getCertifiedFromAsset = (asset) =>
-        toStringList(
-            asset?.certifiedComponents ??
-            asset?.componentsWithCertificates ??
-            asset?.certificateComponents ??
-            (Array.isArray(asset?.certificates) ? asset.certificates.map(c => c.component) : []) ??
-            asset?.existingComponents ??
-            []                                // <- if your /sites-assets-active already sets this
-        );
-
-    useEffect(() => {
-        const fetchSitesAssetsActive = async () => {
-            try {
-                const res = await fetch(`${process.env.REACT_APP_URL}/api/flameproof/sites-assets-active`);
-                if (!res.ok) throw new Error("Failed to fetch sites/assets");
-                const data = await res.json();
-                const sitesArr = (data.sites || []).map(s => ({ _id: s._id, site: s.site }));
-                const assetsMap = {};
-                (data.sites || []).forEach(s => {
-                    assetsMap[s._id] = (s.assets || []).map(a => ({
-                        _id: a._id,
-                        assetNr: a.assetNr,
-                        assetType: a.assetType || "",
-                        // REQUIRED components from the asset doc
-                        components: Array.isArray(a.components) ? a.components : [],
-                        // components that ALREADY have active certs
-                        certifiedComponents: Array.isArray(a.certifiedComponents) ? a.certifiedComponents : [],
-                        hasMaster: !!a.hasMaster    // or a.master; route returns both
-                    }));
-                });
-
-                // stable UI sorts
-                sitesArr.sort((a, b) => (a.site || "").localeCompare(b.site || ""));
-                Object.keys(assetsMap).forEach(k => {
-                    assetsMap[k].sort((a, b) => (a.assetNr || "").localeCompare(b.assetNr || ""));
-                });
-
-                setAssetsBySite(assetsMap);
-                console.log("" + assetsMap[site]);
-
-                // ⬇️ user must pick site first, so:
-                setFilteredSites(sitesArr);
-                setAssetOptions([]);            // ⬅️ no site yet ⇒ empty asset list
-
-                if (site && assetsMap[site]) setSiteId(site);
-                if (assetNumber) setAssetNr(assetNumber);
-            } catch (e) {
-                console.error(e);
-            }
-        };
-
-        fetchSitesAssetsActive();
-    }, [site, assetNumber]);
-
-    useEffect(() => {
-        if (!assetNr) {
-            setAvailableComponents([]);
-            return;
-        }
-
-        const current = assetNrs.find(a => a.assetNr === assetNr);
-        const requiredAll = Array.from(new Set(getRequiredFromAsset(current).map(s => s.trim())));
-        const already = new Set(getCertifiedFromAsset(current).map(s => s.toLowerCase()));
-        if (String(current?.master ?? '').toLowerCase() === 'true' || current?.master === true) {
-            already.add('master');
-        }
-
-        const remaining = requiredAll.filter(name => !already.has(name.toLowerCase()));
-        const isMaster = (s) => (s || '').trim().toLowerCase() === 'master';
-        const num = (s) => parseInt(String(s || '').replace(/^\D+/, ''), 10) || 0;
-
-        remaining.sort((a, b) => {
-            if (isMaster(a)) return -1;
-            if (isMaster(b)) return 1;
-            return num(a) - num(b);
-        });
-
-        const opts = remaining.map((name, i) => ({ _id: `opt-${i}-${name}`, component: name }));
-        setAvailableComponents(opts);
-    }, [assetNr, assetNrs]);
-
-    useEffect(() => {
-        if (!siteId) {
-            setAssetNrs([]);
-            setAssetOptions([]);
-            setAssetNr("");
-            setComponent("");
-            return;
-        }
-
-        const listAll = assetsBySite[siteId] || [];
-        const list =
-            assetTypeFilter
-                ? listAll.filter(a => normStr(a.assetType) === assetTypeFilter)
-                : listAll;
-
-        console.log(list)
-        setAssetNrs(list);
-        setAssetOptions(list);
-
-        // clear asset if it doesn't belong here (unless locked)
-        if (!assetLocked && assetNr && !list.some(a => a.assetNr === assetNr)) {
-            setAssetNr("");
-        }
-
-        // whenever site changes, clear component choice
-        setComponent("");
-    }, [siteId, assetsBySite, assetTypeFilter, assetNr, assetLocked]);
-
-    useEffect(() => {
-        // Always show all sites (or keep any pre-existing site prop lock)
-        if (sites.length) setFilteredSites(sites);
-    }, [sites]);
-
-    const norm = (s = "") => s.toLowerCase().trim();
-    const isMasterLabel = s => norm(s) === "master";
-
-    const closeAllDropdowns = () => setShowAssetDropdown(false);
 
     const validateForm = () => {
         const newErrors = {};
@@ -246,69 +110,52 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
 
     const handleFileUpload = async () => {
         if (!isFormValid()) return;
-        const norm = (s = "") => s.trim().toLowerCase();
-        const existsInThisSite = (assetsBySite[siteId] || []).some(a => norm(a.assetNr) === norm(assetNr));
-        if (!existsInThisSite) {
-            toast.error("Asset Number does not exist in the selected site.", {
-                closeButton: false, autoClose: 2000, style: { textAlign: 'center' }
-            });
-            return;
-        }
 
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('certificationAuthority', certificateAuth);
         formData.append('certificateNr', certificateNum);
-        formData.append('assetNr', assetNr);
         formData.append('issueDate', issueDate);
-        formData.append('component', component);
-        formData.append('site', siteId);
 
         try {
             setLoading(true);
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/flameproof/uploadCertificate`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-                body: formData,
-            });
-            if (!response.ok) throw new Error(response.error || 'Failed to upload file');
+            if (!oldId) {
+                throw new Error("Missing oldId (certificateId) for rollback-and-upload flow");
+            }
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/flameWarehouse/certificates/rollbackAndUploadNewNext/${oldId}`,
+                {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+                    body: formData,
+                }
+            );
+
             const data = await response.json();
+            if (!response.ok) throw new Error(data?.error || 'Failed to upload file');
 
-            setAssetID(data.id);
-            setAssetNumberR(data.assetNr);
-
-            setShowPopup(true);
             setSelectedFile(null);
             setCertificateAuth('');
             setCertificateNum('');
-            setComponent("");
             setIssueDate('');
-            setAssetNr("");
-            setSiteId("");
 
             setError(null);
             setLoading(false);
 
-            toast.success("Certificate Uploaded Successfully", {
+            toast.success("Component moved to asset with new certificate", {
                 closeButton: false, autoClose: 2000, style: { textAlign: 'center' }
             });
 
-            setConfirmNavigation(true);
+            setTimeout(() => {
+                onClose();
+                refresh();
+            }, 1500);
         } catch (error) {
             setError(error.message);
             setLoading(false);
         }
     };
-
-    const handleNavigateUpdate = () => {
-        setConfirmNavigation(false);
-        navigate(`/flameComponents/${assetID}`);
-    }
-
-    const handleNavigateNormal = () => {
-        setConfirmNavigation(false);
-        onClose(assetNumberR, assetID, true);
-    }
 
     const handleFileSelect = (file) => {
         if (file) setSelectedFile(file);
@@ -344,45 +191,6 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
         };
     }, [showAssetDropdown]);
 
-    const positionDropdownToInput = () => {
-        const el = assetRef.current;
-        if (el) {
-            const rect = el.getBoundingClientRect();
-            setDropdownPosition({
-                top: rect.bottom + window.scrollY + 5,
-                left: rect.left + window.scrollX,
-                width: rect.width
-            });
-        }
-    };
-
-    const handleAssetInput = (value) => {
-        setAssetNr(value);
-    };
-
-    const handleAssetFocus = () => {
-        if (assetLocked) return;
-        closeAllDropdowns();
-        setFilteredAssetNrs(assetNrs);
-        setShowAssetDropdown(true);
-        positionDropdownToInput();
-    };
-
-    const selectAssetSuggestion = (value) => {
-        setAssetNr(value);
-        setShowAssetDropdown(false);
-    };
-
-    const selectedAsset = assetNrs.find(a => a.assetNr === assetNr) || null;
-    const selectedAssetHasMaster = !!selectedAsset?.master;
-
-    useEffect(() => {
-        if (!assetNr) return;
-        if (component === "Master" && selectedAssetHasMaster) {
-            setComponent("");
-        }
-    }, [assetNr, component, selectedAssetHasMaster]);
-
     useEffect(() => {
         fetchCertifiers();
     }, [])
@@ -392,7 +200,7 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
             <div className="ump-overlay">
                 <div className="ump-content">
                     <div className="review-date-header">
-                        <h2 className="review-date-title">Upload Certificate</h2>
+                        <h2 className="review-date-title">Upload New Certificate</h2>
                         <button className="review-date-close" onClick={() => onClose(null, null, false)} title="Close Popup">×</button>
                     </div>
 
@@ -416,57 +224,34 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
                                 <div className={`ump-form-group ${errors.site ? "ump-error" : ""}`}>
                                     <label>Site <span className="ump-required">*</span></label>
                                     <div className={`${siteLocked ? `` : `fpm-select-container`}`}>
-                                        <select
+                                        <input
                                             value={siteId}
-                                            onChange={(e) => setSiteId(e.target.value)}
                                             className="upm-comp-input-select font-fam"
                                             style={{ color: siteId === "" ? "GrayText" : "black" }}
-                                            disabled={siteLocked}                // <- lock when site prop provided
-                                        >
-                                            <option value="" className="def-colour">Select Site</option>
-                                            {filteredSites.map(s => (
-                                                <option key={s._id} value={s._id} className="norm-colour">
-                                                    {s.site}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            disabled={siteLocked}
+                                        />
                                     </div>
                                 </div>
                                 <div className={`ump-form-group ${errors.asset ? "ump-error" : ""}`}>
                                     <label>Asset Number <span className="ump-required">*</span></label>
                                     <div className={`${assetLocked ? `` : `fpm-select-container`}`}>
-                                        <select
+                                        <input
                                             value={assetNr || ""}
-                                            onChange={(e) => handleAssetInput(e.target.value)}
                                             className="upm-comp-input-select font-fam"
                                             style={{ color: assetNr === "" ? "GrayText" : "black" }}
                                             disabled={assetLocked}
-                                        >
-                                            <option value="" className="def-colour">Select Asset Number</option>
-                                            {assetOptions.map(asset => (
-                                                <option key={asset._id} value={asset.assetNr} className="norm-colour">
-                                                    {asset.assetNr}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        />
                                     </div>
                                 </div>
                                 <div className={`ump-form-group ${errors.component ? "ump-error" : ""}`}>
                                     <label>Component/ Type <span className="ump-required">*</span></label>
-                                    <div className="ump-select-container">
-                                        <select
+                                    <div className={`${componentLocked ? `` : `fpm-select-container`}`}>
+                                        <input
                                             value={component || ""}
-                                            onChange={(e) => setComponent(e.target.value)}
                                             className="upm-comp-input-select font-fam"
                                             style={{ color: component === "" ? "GrayText" : "black" }}
-                                        >
-                                            <option value="" className="def-colour">Select Component</option>
-                                            {availableComponents.map(comp => (
-                                                <option key={comp._id} value={comp.component} className="norm-colour">
-                                                    {comp.component}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            disabled={componentLocked}
+                                        />
                                     </div>
                                 </div>
 
@@ -513,8 +298,7 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
                                             format="YYYY-MM-DD"
                                             onChange={(val) => {
                                                 const v = val?.format("YYYY-MM-DD");
-                                                const max = todayString();
-                                                setIssueDate(v && v > max ? max : v); // clamp to today if future picked/typed
+                                                setIssueDate(v); // clamp to today if future picked/typed
                                             }}
                                             rangeHover={false}
                                             highlightToday={false}
@@ -544,32 +328,8 @@ const UploadComponentPopup = ({ onClose, refresh, assetNumber = "", site = "", a
                     </div>
                 </div>
             </div>
-
-            {showAssetDropdown && filteredAssetNrs.length > 0 && (
-                <ul
-                    className="floating-dropdown"
-                    style={{
-                        position: "fixed",
-                        top: dropdownPosition.top,
-                        left: dropdownPosition.left,
-                        width: dropdownPosition.width,
-                        zIndex: 1000
-                    }}
-                >
-                    {filteredAssetNrs
-                        .slice() // avoid mutating original
-                        .sort((a, b) => (a.assetNr || "").localeCompare(b.assetNr || ""))
-                        .map((term, i) => (
-                            <li key={i} onMouseDown={() => selectAssetSuggestion(term.assetNr)}>
-                                {term.assetNr}
-                            </li>
-                        ))}
-                </ul>
-            )}
-
-            {confirmNavigation && (<ComponentDateUpdates closeModal={handleNavigateNormal} navigateToPage={handleNavigateUpdate} />)}
         </div>
     );
 };
 
-export default UploadComponentPopup;
+export default NewComponentCertificateDigitalWarehouse;

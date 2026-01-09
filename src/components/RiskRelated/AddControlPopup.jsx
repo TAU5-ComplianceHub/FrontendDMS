@@ -187,6 +187,7 @@ const AddControlPopup = ({ onClose }) => {
                                         className="cea-popup-page-text-area-input"
                                         value={controlName}
                                         onChange={(e) => setControlName(e.target.value)}
+                                        style={{ resize: "none" }}
                                     />
                                 </div>
                             </div>
@@ -346,6 +347,7 @@ const AddControlPopup = ({ onClose }) => {
                                         onChange={(e) => setDescription(e.target.value)}
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Description of control"
+                                        style={{ resize: "none" }}
                                     ></textarea>
                                 </div>
                             </div>
@@ -358,6 +360,7 @@ const AddControlPopup = ({ onClose }) => {
                                         onChange={(e) => setPerformance(e.target.value)}
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Performance requirement of control"
+                                        style={{ resize: "none" }}
                                     ></textarea>
                                 </div>
                             </div>

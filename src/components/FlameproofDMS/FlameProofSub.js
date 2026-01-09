@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCaretLeft, faCaretRight, faTrash, faRotate, faX, faFileCirclePlus, faSearch, faArrowLeft, faSpinner, faDownload, faSort } from '@fortawesome/free-solid-svg-icons';
+import { faCaretLeft, faCaretRight, faTrash, faRotate, faX, faFileCirclePlus, faSearch, faArrowLeft, faSpinner, faDownload, faSort, faEdit } from '@fortawesome/free-solid-svg-icons';
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
 import { toast, ToastContainer } from 'react-toastify';
@@ -21,6 +21,7 @@ import TopBarFPC from "./Popups/TopBarFPC";
 import DeleteCertificate from "./Popups/DeleteCertificate";
 import ReplaceComponentPopup from "./WarehousePopups/ReplaceComponentPopup";
 import { saveAs } from "file-saver";
+import ModifyCertificateDetailsPopup from "./Popups/ModifyCertificateDetailsPopup";
 
 const FlameProofSub = () => {
   const { type, assetId } = useParams();
@@ -67,6 +68,8 @@ const FlameProofSub = () => {
   const [replaceType, setReplaceType] = useState("");
   const [replaceComp, setReplaceComp] = useState("");
   const [replaceID, setReplaceID] = useState("");
+  const [modifyData, setModifyData] = useState([]);
+  const [modifyPopup, setModifyPopup] = useState(false);
 
   const openReplace = (assetType, component, id) => {
     setReplaceID(id);
@@ -149,6 +152,16 @@ const FlameProofSub = () => {
       console.error("Error generating document:", error);
     }
   };
+
+  const openModify = (data) => {
+    setModifyData(data);
+    setModifyPopup(true)
+  }
+
+  const closeModify = () => {
+    setModifyData([]);
+    setModifyPopup(false)
+  }
 
   const closePopup = () => {
     setPopup(null);
@@ -335,6 +348,8 @@ const FlameProofSub = () => {
       setAreas(uniqueOpAreas);
       setStatus(uniqueStatus);
       setTypes(uniqueTypes);
+
+      console.log(data.certificates);
 
       setFiles(data.certificates);
     } catch (error) {
@@ -783,15 +798,28 @@ const FlameProofSub = () => {
                             <FontAwesomeIcon icon={faRotate} title="Restore Document" />
                           </button>
                         )}
-                        {!file.isPlaceholder && (<button
-                          className={`delete-button-fi col-but ${isTrashView ? "trashed-color" : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();         // ⛔ prevent row click
-                            openModal(file._id, file.fileName);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faTrash} title="Delete Document" />
-                        </button>)}
+                        {!file.isPlaceholder && (
+                          <>
+                            {!isTrashView && (<button
+                              className={`delete-button-fi col-but-res col-but ${isTrashView ? "trashed-color" : ""}`}
+                              onClick={(e) => {
+                                e.stopPropagation();         // ⛔ prevent row click
+                                openModify(file);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faEdit} title="Modify Component" />
+                            </button>)}
+                            <button
+                              className={`delete-button-fi col-but ${isTrashView ? "trashed-color" : ""}`}
+                              onClick={(e) => {
+                                e.stopPropagation();         // ⛔ prevent row click
+                                openModal(file._id, file.fileName);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrash} title="Delete Document" />
+                            </button>
+                          </>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -808,6 +836,7 @@ const FlameProofSub = () => {
       {upload && (<UploadComponentPopup onClose={closeUpload} refresh={fetchFiles} site={site} assetNumber={type} />)}
       {update && (<UpdateCertificateModal certificateID={updateID} closeModal={closeUpdate} isModalOpen={update} refresh={fetchFiles} />)}
       {replace && (<ReplaceComponentPopup onClose={closeReplace} isOpen={replace} assetType={replaceType} component={replaceComp} replaceComponent={replaceComponent} />)}
+      {modifyPopup && (<ModifyCertificateDetailsPopup data={modifyData} onClose={closeModify} refresh={fetchFiles} />)}
       <ToastContainer />
     </div >
   );

@@ -161,6 +161,7 @@ const AddVisitorDevicePopup = ({ onClose, refresh, visitorId, insertAfterIndex }
                                                         hideIcon={false}
                                                         inputClass='ump-input-select-new-3'
                                                         minDate={todayString()}
+                                                        onOpenPickNewDate={false}
                                                     />
                                                     <FontAwesomeIcon
                                                         icon={faCalendarDays}
@@ -190,6 +191,7 @@ const AddVisitorDevicePopup = ({ onClose, refresh, visitorId, insertAfterIndex }
                                                         hideIcon={false}
                                                         inputClass='ump-input-select-new-3'
                                                         minDate={arrival}
+                                                        onOpenPickNewDate={false}
                                                     />
                                                     <FontAwesomeIcon
                                                         icon={faCalendarDays}

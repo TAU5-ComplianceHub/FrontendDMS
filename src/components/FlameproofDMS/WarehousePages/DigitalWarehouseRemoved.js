@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faCirclePlus, faClipboardCheck, faDownload, faEdit, faFileAlt, faFileSignature, faHardHat, faHome, faIndustry, faListOl, faMagnifyingGlass, faScaleBalanced, faTableList, faTrash, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faCirclePlus, faClipboardCheck, faDownload, faEdit, faFileAlt, faFileSignature, faHardHat, faHome, faIndustry, faListOl, faMagnifyingGlass, faRotate, faScaleBalanced, faTableList, faTrash, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
 import { faSort, faSpinner, faX, faFileCirclePlus, faFolderOpen, faSearch, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
@@ -20,6 +20,9 @@ import PopupMenuOptionsAssets from "../Popups/PopupMenuOptionsAssets";
 import DownloadPopup from "../../FileInfo/DownloadPopup";
 import { saveAs } from 'file-saver';
 import TopBar from "../../Notifications/TopBar";
+import MoveRepairedComponent from "../Popups/MoveRepairedComponent";
+import NewComponentCertificateDigitalWarehouse from "../Popups/NewComponentCertificateDigitalWarehouse";
+import MoveComponentWarehousePopup from "../WarehousePopups/MoveComponentWarehousePopup";
 
 const DigitalWarehouseRemoved = () => {
   const { type, site } = useParams();
@@ -64,6 +67,10 @@ const DigitalWarehouseRemoved = () => {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [downloadFileId, setDownloadFileId] = useState(null);
   const [downloadFileName, setDownloadFileName] = useState(null);
+  const [showMovePopup, setShowMovePopup] = useState(false);
+  const [selectedMoveFile, setSelectedMoveFile] = useState(null);
+  const [selectedMoveSite, setSelectedMoveSite] = useState(null);
+  const [showNew, setShowNew] = useState(false);
 
   const openSortModal = () => setIsSortModalOpen(true);
   const closeSortModal = () => setIsSortModalOpen(false);
@@ -78,6 +85,23 @@ const DigitalWarehouseRemoved = () => {
     setDownloadFileId(null);
     setDownloadFileName(null);
     setIsDownloadModalOpen(false);
+  };
+
+  const openNew = () => {
+    setShowMovePopup(false);
+    setShowNew(true);
+  }
+
+  const openMoveModal = (file, site) => {
+    setSelectedMoveFile(file);
+    setSelectedMoveSite(site);
+    setShowMovePopup(true);
+  };
+
+  const closeMoveModal = () => {
+    setSelectedMoveFile(null);
+    setSelectedMoveSite(null);
+    setShowMovePopup(false);
   };
 
   const confirmDownload = () => {
@@ -123,6 +147,33 @@ const DigitalWarehouseRemoved = () => {
     } catch (error) {
       console.error('Error downloading file:', error);
       alert('Error downloading the file. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const moveNormal = async () => {
+    if (!selectedMoveFile) return;
+
+    try {
+      setLoading(true);
+      const res = await fetch(
+        `${process.env.REACT_APP_URL}/api/flameWarehouse/certificates/moveToWarehouseRepaired/${selectedMoveFile._id}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Rollback failed");
+
+      toast.success("Component moved to digital warehouse.", { autoClose: 1500, closeButton: false });
+
+      closeMoveModal();
+      fetchFiles();
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -240,24 +291,37 @@ const DigitalWarehouseRemoved = () => {
 
   const fetchFiles = async () => {
     setIsLoadingTable(true);
+    setError(null);
+
     const route = `/api/flameWarehouse/getComponentsReplaced`;
+
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
-        headers: {
-          // 'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await fetch(`${process.env.REACT_APP_URL}${route}`);
+
       if (!response.ok) {
-        throw new Error('Failed to fetch files');
+        // clear stale UI state so it doesn't show old data
+        setFiles([]);
+        setAssets([]);
+        setSites([]);
+
+        // optional: read server message if it exists
+        let msg = `Request failed (${response.status})`;
+        try {
+          const body = await response.json();
+          msg = body?.error || body?.message || msg;
+        } catch (_) { }
+
+        throw new Error(msg);
       }
+
       const data = await response.json();
 
-      const uniqueAssets = [...new Set(data.replacedDocuments.map(file => file.asset.assetNr))].sort();
-      const uniqueSites = [...new Set(data.replacedDocuments.map(file => file.asset.site.site))].sort();
+      const uniqueAssets = [...new Set(data.replacedDocuments.map(f => f.asset.assetNr))].sort();
+      const uniqueSites = [...new Set(data.replacedDocuments.map(f => f.asset.site.site))].sort();
 
       setAssets(uniqueAssets);
       setSites(uniqueSites);
-      setFiles(data.replacedDocuments);
+      setFiles(data.replacedDocuments || []);
     } catch (error) {
       setError(error.message);
     } finally {
@@ -362,11 +426,11 @@ const DigitalWarehouseRemoved = () => {
             <p className="filter-text-dm-fi">Filter</p>
             <div className="button-container-dm-fi">
               <div className="fi-info-popup-page-select-container">
-                <Select options={assetTypes.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedSite(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Site"
+                <Select options={sites.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedSite(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Site"
                   classNamePrefix="sb" />
               </div>
               <div className="fi-info-popup-page-select-container">
-                <Select options={areas.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedAssetForComponent(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Asset"
+                <Select options={assets.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedAssetForComponent(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Asset"
                   classNamePrefix="sb" />
               </div>
             </div>
@@ -445,7 +509,7 @@ const DigitalWarehouseRemoved = () => {
                     <td colSpan={
                       7
                     } style={{ textAlign: "center", padding: 20 }}>
-                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading repaired assets.
+                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading removed components.
                     </td>
                   </tr>
                 )}
@@ -455,7 +519,7 @@ const DigitalWarehouseRemoved = () => {
                     <td colSpan={
                       7
                     } style={{ textAlign: "center", padding: 20 }}>
-                      No Assets Repaired.
+                      No Components Removed.
                     </td>
                   </tr>
                 )}
@@ -471,6 +535,12 @@ const DigitalWarehouseRemoved = () => {
                     {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<td className={"col-act"}>
                       <button
                         className={"flame-delete-button-fi col-but-res"}
+                        onClick={() => openMoveModal(file, file.asset.site)}
+                      >
+                        <FontAwesomeIcon icon={faRotate} title="Move to Digital Warehouse" />
+                      </button>
+                      <button
+                        className={"flame-delete-button-fi col-but-res"}
                         onClick={() => openDownloadModal(file._id, file.fileName)}
                       >
                         <FontAwesomeIcon icon={faDownload} title="Download Certificate" />
@@ -484,6 +554,8 @@ const DigitalWarehouseRemoved = () => {
         </div>
       </div>
 
+      {showMovePopup && (<MoveRepairedComponent refresh={fetchFiles} closeModal={closeMoveModal} file={selectedMoveFile} moveNormal={moveNormal} newCertificate={openNew} />)}
+      {showNew && (<MoveComponentWarehousePopup onClose={() => setShowNew(false)} data={selectedMoveFile} refresh={fetchFiles} />)}
       {isDownloadModalOpen && (<DownloadPopup closeDownloadModal={closeDownloadModal} confirmDownload={confirmDownload} downloadFileName={downloadFileName} loading={loading} />)}
       {isSortModalOpen && (<SortPopupAsset closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} />)}
       <ToastContainer />
