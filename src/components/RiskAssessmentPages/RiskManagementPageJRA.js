@@ -855,15 +855,6 @@ const RiskManagementPageJRA = () => {
             });
         }
 
-        if (formData.references.length === 0) {
-            newErrors.reference = true;
-        } else {
-            formData.references.forEach((row, index) => {
-                if (!row.ref) newErrors.reference = true;
-                if (!row.refDesc) newErrors.reference = true;
-            });
-        }
-
         if (formData.jra.length === 0) {
             newErrors.jra = true;
         } else {
@@ -1438,7 +1429,7 @@ const RiskManagementPageJRA = () => {
                     <JRATable readOnly={readOnly} formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} error={errors.jra} setErrors={setErrors} />
                     <OtherTeam formData={formData} />
                     <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={false} />
 
                     <div className="input-row-buttons-risk-create">
                         {/* Generate File Button */}

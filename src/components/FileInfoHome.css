@@ -246,3 +246,33 @@
         transform: rotate(360deg);
     }
 }
+
+.vqr-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    padding-top: 4px;
+    padding-bottom: 0px;
+    /* gives the popup some body height */
+}
+
+.vqr-qr-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vqr-qr-img {
+    width: 260px;
+    height: 260px;
+    object-fit: contain;
+}
+
+.vqr-loading,
+.vqr-error {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}

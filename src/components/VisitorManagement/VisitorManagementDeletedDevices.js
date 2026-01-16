@@ -36,6 +36,18 @@ const VisitorManagementDeletedDevices = () => {
     const [deleteContext, setDeleteContext] = useState(null); // { deviceId, name }
     const [deleting, setDeleting] = useState(false);
 
+    // Excel Filter States
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const [activeExcelFilters, setActiveExcelFilters] = useState({});
+    const excelPopupRef = useRef(null);
+
     const totalCols = canIn(access, "TMS", ["systemAdmin", "contributor"]) ? 9 : 8;
     const openSortModal = () => setIsSortModalOpen(true);
     const closeSortModal = () => setIsSortModalOpen(false);
@@ -56,35 +68,27 @@ const VisitorManagementDeletedDevices = () => {
     const onPointerDownX = (e) => {
         const el = scrollerRef.current;
         if (!el) return;
-
-        // If the press is on an interactive element, don't start drag logic
         if (isInteractive(e.target)) return;
-
         dragRef.current.active = true;
         dragRef.current.hasDragged = false;
         dragRef.current.startX = e.clientX;
         dragRef.current.startScrollLeft = el.scrollLeft;
-        // IMPORTANT: do NOT set isDraggingX yet; wait until we cross threshold
     };
 
     const onPointerMoveX = (e) => {
         const el = scrollerRef.current;
         if (!el || !dragRef.current.active) return;
-
         const dx = e.clientX - dragRef.current.startX;
-
         if (!dragRef.current.hasDragged) {
             if (Math.abs(dx) >= DRAG_THRESHOLD) {
                 dragRef.current.hasDragged = true;
                 setIsDraggingX(true);
                 try { el.setPointerCapture?.(e.pointerId); } catch { }
             } else {
-                return; // still a click, do nothing
+                return;
             }
         }
-
         el.scrollLeft = dragRef.current.startScrollLeft - dx;
-        // prevent text selection while actually dragging
         e.preventDefault();
     };
 
@@ -119,7 +123,6 @@ const VisitorManagementDeletedDevices = () => {
     const extractNumbers = (value) => {
         if (!value) return '';
         const cleaned = value.replace(/\s+/g, '').replace(/[^\d+]/g, '');
-        // keep only one leading +
         return cleaned.startsWith('+')
             ? '+' + cleaned.slice(1).replace(/\+/g, '')
             : cleaned.replace(/\+/g, '');
@@ -127,15 +130,14 @@ const VisitorManagementDeletedDevices = () => {
 
     const formatDate = (dateString) => {
         if (!dateString) return "-";
-        const date = new Date(dateString); // Convert to Date object
+        const date = new Date(dateString);
         const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-        const day = String(date.getDate()).padStart(2, '0'); // Pad day with leading zero
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
         return `${day}.${month}.${year}`;
     };
 
     const [files, setFiles] = useState([]);
-    const [trainees, setTrainees] = useState([]);
     const [visitorInfo, setVisitorInfo] = useState([]);
 
     const fetchFiles = async () => {
@@ -150,7 +152,6 @@ const VisitorManagementDeletedDevices = () => {
                 throw new Error('Failed to fetch files');
             }
             const data = await response.json();
-            console.log(data);
             setFiles(data.devices);
         } catch (error) {
         }
@@ -168,8 +169,6 @@ const VisitorManagementDeletedDevices = () => {
                 throw new Error('Failed to fetch files');
             }
             const data = await response.json();
-            console.log(data)
-            console.log(data);
             setVisitorInfo(data.user);
         } catch (error) {
         }
@@ -181,21 +180,45 @@ const VisitorManagementDeletedDevices = () => {
     }, [token]);
 
     const handleSort = () => {
+        // Original manual sort modal logic
         const sortedFiles = [...files].sort((a, b) => {
-            const fieldA = a[sortField]?.toString().toLowerCase() || "";
-            const fieldB = b[sortField]?.toString().toLowerCase() || "";
-            if (sortOrder === "ascending") return fieldA.localeCompare(fieldB);
-            return fieldB.localeCompare(fieldA);
+            const fieldA = getRawValue(a, sortField);
+            const fieldB = getRawValue(b, sortField);
+            if (sortOrder === "ascending") return String(fieldA).localeCompare(String(fieldB));
+            return String(fieldB).localeCompare(String(fieldA));
         });
         setFiles(sortedFiles);
         closeSortModal();
+    };
+
+    // Helper to get raw values for sorting/filtering
+    const getRawValue = (item, colId) => {
+        switch (colId) {
+            case "nr": return ""; // handled by index
+            case "type": return item.deviceType || "";
+            case "name": return item.deviceName || "";
+            case "serialNumber": return item.serialNumber || "-";
+            case "deletionDate": return formatDate(item.deletedDate) || "-";
+            case "deletionReason": return item.deletedReason || "-";
+            default: return "";
+        }
+    };
+
+    // Excel Sort Logic
+    const toggleExcelSort = (colId, direction) => {
+        if (sortField === colId && sortOrder === direction) {
+            setSortField("");
+            setSortOrder("");
+        } else {
+            setSortField(colId);
+            setSortOrder(direction);
+        }
     };
 
     const clearSearch = () => {
         setSearchQuery("");
     };
 
-    // Which columns exist and how to render them
     const allColumns = [
         { id: "nr", title: "Nr", thClass: "visitor-ind-num-filter", td: (f, i) => i + 1 },
         { id: "type", title: "Device Type", thClass: "visitor-ind-name-filter", td: (f) => f.deviceType },
@@ -219,7 +242,6 @@ const VisitorManagementDeletedDevices = () => {
 
     const toggleColumn = (id) => {
         setShowColumns(prev => {
-            // nr + action are pinned (like IBRA’s nr/action)
             if (id === "nr" || id === "action") return prev;
             return prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id];
         });
@@ -230,7 +252,6 @@ const VisitorManagementDeletedDevices = () => {
             const allIds = availableColumns.map(c => c.id);
             setShowColumns(allIds);
         } else {
-            // minimal: only Nr (and Action if allowed)
             setShowColumns(
                 canIn(access, "TMS", ["systemAdmin", "contributor"]) ? ["nr", "action"] : ["nr"]
             );
@@ -244,13 +265,9 @@ const VisitorManagementDeletedDevices = () => {
 
     const visibleColumns = availableColumns.filter(c => showColumns.includes(c.id));
     const visibleCount = visibleColumns.length;
-    // Wide-mode when more than 9 columns (as requested)
     const isWide = visibleCount > 9;
-
-    // which header popup is open
     const [openHeader, setOpenHeader] = useState(null);
 
-    // column filters (text + date)
     const [colFilters, setColFilters] = useState({
         name: '',
         surname: '',
@@ -261,26 +278,43 @@ const VisitorManagementDeletedDevices = () => {
         createdBy: '',
         validity: '',
         version: '',
-        expiryFrom: '', // yyyy-mm-dd
-        expiryTo: ''    // yyyy-mm-dd
+        expiryFrom: '',
+        expiryTo: ''
     });
 
     const setFilter = (field, val) => setColFilters(f => ({ ...f, [field]: val }));
 
+    // Apply Filters & Sort
     const filteredFiles = files.filter((file) => {
         const matchesSearchQuery =
             (file.deviceName ?? "").toLowerCase().includes(searchQuery.toLowerCase())
-        // Date range filter (expiry)
+
         const fileExpiry = file.expiryDate ? new Date(file.expiryDate) : null;
         const fromOK = colFilters.expiryFrom ? (fileExpiry && fileExpiry >= new Date(colFilters.expiryFrom)) : true;
         const toOK = colFilters.expiryTo ? (fileExpiry && fileExpiry <= new Date(colFilters.expiryTo)) : true;
 
-        return fromOK && toOK && matchesSearchQuery;
+        // Excel Filters
+        let excelMatch = true;
+        for (const [colId, selectedSet] of Object.entries(activeExcelFilters)) {
+            if (!selectedSet) continue;
+            const val = getRawValue(file, colId);
+            if (!selectedSet.has(val)) {
+                excelMatch = false;
+                break;
+            }
+        }
+
+        return fromOK && toOK && matchesSearchQuery && excelMatch;
+    }).sort((a, b) => {
+        if (!sortField) return 0;
+        const fieldA = getRawValue(a, sortField);
+        const fieldB = getRawValue(b, sortField);
+        const dir = sortOrder === "ascending" ? 1 : -1;
+        return String(fieldA).localeCompare(String(fieldB), undefined, { sensitivity: "base", numeric: true }) * dir;
     });
 
     const handleDeleteClick = (device) => {
         if (!device?._id) return;
-
         setDeleteContext({
             deviceId: device._id,
             name: device.deviceName || device.deviceType || device.serialNumber || "Device",
@@ -289,11 +323,9 @@ const VisitorManagementDeletedDevices = () => {
 
     const confirmDeleteDevice = async () => {
         if (!deleteContext || !deleteContext.deviceId) return;
-
         setDeleting(true);
         try {
             const adminToken = localStorage.getItem("token");
-
             const response = await fetch(
                 `${process.env.REACT_APP_URL}/api/visitorDevices/deleteDevicePermanently/${visitorID}/${deleteContext.deviceId}`,
                 {
@@ -303,32 +335,68 @@ const VisitorManagementDeletedDevices = () => {
                     },
                 }
             );
-
             const result = await response.json();
-
             if (response.ok && result.ok) {
-                toast.success("Device permanently deleted", {
-                    autoClose: 2000,
-                    closeButton: false,
-                });
-
-                await fetchFiles();          // refresh deleted devices list
-                setDeleteContext(null);      // close popup
+                toast.success("Device permanently deleted", { autoClose: 2000, closeButton: false });
+                await fetchFiles();
+                setDeleteContext(null);
             } else {
-                toast.error(result.message || "Failed to permanently delete device", {
-                    autoClose: 2000,
-                    closeButton: false,
-                });
+                toast.error(result.message || "Failed to permanently delete device", { autoClose: 2000, closeButton: false });
             }
         } catch (err) {
             console.error("Error permanently deleting device:", err);
-            toast.error("An error occurred while permanently deleting the device", {
-                autoClose: 2000,
-                closeButton: false,
-            });
+            toast.error("An error occurred while permanently deleting the device", { autoClose: 2000, closeButton: false });
         } finally {
             setDeleting(false);
         }
+    };
+
+    // --- Excel Filter Logic ---
+    function openExcelFilterPopup(colId, e) {
+        if (colId === "nr" || colId === "action") return;
+
+        // Prevent opening if clicking on input or date picker
+        if (e.target.closest('input') || e.target.closest('.react-date-picker')) return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        const allValues = Array.from(new Set(files.map(f => getRawValue(f, colId)))).sort();
+
+        const currentFilter = activeExcelFilters[colId];
+        const initialSelected = currentFilter ? new Set(currentFilter) : new Set(allValues);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (excelPopupRef.current && !excelPopupRef.current.contains(e.target) && !e.target.closest('th')) {
+                setExcelFilter(prev => ({ ...prev, open: false }));
+            }
+        };
+        if (excelFilter.open) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [excelFilter.open]);
+
+    const handleInnerScrollWheel = (e) => {
+        e.stopPropagation();
     };
 
     return (
@@ -391,12 +459,6 @@ const VisitorManagementDeletedDevices = () => {
                             className="top-right-button-control-att"
                             onClick={() => setShowColumnSelector(v => !v)}
                         />
-                        <FontAwesomeIcon
-                            icon={faSort}
-                            title="Select Columns to Display"
-                            className="top-right-button-control-att-2"
-                            onClick={openSortModal}
-                        />
                         {showColumnSelector && (
                             <div className="column-selector-popup"
                                 onMouseDown={(e) => e.stopPropagation()}>
@@ -404,10 +466,8 @@ const VisitorManagementDeletedDevices = () => {
                                     <h4>Select Columns</h4>
                                     <button className="close-popup-btn" onClick={() => setShowColumnSelector(false)}>×</button>
                                 </div>
-
                                 <div className="column-selector-content">
                                     <p className="column-selector-note">Select columns to display</p>
-
                                     <div className="select-all-container">
                                         <label className="select-all-checkbox">
                                             <input
@@ -418,7 +478,6 @@ const VisitorManagementDeletedDevices = () => {
                                             <span className="select-all-text">Select All</span>
                                         </label>
                                     </div>
-
                                     <div className="column-checkbox-container">
                                         {availableColumns.map(col => (
                                             <div className="column-checkbox-item" key={col.id}>
@@ -434,7 +493,6 @@ const VisitorManagementDeletedDevices = () => {
                                             </div>
                                         ))}
                                     </div>
-
                                     <div className="column-selector-footer">
                                         <p>{visibleCount} columns selected</p>
                                         <button className="apply-columns-btn" onClick={() => setShowColumnSelector(false)}>
@@ -444,7 +502,6 @@ const VisitorManagementDeletedDevices = () => {
                                 </div>
                             </div>
                         )}
-
                     </div>
                     <div
                         className={`limit-table-height-visitor-wrap ${isDraggingX ? 'dragging' : ''} ${isWide ? 'wide' : ''}`}
@@ -463,34 +520,29 @@ const VisitorManagementDeletedDevices = () => {
                                         const isDate = ["deletionDate"].includes(col.id);
                                         const isStatic = ["nr", "action"].includes(col.id);
 
-                                        const textActive = isText && !!colFilters[col.id];
-                                        const dateActive = isDate && (!!colFilters.expiryFrom || !!colFilters.expiryTo);
-                                        const thActive = textActive || dateActive;
+                                        const hasExcelFilter = Object.prototype.hasOwnProperty.call(activeExcelFilters, col.id);
+                                        const hasSort = sortField === col.id && (sortOrder === "ascending" || sortOrder === "descending");
 
                                         return (
-                                            <th key={col.id} className={`${col.thClass} col ${thActive ? "th-filter-active" : ""}`}>
+                                            <th
+                                                key={col.id}
+                                                className={`${col.thClass} col`}
+                                                onClick={(e) => openExcelFilterPopup(col.id, e)}
+                                                style={{ cursor: isStatic ? 'default' : 'pointer' }}
+                                            >
                                                 {isStatic && <span className="fileinfo-title-filter-1">{col.title}</span>}
 
                                                 {isText && (
                                                     <div className="fileinfo-container-filter">
                                                         <span
                                                             className="fileinfo-title-filter"
-                                                            style={{ cursor: "default" }}
+                                                            style={{ cursor: "pointer" }}
                                                         >
-                                                            {col.title} {textActive && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                                            {col.title}
+                                                            {(hasExcelFilter || hasSort) && (
+                                                                <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />
+                                                            )}
                                                         </span>
-
-                                                        {openHeader === col.id && (
-                                                            <div className="fileinfo-menu-filter" onMouseLeave={() => setOpenHeader(null)}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={`Filter by ${col.title.toLowerCase()}`}
-                                                                    className="filter-input-file"
-                                                                    value={colFilters[col.id] ?? ""}
-                                                                    onChange={(e) => setFilter(col.id, e.target.value)}
-                                                                />
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 )}
 
@@ -498,89 +550,13 @@ const VisitorManagementDeletedDevices = () => {
                                                     <div className="fileinfo-container-filter">
                                                         <span
                                                             className="fileinfo-title-filter"
-                                                            style={{ cursor: "default" }}
+                                                            style={{ cursor: "pointer" }}
                                                         >
-                                                            {col.title} {dateActive && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                                            {col.title}
+                                                            {(hasExcelFilter || hasSort) && (
+                                                                <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />
+                                                            )}
                                                         </span>
-
-                                                        {openHeader === "expiry" && (
-                                                            <div className="date-menu-filter" onMouseLeave={() => setOpenHeader(null)}>
-                                                                <div className="date-filter-row">
-                                                                    <label className="date-label">From</label>
-
-                                                                    <DatePicker
-                                                                        value={colFilters.expiryFrom || ""}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) =>
-                                                                            setFilter("expiryFrom", val?.format("YYYY-MM-DD"))
-                                                                        }
-                                                                        rangeHover={false}
-                                                                        highlightToday={false}
-                                                                        editable={false}
-                                                                        inputClass="filter-input-date"
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-
-                                                                    {/* 👇 Clear button resets the filter */}
-                                                                    {colFilters.expiryFrom && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setFilter("expiryFrom", "")}
-                                                                            style={{
-                                                                                background: "none",
-                                                                                border: "none",
-                                                                                color: "#666",
-                                                                                cursor: "pointer",
-                                                                                fontSize: "14px",
-                                                                                padding: "2px 6px",
-                                                                            }}
-                                                                            title="Clear date"
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faTrash} title='Clear Filter' />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <div className="date-filter-row">
-                                                                    <label className="date-label">To:</label>
-
-                                                                    <DatePicker
-                                                                        value={colFilters.expiryTo || ""}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) =>
-                                                                            setFilter("expiryTo", val?.format("YYYY-MM-DD"))
-                                                                        }
-                                                                        rangeHover={false}
-                                                                        highlightToday={false}
-                                                                        editable={false}
-                                                                        inputClass="filter-input-date"
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-
-                                                                    {/* 👇 Clear button resets the filter */}
-                                                                    {colFilters.expiryTo && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setFilter("expiryTo", "")}
-                                                                            style={{
-                                                                                background: "none",
-                                                                                border: "none",
-                                                                                color: "#666",
-                                                                                cursor: "pointer",
-                                                                                fontSize: "14px",
-                                                                                padding: "2px 6px",
-                                                                            }}
-                                                                            title="Clear date"
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faTrash} title='Clear Filter' />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                 )}
                                             </th>
@@ -588,7 +564,6 @@ const VisitorManagementDeletedDevices = () => {
                                     })}
                                 </tr>
                             </thead>
-
                             <tbody>
                                 {filteredFiles.length === 0 ? (
                                     <tr className="empty-row">
@@ -614,7 +589,6 @@ const VisitorManagementDeletedDevices = () => {
                                                         </td>
                                                     ) : null;
                                                 }
-
                                                 const value = col.id === "nr" ? col.td(file, index) : (col.td ? col.td(file, index) : "-");
                                                 return (
                                                     <td key={`${file._id ?? index}-${col.id}`} className="col" style={{ textAlign: "center" }}>
@@ -640,7 +614,121 @@ const VisitorManagementDeletedDevices = () => {
                 />
             )}
 
-            {isSortModalOpen && (<SortPopupVisitorDeletedDevices closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} />)}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onWheel={handleInnerScrollWheel}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortField === excelFilter.colId && sortOrder === "ascending" ? "active" : ""}`}
+                            onClick={() => toggleExcelSort(excelFilter.colId, "ascending")}
+                        >
+                            Sort A to Z
+                        </button>
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortField === excelFilter.colId && sortOrder === "descending" ? "active" : ""}`}
+                            onClick={() => toggleExcelSort(excelFilter.colId, "descending")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(new Set(files.map(f => getRawValue(f, colId)))).sort();
+                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const isAllSelected = excelSelected.size === allValues.length;
+
+                            setActiveExcelFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];   // <- important
+                                else next[colId] = excelSelected;
+                                return next;
+                            });
+
+                            setExcelFilter(prev => ({ ...prev, open: false }));
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={() => setExcelFilter(prev => ({ ...prev, open: false }))}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
             <ToastContainer />
         </div >
     );

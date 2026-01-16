@@ -132,6 +132,12 @@ import VisitorManagementPage from './components/VisitorManagement/VisitorManagem
 import VisitorManagementDevices from './components/VisitorManagement/VisitorManagementDevices';
 import VisitorManagementDeletedDevices from './components/VisitorManagement/VisitorManagementDeletedDevices';
 import VisitorRegisteredDevices from './components/TrainingManagement/UserView/VisitorRegisteredDevices';
+import StudentProfileSetup from './components/OnlineTrainingModule/UserView/StudentProfileSetup';
+import StudentInvalidPageMobile from './components/OnlineTrainingModule/UserView/StudentInvalidPageMobile';
+import StudentPasswordSetup from './components/OnlineTrainingModule/UserView/StudentPasswordSetup';
+import StudentLogin from './components/OnlineTrainingModule/UserView/StudentLogin';
+import ResetStudentPassword from './components/OnlineTrainingModule/UserView/ResetStudentPassword';
+import StudentProfileHomePage from './components/OnlineTrainingModule/UserView/StudentProfileHomePage';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -317,6 +323,7 @@ function App() {
         <Route path='FrontendDMS/flameReplacedComponents' element={<DigitalWarehouseRemoved />} />
         <Route path='FrontendDMS/previewCertifier/:fileId' element={<PreviewCertifier />} />
         <Route path='FrontendDMS/invalidDevice' element={<InvalidPageMobile />} />
+        <Route path='FrontendDMS/invalidDeviceStudent' element={<StudentInvalidPageMobile />} />
         <Route path="FrontendDMS/loginRedirect/:module/:action/:id/:type" element={isMobile ? <Navigate to="/mobileLogin" /> : <RedirectLogin />} />
         <Route path="FrontendDMS/assetVersionHistory/:id" element={<VersionHistoryAssets />} />
         <Route path='FrontendDMS/onlineTrainingHome' element={<OnlineTrainingHomePage />} />
@@ -330,6 +337,11 @@ function App() {
         <Route path='FrontendDMS/visitorDevices/:id' element={<VisitorManagementDevices />} />
         <Route path='FrontendDMS/visitorDeletedDevices/:id' element={<VisitorManagementDeletedDevices />} />
         <Route path='FrontendDMS/visitorRegisteredDevices' element={<VisitorRegisteredDevices />} />
+        <Route path='FrontendDMS/student-profile' element={isMobile ? <Navigate to="/FrontendDMS/invalidDeviceStudent" /> : <StudentProfileSetup />} />
+        <Route path="FrontendDMS/studentLogin" element={isMobile ? <Navigate to="/FrontendDMS/invalidDeviceStudent" /> : <StudentLogin />} />
+        <Route path='FrontendDMS/studentPasswordSetup/:id' element={<StudentPasswordSetup />} />
+        <Route path='FrontendDMS/resetStudentPassword' element={<ResetStudentPassword />} />
+        <Route path='FrontendDMS/studentHomePage' element={<StudentProfileHomePage />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

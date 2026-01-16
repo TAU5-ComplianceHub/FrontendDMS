@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import './StandardsTable.css';
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
@@ -7,12 +7,27 @@ import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkl
 import { v4 as uuidv4 } from 'uuid';
 
 const StandardsTable = ({ formData, setFormData, error, title, documentType, setErrors, readOnly = false }) => {
-    const [filters, setFilters] = useState({
-        mainSection: '',
-        minRequirement: '',
-        reference: '',
-        notes: '',
+
+    // --- EXCEL FILTER & SORT STATE ---
+    const excelPopupRef = useRef(null);
+    const initialOrderRef = useRef(new Map());
+    const [filters, setFilters] = useState({});
+    const [sortConfig, setSortConfig] = useState({ colId: "nr", direction: "asc" });
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
     });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const BLANK = "(Blanks)";
+
+    const containerRef = useRef(null);
+    const [armedDragRow, setArmedDragRow] = useState(null);
+    const [draggedRowId, setDraggedRowId] = useState(null);
+    const [dragOverRowId, setDragOverRowId] = useState(null);
+    const draggedElRef = useRef(null);
 
     const renumberStandards = (arr) => {
         arr.forEach((item, idx) => {
@@ -24,21 +39,153 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         });
     };
 
-    // popup state
-    const [filterPopup, setFilterPopup] = useState({
-        column: null,
-        left: 0,
-        top: 0,
-        width: 0,
-    });
-    const containerRef = useRef(null);
+    const updateRows = (newStandardArray) => {
+        setFormData((prev) => ({
+            ...prev,
+            standard: newStandardArray,
+        }));
+    };
 
-    const [armedDragRow, setArmedDragRow] = useState(null);
-    const [draggedRowId, setDraggedRowId] = useState(null);
-    const [dragOverRowId, setDragOverRowId] = useState(null);
-    const draggedElRef = useRef(null);
+    // --- FILTER HELPER FUNCTIONS ---
+    const getFilterValuesForCell = (row, colId) => {
+        let val;
+        // Handle nested details
+        if (["minRequirement", "reference", "notes"].includes(colId)) {
+            const vals = (row.details || [])
+                .map(d => d[colId])
+                .map(v => (v == null ? "" : String(v).trim()))
+                .filter(Boolean);
+            return vals.length ? vals : [BLANK];
+        } else {
+            val = row[colId];
+        }
+
+        const s = val == null ? "" : String(val).trim();
+        return s === "" ? [BLANK] : [s];
+    };
+
+    useEffect(() => {
+        if (!formData.standard || formData.standard.length === 0) return;
+        const map = initialOrderRef.current;
+        if (map.size === 0) {
+            formData.standard.forEach((r, idx) => {
+                if (!map.has(r.id)) map.set(r.id, idx);
+            });
+        }
+    }, [formData.standard]);
+
+    const filteredRows = useMemo(() => {
+        let current = [...formData.standard];
+
+        // 1. Apply Filters
+        current = current.filter(row => {
+            for (const [colId, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+                if (!selected || !Array.isArray(selected)) continue;
+
+                const cellValues = getFilterValuesForCell(row, colId);
+                const match = cellValues.some(v => selected.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 2. Apply Sort
+        const colId = sortConfig?.colId || "nr";
+        const dir = sortConfig?.direction === "desc" ? -1 : 1;
+
+        if (colId === "nr") {
+            const order = initialOrderRef.current;
+            current.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+        } else {
+            const normalize = (v) => {
+                const s = v == null ? "" : String(v).trim();
+                return s === "" ? BLANK : s;
+            };
+
+            current.sort((a, b) => {
+                // If sorting by nested fields (minRequirement), we check the first detail? 
+                // Or join them? Standard excel sort on 1-to-many is usually by first item.
+                let av, bv;
+                if (["minRequirement", "reference", "notes"].includes(colId)) {
+                    av = a.details?.[0]?.[colId];
+                    bv = b.details?.[0]?.[colId];
+                } else {
+                    av = a[colId];
+                    bv = b[colId];
+                }
+
+                av = normalize(av);
+                bv = normalize(bv);
+
+                const aBlank = av === BLANK;
+                const bBlank = bv === BLANK;
+                if (aBlank && !bBlank) return 1;
+                if (!aBlank && bBlank) return -1;
+
+                return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+            });
+        }
+
+        return current;
+    }, [formData.standard, filters, sortConfig]);
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return { colId: "nr", direction: "asc" };
+            }
+            return { colId, direction };
+        });
+    };
+
+    function openExcelFilterPopup(colId, e) {
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        const values = Array.from(
+            new Set(
+                (formData.standard || []).flatMap(r => getFilterValuesForCell(r, colId))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    const handleInnerScrollWheel = (e) => {
+        const el = e.currentTarget;
+        const { scrollTop, scrollHeight, clientHeight } = el;
+        const delta = e.deltaY;
+        const goingDown = delta > 0;
+        const atTop = scrollTop <= 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+        if ((goingDown && atBottom) || (!goingDown && atTop)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
 
     const handleDragStart = (e, rowId) => {
+        const isFiltered = Object.keys(filters).length > 0;
+        const isSorted = sortConfig.colId !== "nr";
+        if (isFiltered || isSorted) return;
+
         setDraggedRowId(rowId);
         draggedElRef.current = e.currentTarget;
         e.dataTransfer.effectAllowed = 'move';
@@ -86,7 +233,7 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
     };
 
     useEffect(() => {
-        const popupSelector = '.standards-class-filter-popup';
+        const popupSelector = '.excel-filter-popup';
 
         const handleClickOutside = (e) => {
             const outside =
@@ -98,21 +245,12 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         };
 
         const handleScroll = (e) => {
-            const isInsidePopup = e.target.closest(popupSelector);
-
-            if (
-                e.target.closest(popupSelector)
-            ) {
-                return;
-            }
-
-            if (!isInsidePopup) {
-                closeDropdowns();
-            }
+            if (e.target.closest(popupSelector)) return;
+            closeDropdowns();
         };
 
         const closeDropdowns = () => {
-            setFilterPopup({ column: null, left: 0, top: 0, width: 0 });
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
         };
 
         document.addEventListener('mousedown', handleClickOutside);
@@ -124,76 +262,43 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
             document.removeEventListener('touchstart', handleClickOutside);
             window.removeEventListener('scroll', handleScroll, true);
         };
-    }, [filterPopup]);
+    }, [excelFilter]);
 
-    const updateRows = (newStandardArray) => {
-        setFormData((prev) => ({
-            ...prev,
-            standard: newStandardArray,
-        }));
-    };
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
 
-    const handleHeaderClick = (col, e) => {
-        e.stopPropagation();
-        // if clicking same header, close
-        if (filterPopup.column === col) {
-            setFilterPopup({ column: null, left: 0, top: 0, width: 0 });
-            return;
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
         }
-        // measure header & container
-        const hdr = e.currentTarget.getBoundingClientRect();
-        const container = containerRef.current.getBoundingClientRect();
-        // compute popup position relative to container
-        const left = hdr.left - container.left;
-        const top = hdr.bottom - container.top;
-        const width = e.currentTarget.offsetWidth;
-        setFilterPopup({
-            column: col,
-            left,
-            top,
-            width,
-        });
-    };
 
-    // apply the filter text for a column
-    const applyFilter = (col, value) => {
-        setFilters(f => ({ ...f, [col]: value }));
-    };
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
 
-    // clear a column filter
-    const clearFilter = (col) => {
-        setFilters(f => ({ ...f, [col]: '' }));
-    };
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
 
-    // filter logic per row
-    const passesFilters = (row) => {
-        // Nr
-        if (filters.nr && !String(row.nr).includes(filters.nr)) return false;
-        // Main Section
-        if (filters.mainSection && !row.mainSection.toLowerCase().includes(filters.mainSection.toLowerCase())) return false;
-        // Details (minRequirement)
-        if (filters.minRequirement) {
-            const ok = row.details.some(d =>
-                d.minRequirement.toLowerCase().includes(filters.minRequirement.toLowerCase())
-            );
-            if (!ok) return false;
-        }
-        // Reference
-        if (filters.reference) {
-            const ok = row.details.some(d =>
-                d.reference.toLowerCase().includes(filters.reference.toLowerCase())
-            );
-            if (!ok) return false;
-        }
-        // Notes
-        if (filters.notes) {
-            const ok = row.details.some(d =>
-                d.notes.toLowerCase().includes(filters.notes.toLowerCase())
-            );
-            if (!ok) return false;
-        }
-        return true;
-    };
 
     const handleAddMain = (stdId) => {
         const newArr = [...formData.standard];
@@ -216,17 +321,14 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
     };
 
     const handleDeleteMain = (stdId) => {
-        // Don’t allow deleting the last main step
         if (formData.standard.length <= 1) {
             toast.dismiss();
             toast.clearWaitingQueue();
             toast.warning("Cannot remove all standard rows.", {
                 closeButton: false,
-                autoClose: 800, // 1.5 seconds
-                style: {
-                    textAlign: 'center'
-                }
-            });   // optional feedback
+                autoClose: 800,
+                style: { textAlign: 'center' }
+            });
             return;
         }
 
@@ -271,13 +373,11 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
 
         const std = { ...newArr[stdIdx] };
         const newDetails = [...std.details];
-        // find insertion point
         const dIdx = detailId
             ? newDetails.findIndex((d) => d.id === detailId)
             : -1;
         const insertAt = dIdx >= 0 ? dIdx + 1 : newDetails.length;
 
-        // splice in one new blank detail
         newDetails.splice(insertAt, 0, {
             id: uuidv4(),
             nr: "",
@@ -287,7 +387,6 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         });
 
         newDetails.forEach((d, i) => {
-            // std.nr is now a string like "4.1"
             d.nr = `${std.nr}.${i + 1}`;
         });
 
@@ -296,20 +395,14 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         updateRows(newArr);
     };
 
-    /**
-     * Remove the detail with detailId from standard stdId.
-     * If that would leave 0 details, we reset to exactly one blank detail.
-     */
     const handleDeleteDetail = (stdId, detailId) => {
         const newArr = [...formData.standard];
         const stdIdx = newArr.findIndex((s) => s.id === stdId);
         if (stdIdx === -1) return;
 
         const std = { ...newArr[stdIdx] };
-        // filter out the one to delete
         let newDetails = std.details.filter((d) => d.id !== detailId);
 
-        // ensure at least one
         if (newDetails.length === 0) {
             newDetails = [
                 {
@@ -322,7 +415,6 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         }
 
         newDetails.forEach((d, i) => {
-            // std.nr is now a string like "4.1"
             d.nr = `${std.nr}.${i + 1}`;
         });
 
@@ -346,7 +438,6 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         updateRows(newArr);
     };
 
-    // 2️⃣ change any detail-field of detail `detailId` inside standard `stdId`
     const handleDetailChange = (stdId, detailId, field, value) => {
         const newArr = formData.standard.map(item => {
             if (item.id !== stdId) return item;
@@ -365,7 +456,7 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
         updateRows(newArr);
     };
 
-    const visibleRows = formData.standard.filter(passesFilters);
+    const isDragEnabled = Object.keys(filters).length === 0 && sortConfig.colId === "nr";
 
     return (
         <div className="input-row">
@@ -379,27 +470,31 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                     <table className="vcr-table table-borders">
                         <thead className="cp-table-header">
                             <tr>
-                                <th className="procCent standNr">Nr</th>
-                                <th className={`procCent standMain ${filters['mainSection'] ? 'jra-filter-active' : ''}`}
-                                    onClick={(e) => handleHeaderClick('mainSection', e)}>Main Section{filters['mainSection'] && (
-                                        <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                    )}</th>
-                                <th className={`procCent standSub ${filters['minRequirement'] ? 'jra-filter-active' : ''}`}
-                                    onClick={(e) => handleHeaderClick('minRequirement', e)}>Minimum Requirement Description / Details{filters['minRequirement'] && (
-                                        <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                    )}</th>
-                                <th className={`procCent standPrev ${filters['reference'] ? 'jra-filter-active' : ''}`}
-                                    onClick={(e) => handleHeaderClick('reference', e)}>Reference / Source<br />(Where Applicable){filters['reference'] && (
-                                        <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                    )}</th>
-                                <th className={`procCent standAR ${filters['notes'] ? 'jra-filter-active' : ''}`}
-                                    onClick={(e) => handleHeaderClick('notes', e)}>Additional Notes{filters['notes'] && (
-                                        <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                    )}</th>
+                                {[
+                                    { id: "nr", label: "Nr", className: "procCent standNr" },
+                                    { id: "mainSection", label: "Main Section", className: "procCent standMain" },
+                                    { id: "minRequirement", label: "Minimum Requirement Description / Details", className: "procCent standSub" },
+                                    { id: "reference", label: "Reference / Source", subLabel: "(Where Applicable)", className: "procCent standPrev" },
+                                    { id: "notes", label: "Additional Notes", className: "procCent standAR" }
+                                ].map(col => (
+                                    <th
+                                        key={col.id}
+                                        className={col.className}
+                                        style={{ cursor: "pointer" }}
+                                        onClick={(e) => openExcelFilterPopup(col.id, e)}
+                                    >
+                                        {col.label}
+                                        {col.subLabel && <br />}
+                                        {col.subLabel && col.subLabel}
+                                        {((filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
+                                            <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
+                                        )}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {visibleRows.map((row, index) => {
+                            {filteredRows.map((row, index) => {
                                 const spanCount = Math.max(row.details.length, 1);
                                 const isDropTarget = draggedRowId && dragOverRowId === row.id && draggedRowId !== row.id;
 
@@ -407,16 +502,16 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                                     <React.Fragment key={index}>
                                         <tr key={index}
                                             className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${isDropTarget ? 'drop-target-top' : ''}`}
-                                            draggable={armedDragRow === row.id}
-                                            onDragStart={armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
-                                            onDragOver={e => handleDragOver(e, row.id)}
-                                            onDragLeave={handleDragLeave}
-                                            onDrop={e => handleDrop(e, row.id)}
-                                            onDragEnd={handleDragEnd}
+                                            draggable={isDragEnabled && armedDragRow === row.id}
+                                            onDragStart={isDragEnabled && armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
+                                            onDragOver={isDragEnabled ? e => handleDragOver(e, row.id) : undefined}
+                                            onDragLeave={isDragEnabled ? handleDragLeave : undefined}
+                                            onDrop={isDragEnabled ? e => handleDrop(e, row.id) : undefined}
+                                            onDragEnd={isDragEnabled ? handleDragEnd : undefined}
                                         >
                                             <td className="procCent" style={{ fontSize: "14px" }} rowSpan={spanCount}>
                                                 {row.nr}
-                                                {!readOnly && (<FontAwesomeIcon
+                                                {!readOnly && isDragEnabled && (<FontAwesomeIcon
                                                     icon={faArrowsUpDown}
                                                     className="drag-handle-standards"
                                                     onMouseDown={() => setArmedDragRow(row.id)}
@@ -429,7 +524,7 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                                                     className="aim-textarea-st font-fam"
                                                     value={row.mainSection}
                                                     style={{ fontSize: "14px", fontWeight: "bold" }}
-                                                    placeholder="Main Section" // Optional placeholder text
+                                                    placeholder="Main Section"
                                                     onChange={(e) => handleMainSectionChange(row.id, e.target.value)}
                                                     readOnly={readOnly}
                                                 />
@@ -465,7 +560,6 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                                             </td>
 
                                             {row.details.length > 0 ? (
-                                                // First detail cell (detail[0])
                                                 <>
                                                     <td className="sub-cell-standards">
                                                         <label className="detail-label">{row.details[0].nr}</label>
@@ -525,12 +619,10 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                                                     </td>
                                                 </>
                                             ) : (
-                                                // No details? just span the empty space
                                                 <td colSpan={3} />
                                             )}
                                         </tr>
 
-                                        {/* — all the remaining detail rows (if any) */}
                                         {row.details.slice(1).map((detail, j) => (
                                             <tr key={j} className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''}`}>
                                                 <td className="sub-cell-standards">
@@ -593,46 +685,139 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                         </tbody>
                     </table>
 
-                    {filterPopup.column && (
+                    {excelFilter.open && (
                         <div
-                            className="standards-class-filter-popup"
+                            className="excel-filter-popup"
+                            ref={excelPopupRef}
                             style={{
-                                top: `${filterPopup.top}px`,
-                                left: `${filterPopup.left}px`,
-                                width: `${filterPopup.width}px`,
+                                position: "fixed",
+                                top: excelFilter.pos.top,
+                                left: excelFilter.pos.left,
+                                width: excelFilter.pos.width,
+                                zIndex: 9999,
                             }}
+                            onWheel={handleInnerScrollWheel}
                         >
-                            <input
-                                type="text"
-                                className="standards-class-filter-input"
-                                placeholder={`Filter Value`}
-                                value={filters[filterPopup.column]}
-                                onChange={e =>
-                                    applyFilter(filterPopup.column, e.target.value)
-                                }
-                            />
-                            <div className="standards-filter-buttons">
+                            <div className="excel-filter-sortbar">
                                 <button
-                                    className="standards-class-filter-btn"
-                                    onClick={() =>
-                                        setFilterPopup({ column: null, left: 0, top: 0, width: 0 })
-                                    }
+                                    type="button"
+                                    className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                        sortConfig.direction === "asc" ? "active" : ""
+                                        }`}
+                                    onClick={() => toggleSort(excelFilter.colId, "asc")}
                                 >
-                                    Apply
+                                    Sort A to Z
                                 </button>
+
                                 <button
-                                    className="standards-class-filter-btn"
-                                    onClick={() => {
-                                        clearFilter(filterPopup.column);
-                                        setFilterPopup({ column: null, left: 0, top: 0, width: 0 });
-                                    }}
+                                    type="button"
+                                    className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                        sortConfig.direction === "desc" ? "active" : ""
+                                        }`}
+                                    onClick={() => toggleSort(excelFilter.colId, "desc")}
                                 >
-                                    Clear
+                                    Sort Z to A
                                 </button>
                             </div>
+
+                            <input
+                                type="text"
+                                className="excel-filter-search"
+                                placeholder="Search"
+                                value={excelSearch}
+                                onChange={(e) => setExcelSearch(e.target.value)}
+                            />
+
+                            {(() => {
+                                const colId = excelFilter.colId;
+                                const allValues = Array.from(
+                                    new Set((formData.standard || []).flatMap(r => getFilterValuesForCell(r, colId)))
+                                ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                                const visibleValues = allValues.filter(v =>
+                                    String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                                );
+
+                                const allVisibleSelected =
+                                    visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                                const toggleValue = (v) => {
+                                    setExcelSelected(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(v)) next.delete(v);
+                                        else next.add(v);
+                                        return next;
+                                    });
+                                };
+
+                                const toggleAllVisible = (checked) => {
+                                    setExcelSelected(prev => {
+                                        const next = new Set(prev);
+                                        visibleValues.forEach(v => {
+                                            if (checked) next.add(v);
+                                            else next.delete(v);
+                                        });
+                                        return next;
+                                    });
+                                };
+
+                                const onOk = () => {
+                                    const selectedArr = Array.from(excelSelected);
+                                    const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                                    setFilters(prev => {
+                                        const next = { ...prev };
+                                        if (isAllSelected) delete next[colId];
+                                        else next[colId] = { selected: selectedArr };
+                                        return next;
+                                    });
+
+                                    setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                                };
+
+                                const onCancel = () => {
+                                    setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                                };
+
+                                return (
+                                    <>
+                                        <div className="excel-filter-list">
+                                            <label className="excel-filter-item">
+                                                <span className="excel-filter-checkbox">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="checkbox-excel-attend"
+                                                        checked={allVisibleSelected}
+                                                        onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                    />
+                                                </span>
+                                                <span className="excel-filter-text">(Select All)</span>
+                                            </label>
+
+                                            {visibleValues.map(v => (
+                                                <label className="excel-filter-item" key={String(v)}>
+                                                    <span className="excel-filter-checkbox">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="checkbox-excel-attend"
+                                                            checked={excelSelected.has(v)}
+                                                            onChange={() => toggleValue(v)}
+                                                        />
+                                                    </span>
+                                                    <span className="excel-filter-text">{v}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        <div className="excel-filter-actions">
+                                            <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                            <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
-                    )
-                    }
+                    )}
                 </div>
             </div>
         </div>

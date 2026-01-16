@@ -191,7 +191,7 @@ const FlameProofHomeAllSites = () => {
         if (!doc) return "";
         if (doc._id === "digital-warehouse") return iconMap["digital-warehouse"]; // NEW
         if (isAllRow(doc)) return iconMap[doc._id];
-        return iconMap[doc.assetType] || "/genericAssetType.svg";
+        return `${process.env.PUBLIC_URL}${iconMap[doc.assetType]}` || `${process.env.PUBLIC_URL}/genericAssetType.svg`;
     };
 
     return (

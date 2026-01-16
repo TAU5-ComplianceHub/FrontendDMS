@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef, forwardRef, useImperativeHandle } from "react";
+import React, { useEffect, useState, useRef, forwardRef, useImperativeHandle, useMemo } from "react";
 import './ProcedureTable.css';
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faArrowsUpDown, faCopy, faUndo } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faArrowsUpDown, faCopy, faUndo, faFilter } from '@fortawesome/free-solid-svg-icons';
 import FlowchartRenderer from "./FlowchartRenderer";
 import { aiRewrite } from "../../utils/jraAI";
 
@@ -27,6 +27,21 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
     const draggedElRef = useRef(null);
     const flowchartRef = useRef(null);
 
+    // --- EXCEL FILTER & SORT STATE ---
+    const excelPopupRef = useRef(null);
+    const initialOrderRef = useRef(new Map());
+    const [filters, setFilters] = useState({});
+    const [sortConfig, setSortConfig] = useState({ colId: "nr", direction: "asc" });
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const BLANK = "(Blanks)";
+
     useImperativeHandle(ref, () => ({
         getFlowchartImages: async () => {
             if (flowchartRef.current) {
@@ -35,6 +50,145 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
             return [];
         }
     }));
+
+    // --- FILTER HELPER FUNCTIONS ---
+    const getFilterValuesForCell = (row, colId) => {
+        let val;
+        if (colId === "prevStep") {
+            // Handle semicolon separated list
+            const raw = row.prevStep || "";
+            const parts = raw.split(';').map(s => s.trim()).filter(s => s !== "");
+            return parts.length > 0 ? parts : [BLANK];
+        } else {
+            val = row[colId];
+        }
+
+        const s = val == null ? "" : String(val).trim();
+        return s === "" ? [BLANK] : [s];
+    };
+
+    // Capture initial order for stable sort reset
+    useEffect(() => {
+        if (!procedureRows || procedureRows.length === 0) return;
+        const map = initialOrderRef.current;
+        // procedureRows usually have 'nr' which might change, so we rely on index during initial load if no ID
+        // Assuming pure index based initial load:
+        if (map.size === 0 && procedureRows.length > 0) {
+            procedureRows.forEach((r, idx) => {
+                // If rows don't have unique IDs, we map by initial index or use nr if unique
+                // Using a combination key or just index if strictly sequential on load
+                const key = r.nr; // fallback to nr
+                if (!map.has(key)) map.set(key, idx);
+            });
+        }
+    }, [procedureRows]);
+
+    const filteredRows = useMemo(() => {
+        // 1. Map rows to include their ORIGINAL index so editing works correctly
+        let current = procedureRows.map((row, index) => ({ ...row, originalIndex: index }));
+
+        // 2. Apply Filters
+        current = current.filter(row => {
+            for (const [colId, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+                if (!selected || !Array.isArray(selected)) continue;
+
+                const cellValues = getFilterValuesForCell(row, colId);
+                const match = cellValues.some(v => selected.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 3. Apply Sort
+        const colId = sortConfig?.colId || "nr";
+        const dir = sortConfig?.direction === "desc" ? -1 : 1;
+
+        if (colId === "nr") {
+            // Reset to roughly original order (using nr as proxy for order)
+            current.sort((a, b) => {
+                const aNr = parseFloat(a.nr) || 0;
+                const bNr = parseFloat(b.nr) || 0;
+                return (aNr - bNr) * dir;
+            });
+        } else {
+            const normalize = (v) => {
+                const s = v == null ? "" : String(v).trim();
+                return s === "" ? BLANK : s;
+            };
+
+            current.sort((a, b) => {
+                const av = normalize(a[colId]);
+                const bv = normalize(b[colId]);
+
+                const aBlank = av === BLANK;
+                const bBlank = bv === BLANK;
+                if (aBlank && !bBlank) return 1;
+                if (!aBlank && bBlank) return -1;
+
+                // Simple string compare for standard text fields
+                return String(av).localeCompare(String(bv), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+            });
+        }
+
+        return current;
+    }, [procedureRows, filters, sortConfig]);
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return { colId: "nr", direction: "asc" }; // reset
+            }
+            return { colId, direction };
+        });
+    };
+
+    function openExcelFilterPopup(colId, e) {
+        // Prevent sorting/filtering on Action column
+        if (colId === "Action") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        const values = Array.from(
+            new Set(
+                (procedureRows || []).flatMap(r => getFilterValuesForCell(r, colId))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    const handleInnerScrollWheel = (e) => {
+        const el = e.currentTarget;
+        const { scrollTop, scrollHeight, clientHeight } = el;
+        const delta = e.deltaY;
+        const goingDown = delta > 0;
+        const atTop = scrollTop <= 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+        if ((goingDown && atBottom) || (!goingDown && atTop)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
+    // --- END FILTER LOGIC ---
 
     const handleAiRewriteMain = async (idx) => {
         const control = procedureRows[idx].mainStep;
@@ -98,7 +252,6 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
             )
         }));
 
-        // pop from history
         setMainHistory(prev => {
             const next = [...history.slice(0, -1)];
             const out = { ...prev };
@@ -122,7 +275,6 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
             )
         }));
 
-        // pop from history
         setSubHistory(prev => {
             const next = [...history.slice(0, -1)];
             const out = { ...prev };
@@ -139,7 +291,7 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
                 const data = await response.json();
 
                 if (response.ok && data.designations) {
-                    const names = data.designations.map(d => d.designation).sort(); // Assuming each has a `name`
+                    const names = data.designations.map(d => d.designation).sort();
                     setDesignationOptions(names);
                 } else {
                     console.error("Failed to load designations");
@@ -161,62 +313,6 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
     useEffect(() => {
         console.log(procedureRows);
     }, [procedureRows]);
-
-    const rewriteAI = async (indexToChange, procedureRows, updateRows, setLoading) => {
-        try {
-            setLoading(true);
-
-            const prompt = JSON.stringify(procedureRows[indexToChange]);
-
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatSingle`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${localStorage.getItem("token")}`,
-                },
-                body: JSON.stringify({ prompt })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.response) {
-                const cleaned = {
-                    ...data.response,
-                    SubStep: data.response.SubStep.includes('\\n')
-                        ? data.response.SubStep.replace(/\\n/g, '\n')
-                        : data.response.SubStep
-                };
-
-                // Replace the specific row
-                const updatedRows = [...procedureRows];
-                updatedRows[indexToChange] = cleaned;
-
-                updateRows(updatedRows);
-
-                toast.success(`Step ${indexToChange + 1} rewritten by AI`, {
-                    autoClose: 1000,
-                    closeButton: true,
-                    style: { textAlign: 'center' }
-                });
-            } else {
-                toast.error("Failed to rewrite this step.", {
-                    autoClose: 1000,
-                    closeButton: true,
-                    style: { textAlign: 'center' }
-                });
-            }
-        } catch (err) {
-            console.error("Single row rewrite error:", err);
-            toast.error("An error occurred while rewriting this step.", {
-                autoClose: 1000,
-                closeButton: true,
-                style: { textAlign: 'center' }
-            });
-        } finally {
-            setLoading(false);
-            setActiveRewriteIndex(null);
-        }
-    };
 
     const handleDuplicateRow = (index) => {
         const newArr = [...formData.procedureRows];
@@ -251,6 +347,11 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
     };
 
     const handleDragStart = (e, rowNr) => {
+        // Disable drag if filtered/sorted
+        const isFiltered = Object.keys(filters).length > 0;
+        const isSorted = sortConfig.colId !== "nr";
+        if (isFiltered || isSorted) return;
+
         setDraggedRowNr(rowNr);
         draggedElRef.current = e.currentTarget;
         e.dataTransfer.effectAllowed = 'move';
@@ -392,7 +493,6 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
         const preds = parsePrevList(prevStep);
         if (preds.length === 1 && preds[0] === "-") return "-";
 
-        // Expand removedPrevList but drop "-" placeholders
         const replacement = (removedPrevList || [])
             .map(String)
             .filter(t => t !== "-");
@@ -402,7 +502,6 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
             const n = Number(token);
             if (Number.isFinite(n)) {
                 if (n === removedNr) {
-                    // fan-through: splice in the removed step's predecessors
                     remapped.push(...replacement);
                 } else if (n > removedNr) {
                     remapped.push(String(n - 1));
@@ -410,7 +509,7 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
                     remapped.push(String(n));
                 }
             } else {
-                remapped.push(token); // keep non-numeric as-is
+                remapped.push(token);
             }
         }
 
@@ -418,7 +517,6 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
         return stringifyPrevList(deduped);
     };
 
-    // --- replacement for removeProRow ---
     const removeProRow = (indexToRemove) => {
         const rows = formData.procedureRows;
         if (rows.length <= 1) {
@@ -430,24 +528,19 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
             return;
         }
 
-        // Identify the removed row and its number / predecessors
         const removedRow = rows[indexToRemove];
         const removedNr = removedRow.nr ?? (indexToRemove + 1);
         const removedPrevList = parsePrevList(removedRow.prevStep);
 
-        // 1) Remove the row
         const withoutRow = rows.filter((_, idx) => idx !== indexToRemove);
 
-        // 2) Update prevStep for every remaining row
         const prevFixed = withoutRow.map(r => ({
             ...r,
             prevStep: remapPrevForRemoval(r.prevStep, removedNr, removedPrevList),
         }));
 
-        // 3) Renumber nrs to be sequential
         const renumbered = prevFixed.map((r, idx) => ({ ...r, nr: idx + 1 }));
 
-        // 4) Commit
         setFormData({
             ...formData,
             procedureRows: renumbered,
@@ -455,18 +548,18 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
     };
 
     const add = () => {
-        setInvalidRows([]); // clear any previous flags
+        setInvalidRows([]);
         addRow();
     };
 
+    // Note: index here refers to the original array index
     const handleInputChange = (index, field, value) => {
         const updatedRow = { ...procedureRows[index], [field]: value };
 
-        // Prevent selecting the same value for both Responsible and Accountable
         if (field === "responsible" && value === updatedRow.accountable) {
-            updatedRow.accountable = ""; // Reset accountable if it conflicts
+            updatedRow.accountable = "";
         } else if (field === "accountable" && value === updatedRow.responsible) {
-            updatedRow.responsible = ""; // Reset responsible if it conflicts
+            updatedRow.responsible = "";
         }
 
         updateRow(index, field, value);
@@ -478,10 +571,12 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
 
     useEffect(() => {
         const popupSelector = '.floating-dropdown';
+        const excelSelector = '.excel-filter-popup';
 
         const handleClickOutside = (e) => {
             const outside =
                 !e.target.closest(popupSelector) &&
+                !e.target.closest(excelSelector) &&
                 !e.target.closest('input');
             if (outside) {
                 closeDropdowns();
@@ -489,7 +584,7 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
         };
 
         const handleScroll = (e) => {
-            const isInsidePopup = e.target.closest(popupSelector);
+            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(excelSelector);
             if (!isInsidePopup) {
                 closeDropdowns();
             }
@@ -501,18 +596,57 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
 
         const closeDropdowns = () => {
             setShowARDropdown({ index: null, field: "" });
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
         };
 
         document.addEventListener('mousedown', handleClickOutside);
         document.addEventListener('touchstart', handleClickOutside);
-        window.addEventListener('scroll', handleScroll, true); // capture scroll events from nested elements
+        window.addEventListener('scroll', handleScroll, true);
 
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('touchstart', handleClickOutside);
             window.removeEventListener('scroll', handleScroll, true);
         };
-    }, [showARDropdown]);
+    }, [showARDropdown, excelFilter]);
+
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
+        }
+
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
+
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
+    // Check if drag should be enabled
+    const isDragEnabled = Object.keys(filters).length === 0 && sortConfig.colId === "nr";
 
     return (
         <div className="input-row">
@@ -524,236 +658,257 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
                     <table className="vcr-table table-borders">
                         <thead className="cp-table-header">
                             <tr>
-                                <th className="procCent procNr" style={{ backgroundColor: "#002060", color: "white" }}>Nr</th>
-                                <th className="procCent procMain" style={{ backgroundColor: "#002060", color: "white" }}>Procedure Main Steps</th>
-                                <th className="procCent procSub" style={{ backgroundColor: "#002060", color: "white" }}>Procedure Sub Steps</th>
-                                <th className="procCent procPrev" style={{ backgroundColor: "#002060", color: "white" }}>Predecessor<div className="procFineText" style={{ color: "white" }}>(Immediate Prior Steps)</div></th>
-                                <th className="procCent procAR" style={{ backgroundColor: "#002060", color: "white" }}>Responsible and Accountable</th>
-                                {!readOnly && (<th className="procCent procAct" style={{ backgroundColor: "#002060", color: "white" }}>Action</th>)}
+                                {/* Helper function to render headers with filter/sort icons */}
+                                {[
+                                    { id: "nr", label: "Nr", className: "procCent procNr" },
+                                    { id: "mainStep", label: "Procedure Main Steps", className: "procCent procMain" },
+                                    { id: "SubStep", label: "Procedure Sub Steps", className: "procCent procSub" },
+                                    { id: "prevStep", label: "Predecessor", subLabel: "(Immediate Prior Steps)", className: "procCent procPrev" },
+                                    { id: "responsible", label: "Responsible and Accountable", className: "procCent procAR" }, // responsible/accountable share a cell visually but handle filtering separately if needed. Currently responsible is the primary filter key for this cell if clicked? Or we need two? The original table has ONE header for R&A. Let's make it clickable for "Responsible" or maybe just disable filtering here since it's a composite? I will map it to 'responsible' for now.
+                                    { id: "Action", label: "Action", className: "procCent procAct", noFilter: true }
+                                ].map((col) => (
+                                    !readOnly && col.id === "Action" ? (
+                                        <th key={col.id} className={col.className} style={{ backgroundColor: "#002060", color: "white" }}>{col.label}</th>
+                                    ) : (col.id !== "Action") && (
+                                        <th
+                                            key={col.id}
+                                            className={col.className}
+                                            style={{ backgroundColor: "#002060", color: "white", cursor: col.noFilter ? "default" : "pointer" }}
+                                            onClick={(e) => !col.noFilter && openExcelFilterPopup(col.id, e)}
+                                        >
+                                            {col.label}
+                                            {col.subLabel && <div className="procFineText" style={{ color: "white" }}>{col.subLabel}</div>}
+                                            {(!col.noFilter && (filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
+                                                <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
+                                            )}
+                                        </th>
+                                    )
+                                ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {procedureRows.map((row, index) => (
-                                <React.Fragment key={index}>
-                                    {/* Insert button above each row except the first */}
-                                    <tr key={index}
-                                        draggable={armedDragRow === row.nr}
-                                        onDragStart={armedDragRow === row.nr ? e => handleDragStart(e, row.nr) : undefined}
-                                        onDragOver={e => handleDragOver(e, row.nr)}
-                                        onDragLeave={handleDragLeave}
-                                        onDrop={e => handleDrop(e, row.nr)}
-                                        onDragEnd={handleDragEnd}
-                                        className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${dragOverRowNr === row.nr ? 'drag-over-top' : ''}`}
-                                    >
-                                        <td className="procCent" style={{ fontSize: "14px" }}>
-                                            {row.nr}
-                                            {!readOnly && (<FontAwesomeIcon
-                                                icon={faArrowsUpDown}
-                                                className="drag-handle-standards"
-                                                onMouseDown={() => setArmedDragRow(row.nr)}
-                                                onMouseUp={() => setArmedDragRow(null)}
-                                            />)}
-                                        </td>
-                                        <td>
-                                            <div className="textarea-wrapper-proc">
-                                                <textarea
-                                                    name="mainStep"
-                                                    className={`${mainHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
-                                                    value={row.mainStep}
-                                                    ref={el => {
-                                                        const key = `${index}`;
-                                                        if (el) {
-                                                            mainInputRefs.current[key] = el;
-                                                        } else {
-                                                            delete mainInputRefs.current[key];
-                                                        }
-                                                    }}
-                                                    readOnly={readOnly}
-                                                    style={{ fontSize: "14px" }}
-                                                    onChange={(e) => handleInputChange(index, "mainStep", e.target.value)}
-                                                    placeholder="Insert the main step of the procedure here..." // Optional placeholder text
-                                                />
-                                                {loadingMainKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin-main spin-animation-proc" />)}
-                                                {mainHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoMain(index)} />)}
-                                                {(!loadingMainKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Main Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteMain(index)} />)}
+                            {filteredRows.map((row) => {
+                                // Use originalIndex for data manipulation
+                                const index = row.originalIndex;
+                                return (
+                                    <React.Fragment key={index}>
+                                        <tr key={index}
+                                            draggable={isDragEnabled && armedDragRow === row.nr}
+                                            onDragStart={isDragEnabled && armedDragRow === row.nr ? e => handleDragStart(e, row.nr) : undefined}
+                                            onDragOver={isDragEnabled ? e => handleDragOver(e, row.nr) : undefined}
+                                            onDragLeave={isDragEnabled ? handleDragLeave : undefined}
+                                            onDrop={isDragEnabled ? e => handleDrop(e, row.nr) : undefined}
+                                            onDragEnd={isDragEnabled ? handleDragEnd : undefined}
+                                            className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${dragOverRowNr === row.nr ? 'drag-over-top' : ''}`}
+                                        >
+                                            <td className="procCent" style={{ fontSize: "14px" }}>
+                                                {row.nr}
+                                                {!readOnly && isDragEnabled && (<FontAwesomeIcon
+                                                    icon={faArrowsUpDown}
+                                                    className="drag-handle-standards"
+                                                    onMouseDown={() => setArmedDragRow(row.nr)}
+                                                    onMouseUp={() => setArmedDragRow(null)}
+                                                />)}
+                                            </td>
+                                            <td>
+                                                <div className="textarea-wrapper-proc">
+                                                    <textarea
+                                                        name="mainStep"
+                                                        className={`${mainHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
+                                                        value={row.mainStep}
+                                                        ref={el => {
+                                                            const key = `${index}`;
+                                                            if (el) {
+                                                                mainInputRefs.current[key] = el;
+                                                            } else {
+                                                                delete mainInputRefs.current[key];
+                                                            }
+                                                        }}
+                                                        readOnly={readOnly}
+                                                        style={{ fontSize: "14px" }}
+                                                        onChange={(e) => handleInputChange(index, "mainStep", e.target.value)}
+                                                        placeholder="Insert the main step of the procedure here..."
+                                                    />
+                                                    {loadingMainKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin-main spin-animation-proc" />)}
+                                                    {mainHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoMain(index)} />)}
+                                                    {(!loadingMainKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Main Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteMain(index)} />)}
 
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="textarea-wrapper-proc">
-                                                <textarea
-                                                    name="SubStep"
-                                                    className={`${subHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
-                                                    value={row.SubStep}
-                                                    ref={el => {
-                                                        const key = `${index}`;
-                                                        if (el) {
-                                                            subInputRefs.current[key] = el;
-                                                        } else {
-                                                            delete subInputRefs.current[key];
-                                                        }
-                                                    }}
-                                                    readOnly={readOnly}
-                                                    onChange={(e) => handleInputChange(index, "SubStep", e.target.value)}
-                                                    style={{ fontSize: "14px" }}
-                                                    placeholder="Insert the sub steps of the procedure here..." // Optional placeholder text
-                                                />
-                                                {loadingSubKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin spin-animation-proc" />)}
-                                                {subHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoSub(index)} />)}
-                                                {(!loadingSubKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Sub Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteSub(index)} />)}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="textarea-wrapper-proc">
+                                                    <textarea
+                                                        name="SubStep"
+                                                        className={`${subHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
+                                                        value={row.SubStep}
+                                                        ref={el => {
+                                                            const key = `${index}`;
+                                                            if (el) {
+                                                                subInputRefs.current[key] = el;
+                                                            } else {
+                                                                delete subInputRefs.current[key];
+                                                            }
+                                                        }}
+                                                        readOnly={readOnly}
+                                                        onChange={(e) => handleInputChange(index, "SubStep", e.target.value)}
+                                                        style={{ fontSize: "14px" }}
+                                                        placeholder="Insert the sub steps of the procedure here..."
+                                                    />
+                                                    {loadingSubKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin spin-animation-proc" />)}
+                                                    {subHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoSub(index)} />)}
+                                                    {(!loadingSubKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Sub Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteSub(index)} />)}
 
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="prev-step-container-ref">
-                                                {(row.prevStep && row.prevStep.trim() !== "" ? row.prevStep.split(";") : [""]).map((step, stepIndex, arr) => (
-                                                    <div key={stepIndex} className="prev-step-input-ref">
-                                                        <input
-                                                            type="text"
-                                                            style={{ fontSize: "14px", width: readOnly ? "100%" : "" }}
-                                                            className="aim-input-pt font-fam"
-                                                            value={step}
-                                                            onChange={(e) => {
-                                                                let updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="prev-step-container-ref">
+                                                    {(row.prevStep && row.prevStep.trim() !== "" ? row.prevStep.split(";") : [""]).map((step, stepIndex, arr) => (
+                                                        <div key={stepIndex} className="prev-step-input-ref">
+                                                            <input
+                                                                type="text"
+                                                                style={{ fontSize: "14px", width: readOnly ? "100%" : "" }}
+                                                                className="aim-input-pt font-fam"
+                                                                value={step}
+                                                                onChange={(e) => {
+                                                                    let updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
 
-                                                                if (stepIndex < updatedSteps.length) {
-                                                                    updatedSteps[stepIndex] = e.target.value;
-                                                                } else {
-                                                                    updatedSteps.push(e.target.value);
-                                                                }
+                                                                    if (stepIndex < updatedSteps.length) {
+                                                                        updatedSteps[stepIndex] = e.target.value;
+                                                                    } else {
+                                                                        updatedSteps.push(e.target.value);
+                                                                    }
 
-                                                                updateRow(index, "prevStep", updatedSteps.join(";"));
-                                                            }}
-                                                            placeholder="Insert step"
-                                                            readOnly={readOnly}
-                                                        />
-                                                        {!readOnly && (<button
-                                                            className="remove-step-button-ref"
-                                                            onClick={() => {
-                                                                const updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
-                                                                if (updatedSteps.length > 1) {
-                                                                    updateRow(index, "prevStep", updatedSteps.filter((_, i) => i !== stepIndex).join(";"));
-                                                                } else {
-                                                                    toast.warn("At least one predecessor is required.", { autoClose: 1000, closeButton: true });
-                                                                }
-                                                            }}
-                                                        >
-                                                            <FontAwesomeIcon icon={faTrash} title="Remove Predecessor" />
-                                                        </button>)}
-                                                        {(stepIndex === arr.length - 1 && !readOnly) && (
-                                                            <button
-                                                                className="add-row-button-pred"
-                                                                style={{ fontSize: "15px" }}
-                                                                onClick={() => {
-                                                                    const updatedSteps = row.prevStep ? row.prevStep.split(";") : [""];
-                                                                    updatedSteps.push("");
                                                                     updateRow(index, "prevStep", updatedSteps.join(";"));
                                                                 }}
+                                                                placeholder="Insert step"
+                                                                readOnly={readOnly}
+                                                            />
+                                                            {!readOnly && (<button
+                                                                className="remove-step-button-ref"
+                                                                onClick={() => {
+                                                                    const updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
+                                                                    if (updatedSteps.length > 1) {
+                                                                        updateRow(index, "prevStep", updatedSteps.filter((_, i) => i !== stepIndex).join(";"));
+                                                                    } else {
+                                                                        toast.warn("At least one predecessor is required.", { autoClose: 1000, closeButton: true });
+                                                                    }
+                                                                }}
                                                             >
-                                                                <FontAwesomeIcon icon={faPlusCircle} title="Add Step" />
-                                                            </button>
-                                                        )}
+                                                                <FontAwesomeIcon icon={faTrash} title="Remove Predecessor" />
+                                                            </button>)}
+                                                            {(stepIndex === arr.length - 1 && !readOnly) && (
+                                                                <button
+                                                                    className="add-row-button-pred"
+                                                                    style={{ fontSize: "15px" }}
+                                                                    onClick={() => {
+                                                                        const updatedSteps = row.prevStep ? row.prevStep.split(";") : [""];
+                                                                        updatedSteps.push("");
+                                                                        updateRow(index, "prevStep", updatedSteps.join(";"));
+                                                                    }}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faPlusCircle} title="Add Step" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div className="select-container-proc">
+                                                    <div className="select-wrapper">
+                                                        <label className={`select-label-proc ${invalidRows.includes(index) && !row.responsible ? "label-error-pt" : ""}`}>R:</label>
+                                                        <textarea
+                                                            type="text"
+                                                            className="table-control-proc-text-area-ar"
+                                                            value={row.responsible}
+                                                            style={{ fontSize: "14px" }}
+                                                            placeholder="Select Responsible"
+                                                            ref={(el) => (inputRefs.current[`responsible-${index}`] = el)}
+                                                            onChange={(e) => {
+                                                                handleInputChange(index, "responsible", e.target.value);
+                                                                const filtered = designationOptions.filter(opt =>
+                                                                    opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
+                                                                    opt !== row.accountable
+                                                                );
+                                                                setDropdownOptions(filtered);
+                                                            }}
+                                                            onFocus={() => {
+                                                                if (readOnly) return;
+                                                                const rect = inputRefs.current[`responsible-${index}`].getBoundingClientRect();
+                                                                setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+                                                                setDropdownOptions(designationOptions.filter(opt => opt !== row.accountable));
+                                                                setShowARDropdown({ index, field: "responsible" });
+                                                            }}
+                                                            onBlur={(e) => {
+                                                                addDesignationIfNew(e.target.value);
+                                                            }}
+                                                            readOnly={readOnly}
+                                                        />
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div className="select-container-proc">
-                                                <div className="select-wrapper">
-                                                    <label className={`select-label-proc ${invalidRows.includes(index) && !row.responsible ? "label-error-pt" : ""}`}>R:</label>
-                                                    <textarea
-                                                        type="text"
-                                                        className="table-control-proc-text-area-ar"
-                                                        value={row.responsible}
-                                                        style={{ fontSize: "14px" }}
-                                                        placeholder="Select Responsible"
-                                                        ref={(el) => (inputRefs.current[`responsible-${index}`] = el)}
-                                                        onChange={(e) => {
-                                                            handleInputChange(index, "responsible", e.target.value);
-                                                            const filtered = designationOptions.filter(opt =>
-                                                                opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
-                                                                opt !== row.accountable
-                                                            );
-                                                            setDropdownOptions(filtered);
-                                                        }}
-                                                        onFocus={() => {
-                                                            if (readOnly) return;
-                                                            const rect = inputRefs.current[`responsible-${index}`].getBoundingClientRect();
-                                                            setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
-                                                            setDropdownOptions(designationOptions.filter(opt => opt !== row.accountable));
-                                                            setShowARDropdown({ index, field: "responsible" });
-                                                        }}
-                                                        onBlur={(e) => {
-                                                            // Commit free-typed value into options
-                                                            addDesignationIfNew(e.target.value);
-                                                        }}
-                                                        readOnly={readOnly}
-                                                    />
-                                                </div>
 
-                                                <div className="select-wrapper">
-                                                    <label className={`select-label-proc ${invalidRows.includes(index) && !row.accountable ? "label-error-pt" : ""}`}>A:</label>
-                                                    <textarea
-                                                        type="text"
-                                                        className="table-control-proc-text-area-ar"
-                                                        value={row.accountable}
-                                                        style={{ fontSize: "14px" }}
-                                                        placeholder="Select Accountable"
-                                                        ref={(el) => (inputRefs.current[`accountable-${index}`] = el)}
-                                                        onChange={(e) => {
-                                                            handleInputChange(index, "accountable", e.target.value);
-                                                            const filtered = designationOptions.filter(opt =>
-                                                                opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
-                                                                opt !== row.responsible
-                                                            );
-                                                            setDropdownOptions(filtered);
-                                                        }}
-                                                        onFocus={() => {
-                                                            if (readOnly) return;
-                                                            const rect = inputRefs.current[`accountable-${index}`].getBoundingClientRect();
-                                                            setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
-                                                            setDropdownOptions(designationOptions.filter(opt => opt !== row.responsible));
-                                                            setShowARDropdown({ index, field: "accountable" });
-                                                        }}
-                                                        onBlur={(e) => {
-                                                            // Commit free-typed value into options
-                                                            addDesignationIfNew(e.target.value);
-                                                        }}
-                                                        readOnly={readOnly}
-                                                    />
+                                                    <div className="select-wrapper">
+                                                        <label className={`select-label-proc ${invalidRows.includes(index) && !row.accountable ? "label-error-pt" : ""}`}>A:</label>
+                                                        <textarea
+                                                            type="text"
+                                                            className="table-control-proc-text-area-ar"
+                                                            value={row.accountable}
+                                                            style={{ fontSize: "14px" }}
+                                                            placeholder="Select Accountable"
+                                                            ref={(el) => (inputRefs.current[`accountable-${index}`] = el)}
+                                                            onChange={(e) => {
+                                                                handleInputChange(index, "accountable", e.target.value);
+                                                                const filtered = designationOptions.filter(opt =>
+                                                                    opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
+                                                                    opt !== row.responsible
+                                                                );
+                                                                setDropdownOptions(filtered);
+                                                            }}
+                                                            onFocus={() => {
+                                                                if (readOnly) return;
+                                                                const rect = inputRefs.current[`accountable-${index}`].getBoundingClientRect();
+                                                                setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+                                                                setDropdownOptions(designationOptions.filter(opt => opt !== row.responsible));
+                                                                setShowARDropdown({ index, field: "accountable" });
+                                                            }}
+                                                            onBlur={(e) => {
+                                                                addDesignationIfNew(e.target.value);
+                                                            }}
+                                                            readOnly={readOnly}
+                                                        />
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </td>
-                                        {!readOnly && (<td className="procCent">
-                                            <button
-                                                className="remove-row-button"
-                                                onClick={() => removeProRow(index)}
-                                                title="Delete step"
-                                            >
-                                                <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                                            </button>
-                                            {index < procedureRows.length - 1 && (
+                                            </td>
+                                            {!readOnly && (<td className="procCent">
                                                 <button
-                                                    className="insert-row-button-sig"
-                                                    onClick={() => insertRowAt(index + 1)} // Insert below
-                                                    style={{ fontSize: "15px" }}
-                                                    title="Insert step"
+                                                    className="remove-row-button"
+                                                    onClick={() => removeProRow(index)}
+                                                    title="Delete step"
                                                 >
-                                                    <FontAwesomeIcon icon={faPlusCircle} />
+                                                    <FontAwesomeIcon icon={faTrash} title="Remove Row" />
                                                 </button>
-                                            )}
-                                            {true && (<button
-                                                className="remove-row-button"
-                                                onClick={() => handleDuplicateRow(row.nr)}
-                                                title="Duplicate step"
-                                            >
-                                                <FontAwesomeIcon icon={faCopy} title="Duplicate Row" />
-                                            </button>)}
+                                                {index < procedureRows.length - 1 && (
+                                                    <button
+                                                        className="insert-row-button-sig"
+                                                        onClick={() => insertRowAt(index + 1)}
+                                                        style={{ fontSize: "15px" }}
+                                                        title="Insert step"
+                                                    >
+                                                        <FontAwesomeIcon icon={faPlusCircle} />
+                                                    </button>
+                                                )}
+                                                {true && (<button
+                                                    className="remove-row-button"
+                                                    onClick={() => handleDuplicateRow(row.nr)}
+                                                    title="Duplicate step"
+                                                >
+                                                    <FontAwesomeIcon icon={faCopy} title="Duplicate Row" />
+                                                </button>)}
 
-                                        </td>)}
-                                    </tr>
-                                </React.Fragment>
-                            ))}
+                                            </td>)}
+                                        </tr>
+                                    </React.Fragment>
+                                )
+                            })}
                         </tbody>
                     </table>
                 )}
@@ -786,6 +941,140 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onWheel={handleInnerScrollWheel}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                        >
+                            Sort A to Z
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(
+                            new Set((procedureRows || []).flatMap(r => getFilterValuesForCell(r, colId)))
+                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const allVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                            setFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = { selected: selectedArr };
+                                return next;
+                            });
+
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
             )}
         </div>
     );

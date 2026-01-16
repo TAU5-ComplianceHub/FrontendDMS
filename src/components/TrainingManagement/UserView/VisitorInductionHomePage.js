@@ -12,6 +12,8 @@ import PopupMenuPubInduction from "../../VisitorsInduction/InductionCreation/Pop
 import PopupMenuCertificateOptions from "../../VisitorsInduction/InductionCreation/PopupMenuCertificateOptions";
 import ProgressNote from "./ProgressNote";
 import ValidityNote from "./ValidityNote";
+import TopBarVisitorQR from "../../Notifications/TopBarVisitorQR";
+import VisitorQrCodePopup from "../../VisitorsInduction/VisitorQrCodePopup";
 
 const VisitorInductionHomePage = () => {
     const [searchTerm, setSearchTerm] = useState("");
@@ -26,6 +28,7 @@ const VisitorInductionHomePage = () => {
     const [indcutionData, setInductionData] = useState([]);
     const [progressInfo, setProgressInfo] = useState(false);
     const [validInfo, setValidInfo] = useState(false);
+    const [code, setCode] = useState(false);
 
     const openProgess = () => {
         setProgressInfo(true);
@@ -270,6 +273,10 @@ const VisitorInductionHomePage = () => {
         );
     };
 
+    const viewCode = () => {
+        setCode(true);
+    }
+
     const getComplianceColor = (status) => {
         if (!status.expiryDate) {
             if (status.validity === "Invalid" || status.validity === "invalid") return "status-missing"
@@ -317,7 +324,7 @@ const VisitorInductionHomePage = () => {
 
                     <div className="spacer"></div>
 
-                    <TopBar visitor={true} />
+                    <TopBarVisitorQR visitor={true} viewQRCode={viewCode} />
                 </div>
                 <div className="course-home-info-wrapper">
                     {/* Welcome header (avatar + name) */}
@@ -390,6 +397,7 @@ const VisitorInductionHomePage = () => {
                 </div>
             </div>
 
+            {code && (<VisitorQrCodePopup onClose={() => setCode(false)} profileId={user._id} />)}
             {progressInfo && (<ProgressNote setClose={closeProgess} />)}
             {validInfo && (<ValidityNote setClose={closeValid} />)}
         </div>

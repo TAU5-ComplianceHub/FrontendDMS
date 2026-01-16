@@ -61,7 +61,7 @@ const VersionHistoryOnlineTraining = () => {
                     </div>
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/tmsCreateCourse2.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"Online Training"}</p>
+                        <p className="logo-text-dm-fi">{"Published Courses"}</p>
                     </div>
                 </div>
             )}

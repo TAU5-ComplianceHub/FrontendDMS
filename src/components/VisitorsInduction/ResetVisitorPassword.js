@@ -221,7 +221,7 @@ function ResetVisitorPassword() {
                                 }}
                             >
                                 An OTP (One-Time Pin) has been sent to your registered email address.
-                                <br />Please enter the OTP below to access yout Visitor Profile.
+                                <br />Please enter the OTP below to access your Visitor Profile.
                             </label>
 
                             <div className="forgot-password-group">

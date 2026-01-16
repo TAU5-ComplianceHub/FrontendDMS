@@ -1,17 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCaretLeft, faCaretRight, faX, faFileCirclePlus, faSearch, faArrowLeft, faEdit, faTrash, faShare, faShareAlt, faCirclePlay, faCirclePlus, faBookOpen, faDownload, faBook, faUser, faUserGroup, faColumns, faFilter, faSort } from '@fortawesome/free-solid-svg-icons';
+import { faCaretLeft, faCaretRight, faX, faSearch, faArrowLeft, faTrash, faShareAlt, faUser, faUserGroup, faColumns, faSort, faFilter } from '@fortawesome/free-solid-svg-icons';
 import { jwtDecode } from 'jwt-decode';
-import { toast, ToastContainer } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import DatePicker from "react-multi-date-picker";
 import { canIn, getCurrentUser } from "../../utils/auth";
 import TopBar from "../Notifications/TopBar";
 import SortPopupVisitors from "../VisitorsInduction/Popups/SortPopupVisitors";
+import OnlineTrainingCreateProfilePopup from "./Popups/OnlineTrainingCreateProfilePopup";
+import OnlineTrainingBatchExcelUpload from "./Popups/OnlineTrainingBatchExcelUpload";
+import OnlineTrainingCreateBatchProfiles from "./Popups/OnlineTrainingCreateBatchProfiles";
+import OnlineTrainingCreateProfileLink from "./Popups/OnlineTrainingCreateProfileLink";
+import OnlineTrainingDeleteVisitor from "./Popups/OnlineTrainingDeleteVisitor";
+import OnlineTrainingSortPopupVisitors from "./Popups/OnlineTrainingSortPopupVisitors";
 
 const OnlineTrainingStudentProfiles = () => {
-    const [expandedRow, setExpandedRow] = useState(null);
+    // --- Existing Drag Scroll State ---
     const scrollerRef = React.useRef(null);
     const dragRef = React.useRef({
         active: false,
@@ -20,30 +25,60 @@ const OnlineTrainingStudentProfiles = () => {
         hasDragged: false
     });
     const [isDraggingX, setIsDraggingX] = useState(false);
-
     const DRAG_THRESHOLD = 5;
 
+    // --- Excel Filter State ---
+    const excelPopupRef = useRef(null);
+    const [filters, setFilters] = useState({});
+    const [sortConfig, setSortConfig] = useState({ colId: null, direction: null });
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+
+    // --- Standard State ---
+    const [upload, setUpload] = useState(false);
+    const [batchProg, setBatchProg] = useState(false);
+    const [batchExcel, setBatchExcel] = useState(false);
+    const [shareLink, setShareLink] = useState(false);
+    const [username, setUsername] = useState("");
+    const [email, setEmail] = useState("");
+    const [deleteVisitor, setDeleteVisitor] = useState(false);
+    const [deleteName, setDeleteName] = useState(false);
+    const [deleteId, setDeleteId] = useState(false);
+    const [linkId, setLinkId] = useState("");
+    const [files, setFiles] = useState([]);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [token, setToken] = useState('');
+    const access = getCurrentUser();
+    const [isSortModalOpen, setIsSortModalOpen] = useState(false);
+
+    // Legacy sort state (maintained for the external button)
+    const [sortField, setSortField] = useState("");
+    const [sortOrder, setSortOrder] = useState("ascending");
+    const navigate = useNavigate();
+
+    // --- Drag Scrolling Logic ---
     const isInteractive = (el) =>
         !!el.closest('button, a, input, textarea, select, [role="button"], .no-drag');
 
     const onPointerDownX = (e) => {
         const el = scrollerRef.current;
-        if (!el) return;
-
-        // If the press is on an interactive element, don't start drag logic
-        if (isInteractive(e.target)) return;
-
+        if (!el || isInteractive(e.target)) return;
         dragRef.current.active = true;
         dragRef.current.hasDragged = false;
         dragRef.current.startX = e.clientX;
         dragRef.current.startScrollLeft = el.scrollLeft;
-        // IMPORTANT: do NOT set isDraggingX yet; wait until we cross threshold
     };
 
     const onPointerMoveX = (e) => {
         const el = scrollerRef.current;
         if (!el || !dragRef.current.active) return;
-
         const dx = e.clientX - dragRef.current.startX;
 
         if (!dragRef.current.hasDragged) {
@@ -52,12 +87,10 @@ const OnlineTrainingStudentProfiles = () => {
                 setIsDraggingX(true);
                 try { el.setPointerCapture?.(e.pointerId); } catch { }
             } else {
-                return; // still a click, do nothing
+                return;
             }
         }
-
         el.scrollLeft = dragRef.current.startScrollLeft - dx;
-        // prevent text selection while actually dragging
         e.preventDefault();
     };
 
@@ -71,10 +104,7 @@ const OnlineTrainingStudentProfiles = () => {
         setIsDraggingX(false);
     };
 
-    const toggleRow = (rowKey) => {
-        setExpandedRow((prev) => (prev === rowKey ? null : rowKey));
-    };
-
+    // --- Helpers ---
     const getComplianceColor = (status) => {
         if (status === "valid") return "status-good";
         if (status === "requiresRetake") return "status-bad"
@@ -83,6 +113,7 @@ const OnlineTrainingStudentProfiles = () => {
     };
 
     const formatStatus = (type) => {
+        if (!type) return "-";
         if (type === "requiresRetake") return "Requires Retake"
         return type
             .replace(/_/g, ' ')
@@ -92,7 +123,6 @@ const OnlineTrainingStudentProfiles = () => {
     const extractNumbers = (value) => {
         if (!value) return '';
         const cleaned = value.replace(/\s+/g, '').replace(/[^\d+]/g, '');
-        // keep only one leading +
         return cleaned.startsWith('+')
             ? '+' + cleaned.slice(1).replace(/\+/g, '')
             : cleaned.replace(/\+/g, '');
@@ -100,18 +130,45 @@ const OnlineTrainingStudentProfiles = () => {
 
     const formatDate = (dateString) => {
         if (!dateString) return "-";
-        const date = new Date(dateString); // Convert to Date object
+        const date = new Date(dateString);
         const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-        const day = String(date.getDate()).padStart(2, '0'); // Pad day with leading zero
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
         return `${day}.${month}.${year}`;
     };
+
+    // --- API Calls ---
+    const fetchFiles = async () => {
+        const route = `/api/onlineTrainingStudentManagement/getStudents`;
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
+                headers: {
+                    // 'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch files');
+            }
+            const data = await response.json();
+            setFiles(data.students);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    useEffect(() => {
+        fetchFiles();
+        const storedToken = localStorage.getItem('token');
+        if (storedToken) {
+            setToken(storedToken);
+            jwtDecode(storedToken);
+        }
+    }, [navigate]);
 
     const deleteVisitorInstance = async () => {
         if (!deleteId) return;
         try {
-
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/visitors/deleteVisitor/${deleteId}`, {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/deleteStudent/${deleteId}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
@@ -123,158 +180,42 @@ const OnlineTrainingStudentProfiles = () => {
             fetchFiles();
         } catch (error) {
             console.error('Error deleting file:', error);
-        } finally {
         }
     };
 
-    const [upload, setUpload] = useState(false);
-    const [batchProg, setBatchProg] = useState(false);
-    const [batchExcel, setBatchExcel] = useState(false);
-    const [shareLink, setShareLink] = useState(false);
-    const [username, setUsername] = useState("");
-    const [email, setEmail] = useState("");
-    const [deleteVisitor, setDeleteVisitor] = useState(false);
-    const [deleteName, setDeleteName] = useState(false);
-    const [deleteId, setDeleteId] = useState(false);
-    const [linkId, setLinkId] = useState("");
-
-    const openUpload = () => {
-        setUpload(true);
-    }
-
-    const closeUpload = () => {
-        setUpload(!upload);
-    }
-
-    const openDelete = (name, id) => {
-        setDeleteName(name);
-        setDeleteId(id);
-        setDeleteVisitor(true);
-    }
-
-    const closeDelete = () => {
-        setDeleteName("");
-        setDeleteId("");
-        setDeleteVisitor(!deleteVisitor);
-    }
-
-    const openBatchProg = () => {
-        setBatchProg(true);
-    }
-
-    const closeBatchProg = () => {
-        setBatchProg(!batchProg);
-    }
-
-    const openBatchExcel = () => {
-        setBatchExcel(true);
-        setBatchProg(false);
-    }
-
-    const closeBatchExcel = () => {
-        setBatchExcel(!batchExcel);
-    }
-
-    const openShareLink = (name, email, id) => {
-        setUsername(name);
-        setEmail(email);
-        setShareLink(true);
-        setLinkId(id);
-    }
-
-    const closeShareLink = () => {
-        setUsername("");
-        setEmail("");
-        setLinkId("");
-        setShareLink(false);
-    }
-
-    const openUserLinkShare = (user) => {
-        setUsername(user.name);
-        setEmail(user.email);
-        setShareLink(true);
-        setLinkId(user._id);
-    }
-
-    const [files, setFiles] = useState([]);
-
-    const fetchFiles = async () => {
-        return;
-        const route = `/api/visitors/getVisitors`;
-        try {
-            const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
-                headers: {
-                    // 'Authorization': `Bearer ${token}`
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Failed to fetch files');
-            }
-            const data = await response.json();
-            console.log(data);
-            setFiles(data.visitors);
-        } catch (error) {
-        }
-    };
-
-    useEffect(() => {
-        fetchFiles();
-    }, []);
-
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [token, setToken] = useState('');
-    const access = getCurrentUser();
-    const [hoveredFileId, setHoveredFileId] = useState(null);
-    const [isSortModalOpen, setIsSortModalOpen] = useState(false);
-    const [sortField, setSortField] = useState("");
-    const [sortOrder, setSortOrder] = useState("ascending");
-    const navigate = useNavigate();
-
-    const totalCols = canIn(access, "TMS", ["systemAdmin", "contributor"]) ? 9 : 8;
+    // --- Modal Toggles ---
+    const openUpload = () => setUpload(true);
+    const closeUpload = () => setUpload(!upload);
+    const openDelete = (name, id) => { setDeleteName(name); setDeleteId(id); setDeleteVisitor(true); };
+    const closeDelete = () => { setDeleteName(""); setDeleteId(""); setDeleteVisitor(!deleteVisitor); };
+    const openBatchProg = () => setBatchProg(true);
+    const closeBatchProg = () => setBatchProg(!batchProg);
+    const openBatchExcel = () => { setBatchExcel(true); setBatchProg(false); };
+    const closeBatchExcel = () => setBatchExcel(!batchExcel);
+    const openShareLink = (name, email, id) => { setUsername(name); setEmail(email); setShareLink(true); setLinkId(id); };
+    const closeShareLink = () => { setUsername(""); setEmail(""); setLinkId(""); setShareLink(false); };
+    const openUserLinkShare = (user) => { setUsername(user.name); setEmail(user.email); setShareLink(true); setLinkId(user._id); };
     const openSortModal = () => setIsSortModalOpen(true);
     const closeSortModal = () => setIsSortModalOpen(false);
 
-    useEffect(() => {
-        const storedToken = localStorage.getItem('token');
-        if (storedToken) {
-            setToken(storedToken);
-            const decodedToken = jwtDecode(storedToken);
-        }
-    }, [navigate]);
-
-    const handleSort = () => {
-        const sortedFiles = [...files].sort((a, b) => {
-            const fieldA = a[sortField]?.toString().toLowerCase() || "";
-            const fieldB = b[sortField]?.toString().toLowerCase() || "";
-            if (sortOrder === "ascending") return fieldA.localeCompare(fieldB);
-            return fieldB.localeCompare(fieldA);
-        });
-        setFiles(sortedFiles);
-        closeSortModal();
-    };
-
-    const clearSearch = () => {
-        setSearchQuery("");
-    };
-
-    // Which columns exist and how to render them
+    // --- Column Config ---
     const allColumns = [
         { id: "nr", title: "Nr", thClass: "visitor-ind-num-filter", td: (f, i) => i + 1 },
         { id: "name", title: "Name", thClass: "visitor-ind-name-filter", td: (f) => f.name },
         { id: "surname", title: "Surname", thClass: "visitor-ind-surname-filter", td: (f) => f.surname },
         { id: "company", title: "Company", thClass: "visitor-ind-company-filter", td: (f) => f.company ?? "-" },
-        { id: "createdBy", title: "Profile Created By", thClass: "visitor-ind-profileBy-filter", td: (f) => f.profileCreatedBy.username ?? "-" },
-        { id: "courses", title: "Enroled Courses", thClass: "visitor-ind-email-filter", td: (f) => f.email ?? "-" },
-        { id: "completed", title: "Completed Courses", thClass: "visitor-ind-company-filter", td: (f) => extractNumbers(f.contactNr) ?? "-" },
-        { id: "lastDate", title: "Last Completion Date", thClass: "visitor-ind-vers-filter", td: (f) => f.indicationVersion ?? "-" },
-        // "action" column is permission-based, we add it dynamically below
+        { id: "createdBy", title: "Profile Created By", thClass: "visitor-ind-profileBy-filter", td: (f) => f.profileCreatedBy?.username ?? "-" },
+        { id: "courses", title: "Enrolled Courses", thClass: "visitor-ind-company-filter", td: (f) => f.courses ?? "-" },
+        { id: "completed", title: "Completed Courses", thClass: "visitor-ind-company-filter", td: (f) => f.completed ?? "-" },
+        { id: "lastDate", title: "Last Completion Date", thClass: "visitor-ind-vers-filter", td: (f) => f.lastCompletion ?? "-" },
+        { id: "email", title: "Email", thClass: "visitor-ind-email-filter", td: (f) => f.email ?? "-" },
+        { id: "phone", title: "Contact Number", thClass: "visitor-ind-company-filter", td: (f) => extractNumbers(f.contactNr) ?? "-" },
+        { id: "idnum", title: "ID/Passport", thClass: "visitor-ind-company-filter", td: (f) => f.idNumber ?? "-" },
     ];
 
     const [showColumns, setShowColumns] = useState(() => {
-        // default starter set
+        // Default set: Include original columns + common ones
         const base = ["nr", "name", "surname", "company", "createdBy", "courses", "completed", "lastDate"];
-        // include action for contributors/admins
         return canIn(access, "TMS", ["systemAdmin", "contributor"]) ? [...base, "action"] : base;
     });
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -289,7 +230,6 @@ const OnlineTrainingStudentProfiles = () => {
 
     const toggleColumn = (id) => {
         setShowColumns(prev => {
-            // nr + action are pinned (like IBRA’s nr/action)
             if (id === "nr" || id === "action") return prev;
             return prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id];
         });
@@ -300,10 +240,7 @@ const OnlineTrainingStudentProfiles = () => {
             const allIds = availableColumns.map(c => c.id);
             setShowColumns(allIds);
         } else {
-            // minimal: only Nr (and Action if allowed)
-            setShowColumns(
-                canIn(access, "TMS", ["systemAdmin", "contributor"]) ? ["nr", "action"] : ["nr"]
-            );
+            setShowColumns(canIn(access, "TMS", ["systemAdmin", "contributor"]) ? ["nr", "action"] : ["nr"]);
         }
     };
 
@@ -314,53 +251,159 @@ const OnlineTrainingStudentProfiles = () => {
 
     const visibleColumns = availableColumns.filter(c => showColumns.includes(c.id));
     const visibleCount = visibleColumns.length;
-    // Wide-mode when more than 9 columns (as requested)
     const isWide = visibleCount > 9;
 
-    // which header popup is open
-    const [openHeader, setOpenHeader] = useState(null);
+    // --- Excel Filtering Logic ---
 
-    // column filters (text + date)
-    const [colFilters, setColFilters] = useState({
-        name: '',
-        surname: '',
-        email: '',
-        phone: '',
-        idnum: '',
-        company: '',
-        createdBy: '',
-        validity: '',
-        version: '',
-        expiryFrom: '', // yyyy-mm-dd
-        expiryTo: ''    // yyyy-mm-dd
-    });
+    const getFilterValuesForCell = (file, colId) => {
+        let val = "";
+        switch (colId) {
+            case "name": val = file.name; break;
+            case "surname": val = file.surname; break;
+            case "company": val = file.company; break;
+            case "createdBy": val = file.profileCreatedBy?.username; break;
+            // Original OT Mappings
+            case "courses": val = file.email; break;
+            case "completed": val = extractNumbers(file.contactNr); break;
+            case "lastDate": val = file.indicationVersion; break;
+            // New Visitor Mappings
+            case "email": val = file.email; break;
+            case "phone": val = extractNumbers(file.contactNr); break;
+            case "idnum": val = file.idNumber; break;
+            case "validity": val = formatStatus(file.validity); break;
+            case "expiry": val = formatDate(file.expiryDate); break;
+            case "version": val = file.indicationVersion; break;
+            default: return [];
+        }
+        return [String(val ?? "-").trim()];
+    };
 
-    const setFilter = (field, val) => setColFilters(f => ({ ...f, [field]: val }));
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return { colId: null, direction: null };
+            }
+            return { colId, direction };
+        });
+    };
 
-    const filteredFiles = files.filter((file) => {
-        const matchesSearchQuery =
-            file.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            file.surname.toLowerCase().includes(searchQuery.toLowerCase());
+    function openExcelFilterPopup(colId, e) {
+        if (colId === "nr" || colId === "action") return;
 
-        // Text filters (case-insensitive, guard nulls)
-        const matchesText =
-            (colFilters.name ? (file.name ?? "").toLowerCase().includes(colFilters.name.toLowerCase()) : true) &&
-            (colFilters.surname ? (file.surname ?? "").toLowerCase().includes(colFilters.surname.toLowerCase()) : true) &&
-            (colFilters.email ? (file.email ?? "").toLowerCase().includes(colFilters.email.toLowerCase()) : true) &&
-            (colFilters.phone ? (file.contactNr ?? "").toLowerCase().includes(colFilters.phone.toLowerCase()) : true) &&
-            (colFilters.idnum ? (file.idNumber ?? "").toLowerCase().includes(colFilters.idnum.toLowerCase()) : true) &&
-            (colFilters.company ? (file.company ?? "").toLowerCase().includes(colFilters.company.toLowerCase()) : true) &&
-            (colFilters.createdBy ? ((file.profileCreatedBy?.username) ?? "").toLowerCase().includes(colFilters.createdBy.toLowerCase()) : true) &&
-            (colFilters.validity ? (formatStatus(file.validity) ?? "").toLowerCase().includes(colFilters.validity.toLowerCase()) : true) &&
-            (colFilters.version ? (file.indicationVersion ?? "").toLowerCase().includes(colFilters.version.toLowerCase()) : true);
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
 
-        // Date range filter (expiry)
-        const fileExpiry = file.expiryDate ? new Date(file.expiryDate) : null;
-        const fromOK = colFilters.expiryFrom ? (fileExpiry && fileExpiry >= new Date(colFilters.expiryFrom)) : true;
-        const toOK = colFilters.expiryTo ? (fileExpiry && fileExpiry <= new Date(colFilters.expiryTo)) : true;
+        const values = Array.from(
+            new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
 
-        return matchesSearchQuery && matchesText && fromOK && toOK;
-    });
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    // Popup Event Listeners
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (!e.target.closest('.excel-filter-popup') && !e.target.closest('th')) {
+                setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            }
+        };
+        if (excelFilter.open) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [excelFilter.open]);
+
+    // Popup Positioning
+    useEffect(() => {
+        if (!excelFilter.open || !excelPopupRef.current) return;
+        const el = excelPopupRef.current;
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin && excelFilter.anchorRect) {
+            newTop = Math.max(margin, excelFilter.anchorRect.top - popupRect.height - 4);
+        }
+        if (popupRect.right > viewportW - margin) {
+            newLeft = Math.max(margin, newLeft - (popupRect.right - (viewportW - margin)));
+        }
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            el.style.top = `${newTop}px`;
+            el.style.left = `${newLeft}px`;
+        }
+    }, [excelFilter.open, excelSearch, excelSelected]);
+
+    // --- Main Filtering & Sorting ---
+    const filteredFiles = useMemo(() => {
+        let current = [...files];
+
+        // 1. Global Search
+        if (searchQuery) {
+            const lowerQ = searchQuery.toLowerCase();
+            current = current.filter(file =>
+                (file.name ?? "").toLowerCase().includes(lowerQ) ||
+                (file.surname ?? "").toLowerCase().includes(lowerQ)
+            );
+        }
+
+        // 2. Excel Checkbox Filters
+        current = current.filter(row => {
+            for (const [colId, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+                if (!selected || !Array.isArray(selected)) continue;
+                const cellValues = getFilterValuesForCell(row, colId);
+                const match = cellValues.some(v => selected.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 3. Sorting
+        const { colId, direction } = sortConfig;
+        if (colId) {
+            const dir = direction === 'desc' ? -1 : 1;
+            current.sort((a, b) => {
+                const valA = getFilterValuesForCell(a, colId)[0];
+                const valB = getFilterValuesForCell(b, colId)[0];
+                return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * dir;
+            });
+        }
+
+        return current;
+    }, [files, searchQuery, filters, sortConfig]);
+
+    const clearSearch = () => {
+        setSearchQuery("");
+    };
+
+    const handleSort = () => {
+        const sortedFiles = [...files].sort((a, b) => {
+            const fieldA = a[sortField]?.toString().toLowerCase() || "";
+            const fieldB = b[sortField]?.toString().toLowerCase() || "";
+            if (sortOrder === "ascending") return fieldA.localeCompare(fieldB);
+            return fieldB.localeCompare(fieldA);
+        });
+        setFiles(sortedFiles);
+        closeSortModal();
+    };
 
     return (
         <div className="file-info-container">
@@ -377,13 +420,13 @@ const OnlineTrainingStudentProfiles = () => {
                     {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (
                         <div className="filter-dm-fi-2">
                             <div className="button-container-dm-fi">
-                                <button className="but-dm-fi">
-                                    <div className="button-content">
+                                <button className="but-dm-fi" onClick={openUpload}>
+                                    <div className="button-content" >
                                         <FontAwesomeIcon icon={faUser} className="button-icon" />
                                         <span className="button-text">Create Profile</span>
                                     </div>
                                 </button>
-                                <button className="but-dm-fi">
+                                <button className="but-dm-fi" onClick={openBatchProg}>
                                     <div className="button-content">
                                         <FontAwesomeIcon icon={faUserGroup} className="button-icon" />
                                         <span className="button-text">Create Group</span>
@@ -439,12 +482,6 @@ const OnlineTrainingStudentProfiles = () => {
                             title="Select Columns to Display"
                             className="top-right-button-control-att"
                             onClick={() => setShowColumnSelector(v => !v)}
-                        />
-                        <FontAwesomeIcon
-                            icon={faSort}
-                            title="Select Columns to Display"
-                            className="top-right-button-control-att-2"
-                            onClick={openSortModal}
                         />
                         {showColumnSelector && (
                             <div className="column-selector-popup"
@@ -508,131 +545,21 @@ const OnlineTrainingStudentProfiles = () => {
                             <thead>
                                 <tr>
                                     {visibleColumns.map(col => {
-                                        const isText = ["name", "surname", "email", "phone", "idnum", "company", "createdBy", "courses", "completed", "lastDate"].includes(col.id);
-                                        const isDate = col.id === "expiry";
-                                        const isStatic = ["nr", "action"].includes(col.id);
-
-                                        const textActive = isText && !!colFilters[col.id];
-                                        const dateActive = isDate && (!!colFilters.expiryFrom || !!colFilters.expiryTo);
-                                        const thActive = textActive || dateActive;
+                                        const isFilterable = col.id !== "nr" && col.id !== "action";
+                                        const isActive = filters[col.id] || sortConfig.colId === col.id;
 
                                         return (
-                                            <th key={col.id} className={`${col.thClass} col ${thActive ? "th-filter-active" : ""}`}>
-                                                {isStatic && <span className="fileinfo-title-filter-1">{col.title}</span>}
-
-                                                {isText && (
-                                                    <div className="fileinfo-container-filter">
-                                                        <span
-                                                            className="fileinfo-title-filter"
-                                                            onClick={() => setOpenHeader(prev => prev === col.id ? null : col.id)}
-                                                            title={`Filter by ${col.title}`}
-                                                        >
-                                                            {col.title} {textActive && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
-                                                        </span>
-
-                                                        {openHeader === col.id && (
-                                                            <div className="fileinfo-menu-filter" onMouseLeave={() => setOpenHeader(null)}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={`Filter by ${col.title.toLowerCase()}`}
-                                                                    className="filter-input-file"
-                                                                    value={colFilters[col.id] ?? ""}
-                                                                    onChange={(e) => setFilter(col.id, e.target.value)}
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {isDate && (
-                                                    <div className="fileinfo-container-filter">
-                                                        <span
-                                                            className="fileinfo-title-filter"
-                                                            onClick={() => setOpenHeader(prev => prev === "expiry" ? null : "expiry")}
-                                                            title="Filter by expiry date"
-                                                        >
-                                                            {col.title} {dateActive && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
-                                                        </span>
-
-                                                        {openHeader === "expiry" && (
-                                                            <div className="date-menu-filter" onMouseLeave={() => setOpenHeader(null)}>
-                                                                <div className="date-filter-row">
-                                                                    <label className="date-label">From</label>
-
-                                                                    <DatePicker
-                                                                        value={colFilters.expiryFrom || ""}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) =>
-                                                                            setFilter("expiryFrom", val?.format("YYYY-MM-DD"))
-                                                                        }
-                                                                        rangeHover={false}
-                                                                        highlightToday={false}
-                                                                        editable={false}
-                                                                        inputClass="filter-input-date"
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-
-                                                                    {/* 👇 Clear button resets the filter */}
-                                                                    {colFilters.expiryFrom && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setFilter("expiryFrom", "")}
-                                                                            style={{
-                                                                                background: "none",
-                                                                                border: "none",
-                                                                                color: "#666",
-                                                                                cursor: "pointer",
-                                                                                fontSize: "14px",
-                                                                                padding: "2px 6px",
-                                                                            }}
-                                                                            title="Clear date"
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faTrash} title='Clear Filter' />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <div className="date-filter-row">
-                                                                    <label className="date-label">To:</label>
-
-                                                                    <DatePicker
-                                                                        value={colFilters.expiryTo || ""}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) =>
-                                                                            setFilter("expiryTo", val?.format("YYYY-MM-DD"))
-                                                                        }
-                                                                        rangeHover={false}
-                                                                        highlightToday={false}
-                                                                        editable={false}
-                                                                        inputClass="filter-input-date"
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-
-                                                                    {/* 👇 Clear button resets the filter */}
-                                                                    {colFilters.expiryTo && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setFilter("expiryTo", "")}
-                                                                            style={{
-                                                                                background: "none",
-                                                                                border: "none",
-                                                                                color: "#666",
-                                                                                cursor: "pointer",
-                                                                                fontSize: "14px",
-                                                                                padding: "2px 6px",
-                                                                            }}
-                                                                            title="Clear date"
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faTrash} title='Clear Filter' />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                            <th
+                                                key={col.id}
+                                                className={`${col.thClass} col ${isActive ? "active-filter-header" : ""}`}
+                                                style={{ cursor: isFilterable ? 'pointer' : 'default', position: 'relative' }}
+                                                onClick={(e) => {
+                                                    if (isFilterable) openExcelFilterPopup(col.id, e);
+                                                }}
+                                            >
+                                                {col.title}
+                                                {isActive && (
+                                                    <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "8px" }} />
                                                 )}
                                             </th>
                                         );
@@ -702,7 +629,120 @@ const OnlineTrainingStudentProfiles = () => {
                 </div >
             </div >
 
-            {isSortModalOpen && (<SortPopupVisitors closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} />)}
+            {/* Excel Filter Popup */}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                        >
+                            Sort A to Z
+                        </button>
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId))))
+                            .sort((a, b) => String(a).localeCompare(String(b)));
+                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v); else next.add(v);
+                                return next;
+                            });
+                        };
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); });
+                                return next;
+                            });
+                        };
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            setFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId]; else next[colId] = { selected: selectedArr };
+                                return next;
+                            });
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
+
+            {upload && (<OnlineTrainingCreateProfilePopup onClose={closeUpload} refresh={fetchFiles} openUserLinkShare={openUserLinkShare} />)}
+            {batchProg && <OnlineTrainingCreateBatchProfiles onClose={closeBatchProg} openExcel={openBatchExcel} refresh={fetchFiles} />}
+            {batchExcel && (<OnlineTrainingBatchExcelUpload onClose={closeBatchExcel} refresh={fetchFiles} />)}
+            {shareLink && (<OnlineTrainingCreateProfileLink onClose={closeShareLink} studentEmail={email} studentName={username} profileId={linkId} />)}
+            {deleteVisitor && (<OnlineTrainingDeleteVisitor closeModal={closeDelete} deleteVisitor={deleteVisitorInstance} name={deleteName} />)}
             <ToastContainer />
         </div >
     );

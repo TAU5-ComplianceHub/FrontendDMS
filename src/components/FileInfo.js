@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faClipboardCheck, faDownload, faFileAlt, faFileSignature, faHardHat, faHome, faListOl, faScaleBalanced, faTrash, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { faHome, faTrash, faSearch, faArrowLeft, faBell, faCircleUser, faCaretLeft, faCaretRight, faFileCirclePlus, faX, faSort, faFilter, faCopy, faPlusCircle, faTableColumns, faDownload, faArrowsLeftRight, faArrowsRotate, faFlag } from '@fortawesome/free-solid-svg-icons';
 import { faRotate } from '@fortawesome/free-solid-svg-icons';
-import { faSort, faSpinner, faX, faFileCirclePlus, faFolderOpen, faSearch, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import FilterFileName from "./FileInfo/FilterFileName";
 import "./FileInfo.css";
@@ -15,7 +14,6 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import BurgerMenuFIMain from "./FileInfo/BurgerMenuFIMain";
 import DeletePopup from "./FileInfo/DeletePopup";
-import SortPopup from "./FileInfo/SortPopup";
 import BatchUpload from "./FileInfo/BatchUpload";
 import DownloadPopup from "./FileInfo/DownloadPopup";
 import PopupMenu from "./FileInfo/PopupMenu";
@@ -25,7 +23,7 @@ import { getCurrentUser, can, isAdmin, hasRole, canIn } from "../utils/auth";
 
 const FileInfo = () => {
   const { type } = useParams();
-  const [files, setFiles] = useState([]); // State to hold the file data
+  const [files, setFiles] = useState([]);
   const [disciplines, setDisciplines] = useState([]);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [docTypes, setDocTypes] = useState([]);
@@ -47,9 +45,6 @@ const FileInfo = () => {
   const [downloadFileName, setDownloadFileName] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const isActionAvailable = !isTrashView && canIn(access, "DMS", ["systemAdmin", "contributor"]);
-  const [isSortModalOpen, setIsSortModalOpen] = useState(false);
-  const [sortField, setSortField] = useState("");
-  const [sortOrder, setSortOrder] = useState("ascending");
   const [reviewDateVal, setReviewDateVal] = useState("");
   const [isRDPopupOpen, setIsRDPopupOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,18 +56,27 @@ const FileInfo = () => {
   const [updateID, setUpdateID] = useState(null);
   const [rename, setRename] = useState(false);
   const [documentRenameName, setDocumentRenameName] = useState("");
-  const [filters, setFilters] = useState({
-    author: '',
-    deptHead: '',
-    docID: '',
-    startDate: '',
-    endDate: ''
-  });
-  const [count, setCount] = useState(""); // Placeholder for unread notifications count
+  const [count, setCount] = useState("");
   const [profilePic, setProfilePic] = useState(null);
+  const excelPopupRef = useRef(null);
+  const [sortField, setSortField] = useState("");
+  const [sortOrder, setSortOrder] = useState("ascending");
+
+  // --- EXCEL FILTER & SORT STATE ---
+  const DEFAULT_SORT = { colId: "reviewDate", direction: "asc" };
+  const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+  const [columnFilters, setColumnFilters] = useState({}); // { colId: { selected: ["Val1", "Val2"] } }
+
+  const [excelFilter, setExcelFilter] = useState({
+    open: false,
+    colId: null,
+    anchorRect: null,
+    pos: { top: 0, left: 0, width: 0 }
+  });
+  const [excelSearch, setExcelSearch] = useState("");
+  const [excelSelected, setExcelSelected] = useState(new Set());
 
   useEffect(() => {
-    // Load from sessionStorage on mount
     const cached = sessionStorage.getItem('profilePic');
     setProfilePic(cached || null);
   }, []);
@@ -85,77 +89,198 @@ const FileInfo = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         }
       });
-      if (!response.ok) {
-        throw new Error('Failed to fetch notification count');
-      }
+      if (!response.ok) throw new Error('Failed');
       const data = await response.json();
       setCount(data.notifications);
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error);
-    }
+    } catch (error) { console.error(error); }
   };
 
-  useEffect(() => {
-    fetchNotificationCount();
-  }, []);
+  useEffect(() => { fetchNotificationCount(); }, []);
 
-  const openUpload = () => {
-    setUpload(true);
-  };
+  const openUpload = () => setUpload(true);
+  const closeUpload = () => { setUpload(false); fetchFiles(); };
 
   const openRename = (fileName, fileID) => {
     setDocumentRenameName(fileName);
     setUpdateID(fileID);
     setRename(true);
   }
+  const closeRename = () => { setRename(false); fetchFiles(); }
 
-  const closeRename = () => {
-    setRename(false);
-    fetchFiles();
-  }
+  const openBatch = () => setBatch(true);
+  const closeBatch = () => { setBatch(false); fetchFiles(); }
 
-  const openBatch = () => {
-    setBatch(true);
-  }
-
-  const closeBatch = () => {
-    setBatch(false);
-    fetchFiles();
-  }
-
-  const closeUpload = () => {
-    setUpload(!upload);
-    fetchFiles();
-  };
-
-  const openUpdate = (fileID) => {
-    setUpdateID(fileID);
-    setUpdate(true);
-  };
-
-  const closeUpdate = () => {
-    setUpdate(!update);
-    fetchFiles();
-  };
+  const openUpdate = (fileID) => { setUpdateID(fileID); setUpdate(true); };
+  const closeUpdate = () => { setUpdate(false); fetchFiles(); };
 
   const openRDPopup = () => setIsRDPopupOpen(true);
   const closeRDPopup = () => setIsRDPopupOpen(false);
 
-  const openSortModal = () => setIsSortModalOpen(true);
-  const closeSortModal = () => setIsSortModalOpen(false);
+  // --- EXCEL FILTER HELPERS ---
+  const BLANK = "(Blanks)";
 
-  const handleFilterChange = (field, value) => {
-    setFilters((prevFilters) => ({
-      ...prevFilters,
-      [field]: value,
-    }));
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date)) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
+
+  // Helper moved up so it can be used in filtering logic
+  const formatStatus = (type) => {
+    if (!type) return "";
+    return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  const getFilterValuesForCell = (row, colId) => {
+    let val;
+
+    if (colId === "uploader") {
+      val = row.userID?.username || "";
+    } else if (colId === "owner") {
+      // Owner can be array or JSON string of array
+      let raw = row.owner;
+      if (typeof raw === 'string' && (raw.startsWith('[') || raw.includes(','))) {
+        try { raw = JSON.parse(raw); } catch { }
+      }
+      if (Array.isArray(raw)) {
+        return raw.map(v => v ? String(v).trim() : BLANK);
+      }
+      val = raw;
+    } else if (colId === "reviewDate" || colId === "uploadDate") {
+      // Format date for the filter list (YYYY-MM-DD)
+      val = formatDate(row[colId]);
+    } else if (colId === "status") {
+      // Format Status (e.g., "in_review" -> "In Review")
+      val = formatStatus(row[colId]);
+    } else {
+      val = row[colId];
+    }
+
+    const s = val == null ? "" : String(val).trim();
+    return s === "" ? [BLANK] : [s];
+  };
+
+  const toggleSort = (colId, direction) => {
+    setSortConfig(prev => {
+      // If clicking the same sort active now, reset to default
+      if (prev?.colId === colId && prev?.direction === direction) {
+        return DEFAULT_SORT;
+      }
+      return { colId, direction };
+    });
+  };
+
+  const openExcelFilterPopup = (colId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const th = e.target.closest("th");
+    const rect = th.getBoundingClientRect();
+
+    // Build unique values
+    const values = Array.from(
+      new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
+    ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+    const existing = columnFilters?.[colId]?.selected;
+    const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+    setExcelSelected(initialSelected);
+    setExcelSearch("");
+
+    setExcelFilter({
+      open: true,
+      colId,
+      anchorRect: rect,
+      pos: {
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: Math.max(220, rect.width),
+      },
+    });
+  };
+
+  // Logic to reposition popup if it goes offscreen
+  useEffect(() => {
+    if (!excelFilter.open) return;
+    const el = excelPopupRef.current;
+    if (!el) return;
+
+    const popupRect = el.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const margin = 8;
+
+    let newTop = excelFilter.pos.top;
+    let newLeft = excelFilter.pos.left;
+
+    // if bottom off-screen -> place above header if possible
+    if (popupRect.bottom > viewportH - margin) {
+      const anchor = excelFilter.anchorRect;
+      if (anchor) {
+        const desiredTop = anchor.top - popupRect.height - 4;
+        newTop = Math.max(margin, desiredTop);
+      }
+    }
+
+    // keep within left/right bounds
+    if (popupRect.right > viewportW - margin) {
+      const overflow = popupRect.right - (viewportW - margin);
+      newLeft = Math.max(margin, newLeft - overflow);
+    }
+    if (popupRect.left < margin) newLeft = margin;
+
+    if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+      setExcelFilter(prev => ({
+        ...prev,
+        pos: { ...prev.pos, top: newTop, left: newLeft }
+      }));
+    }
+  }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
+  // Handle clicking outside popup
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (excelFilter.open && excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
+        setExcelFilter(prev => ({ ...prev, open: false }));
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [excelFilter.open]);
+
+  const handleInnerScrollWheel = (e) => {
+    const el = e.currentTarget;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const delta = e.deltaY;
+    const goingDown = delta > 0;
+
+    const atTop = scrollTop <= 0;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+    if ((goingDown && atBottom) || (!goingDown && atTop)) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (goingDown && atBottom) {
+        el.scrollTop = scrollHeight - clientHeight;
+      } else if (!goingDown && atTop) {
+        el.scrollTop = 0;
+      }
+      return;
+    }
+  };
+
 
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
       setToken(storedToken);
-      const decodedToken = jwtDecode(storedToken);
+      jwtDecode(storedToken);
     }
   }, [navigate]);
 
@@ -163,15 +288,10 @@ const FileInfo = () => {
     const fetchValues = async () => {
       try {
         const response = await fetch(`${process.env.REACT_APP_URL}/api/valuesUpload/`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch users");
-        }
+        if (!response.ok) throw new Error("Failed");
         const data = await response.json();
-
         setReviewDateVal(data[0].reviewDate);
-      } catch (error) {
-        setError(error.message);
-      }
+      } catch (error) { setError(error.message); }
     };
     fetchValues();
   }, []);
@@ -181,39 +301,21 @@ const FileInfo = () => {
   };
 
   useEffect(() => {
-    if (token && hasRole(access, "DMS")) {
-      fetchFiles();
-    }
+    if (token && hasRole(access, "DMS")) fetchFiles();
   }, [token]);
 
   useEffect(() => {
     fetchFiles();
   }, [isTrashView]);
 
-  const handleSort = () => {
-    const sortedFiles = [...files].sort((a, b) => {
-      const fieldA = a[sortField]?.toString().toLowerCase() || "";
-      const fieldB = b[sortField]?.toString().toLowerCase() || "";
-      if (sortOrder === "ascending") return fieldA.localeCompare(fieldB);
-      return fieldB.localeCompare(fieldA);
-    });
-    setFiles(sortedFiles);
-    closeSortModal();
-  };
-
-  // Fetch files from the API
   const fetchFiles = async () => {
     const route = isTrashView ? `/api/file/trash/` : (type === "All Document" ? `/api/file/` : `/api/file/type/${type}`);
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
-        headers: {
-          // 'Authorization': `Bearer ${token}` // Uncomment and fill in the token if needed
-        }
-      });
-      if (!response.ok) {
-        throw new Error('Failed to fetch files');
-      }
+      const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {});
+      if (!response.ok) throw new Error('Failed');
       const data = await response.json();
+
+      // Initial sort by review date
       const sortedFiles = data.files.sort((a, b) => new Date(a.reviewDate) - new Date(b.reviewDate));
 
       setFiles(sortedFiles);
@@ -230,47 +332,28 @@ const FileInfo = () => {
     }
   };
 
-  const clearSearch = () => {
-    setSearchQuery("");
-  };
+  const clearSearch = () => setSearchQuery("");
 
   const restoreFile = async (fileId) => {
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}/api/file/trash/restore/${fileId}`, {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      if (!response.ok) {
-        throw new Error('Failed to fetch files');
-      }
-
+      if (!response.ok) throw new Error('Failed');
       fetchFiles();
-    } catch (error) {
-      alert('Error restoring the file. Please try again.');
-    }
+    } catch (error) { alert('Error restoring the file.'); }
   };
 
   const downloadFile = async (fileId, fileName) => {
     try {
       setLoading(true);
-
       const response = await fetch(`${process.env.REACT_APP_URL}/api/file/download/${fileId}`, {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to download the file');
-      }
-
-      // Confirm the response is a Blob
+      if (!response.ok) throw new Error('Failed');
       const blob = await response.blob();
-
-      // Create a URL and download the file
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -278,34 +361,24 @@ const FileInfo = () => {
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading file:', error);
-      alert('Error downloading the file. Please try again.');
-    } finally {
-      setLoading(false); // Reset loading state after response
-    }
+    } catch (error) { console.error(error); alert('Error downloading.'); }
+    finally { setLoading(false); }
   };
 
   const deleteFile = async () => {
     if (!selectedFileId) return;
     try {
       setLoading(true);
-
       const response = await fetch(`${process.env.REACT_APP_URL}/api/file/delete/${selectedFileId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete the file');
+      if (!response.ok) throw new Error('Failed');
       setIsModalOpen(false);
       setSelectedFileId(null);
       fetchFiles();
-    } catch (error) {
-      console.error('Error deleting file:', error);
-    } finally {
-      setLoading(false); // Reset loading state after response
-    }
+    } catch (error) { console.error(error); }
+    finally { setLoading(false); }
   };
 
   const deleteFileFromTrash = async () => {
@@ -313,59 +386,28 @@ const FileInfo = () => {
     try {
       setLoading(true);
       const response = await fetch(`${process.env.REACT_APP_URL}/api/file/trash/delete/${selectedFileId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete file from trash');
+      if (!response.ok) throw new Error('Failed');
       setIsModalOpen(false);
       setSelectedFileId(null);
       fetchFiles();
-    } catch (error) {
-      console.error('Error deleting file from trash:', error);
-    } finally {
-      setLoading(false); // Reset loading state after response
-    }
+    } catch (error) { console.error(error); }
+    finally { setLoading(false); }
   };
 
-  const formatStatus = (type) => {
-    return type
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, char => char.toUpperCase());
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString); // Convert to Date object
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-    const day = String(date.getDate()).padStart(2, '0'); // Pad day with leading zero
-    return `${year}-${month}-${day}`;
-  };
-
-  const removeFileExtension = (fileName) => {
-    return fileName.replace(/\.[^/.]+$/, "");
-  };
+  const removeFileExtension = (fileName) => fileName.replace(/\.[^/.]+$/, "");
 
   const getReviewClass = (reviewDate) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today to midnight to avoid time mismatches
+    today.setHours(0, 0, 0, 0);
     const review = new Date(reviewDate);
-    review.setHours(0, 0, 0, 0); // Normalize review date
-
+    review.setHours(0, 0, 0, 0);
     const timeDiff = review - today;
-
-    // If the review date is in the past, mark it as "review-past"
-    if (timeDiff < 0) {
-      return "review-past";
-    }
-    // If the review date is within the next `reviewDateVal` days, mark it as "review-soon"
-    else if (timeDiff <= reviewDateVal * 24 * 60 * 60 * 1000) {
-      return "review-soon";
-    }
-    // Otherwise, mark it as "review-ongoing"
+    if (timeDiff < 0) return "review-past";
+    else if (timeDiff <= reviewDateVal * 24 * 60 * 60 * 1000) return "review-soon";
     return "review-ongoing";
-
   };
 
   const iconMap = {
@@ -374,7 +416,7 @@ const FileInfo = () => {
     Guideline: "guidelinesDMSInverted.svg",
     "DMRE MCOP Guideline": "guidelinesDMSInverted.svg",
     "Industry Document": "guidelinesDMSInverted.svg",
-    MCOP: faHardHat,
+    MCOP: "guidelinesDMSInverted.svg",
     Policy: "policiesDMSInverted.svg",
     Procedure: "proceduresDMSInverted.svg",
     "Risk Assessment": "riskAssessmentDMSInverted.svg",
@@ -385,7 +427,7 @@ const FileInfo = () => {
   }
 
   const getStatusClass = (status) => {
-    switch (status.toLowerCase()) {
+    switch (status?.toLowerCase()) {
       case 'approved': return 'status-approved';
       case 'in_review': return 'status-rejected';
       case 'in_approval': return 'status-pending';
@@ -393,88 +435,103 @@ const FileInfo = () => {
     }
   };
 
-  const toggleTrashView = () => {
-    setIsTrashView(!isTrashView);
-  };
+  const toggleTrashView = () => setIsTrashView(!isTrashView);
 
-  const openModal = (fileId, fileName) => {
-    setSelectedFileId(fileId);
-    setSelectedFileName(fileName);
-    setIsModalOpen(true);
-  };
+  const openModal = (fileId, fileName) => { setSelectedFileId(fileId); setSelectedFileName(fileName); setIsModalOpen(true); };
+  const closeModal = () => { setSelectedFileId(null); setSelectedFileName(null); setIsModalOpen(false); };
+  const openDownloadModal = (fileId, fileName) => { setDownloadFileId(fileId); setDownloadFileName(fileName); setIsDownloadModalOpen(true); };
+  const closeDownloadModal = () => { setDownloadFileId(null); setDownloadFileName(null); setIsDownloadModalOpen(false); };
+  const confirmDownload = () => { if (downloadFileId && downloadFileName) downloadFile(downloadFileId, downloadFileName); closeDownloadModal(); };
 
-  const closeModal = () => {
-    setSelectedFileId(null);
-    setSelectedFileName(null);
-    setIsModalOpen(false);
-  };
+  // --- FILTERED AND SORTED FILES ---
+  const filteredFiles = useMemo(() => {
+    let current = [...files];
 
-  const openDownloadModal = (fileId, fileName) => {
-    setDownloadFileId(fileId);
-    setDownloadFileName(fileName);
-    setIsDownloadModalOpen(true);
-  };
-
-  const closeDownloadModal = () => {
-    setDownloadFileId(null);
-    setDownloadFileName(null);
-    setIsDownloadModalOpen(false);
-  };
-
-  const confirmDownload = () => {
-    if (downloadFileId && downloadFileName) {
-      downloadFile(downloadFileId, downloadFileName);
+    // 1. Search Query
+    if (searchQuery) {
+      const lower = searchQuery.toLowerCase();
+      current = current.filter(file => (
+        file.fileName.toLowerCase().includes(lower) ||
+        file.discipline.toLowerCase().includes(lower) ||
+        file.documentType.toLowerCase().includes(lower) ||
+        (Array.isArray(file.owner) ? file.owner.some(o => o.toLowerCase().includes(lower)) : String(file.owner).toLowerCase().includes(lower)) ||
+        file.departmentHead.toLowerCase().includes(lower) ||
+        file.docID.toLowerCase().includes(lower)
+      ));
     }
-    closeDownloadModal();
-  };
 
-  // Filter files based on selected values
-  const filteredFiles = files.filter((file) => {
-    const matchesSearchQuery = (
-      file.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.discipline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.documentType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.owner.some(o => o.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      file.departmentHead.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.docID.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // 2. Sidebar Filters
+    if (selectedType.length > 0) current = current.filter(f => selectedType.includes(f.documentType));
+    if (selectedDiscipline.length > 0) current = current.filter(f => selectedDiscipline.includes(f.discipline));
+    if (selectedStatus.length > 0) current = current.filter(f => selectedStatus.includes(f.status));
 
-    const matchTextFilters = (
-      file.owner.some(o => o.toLowerCase().includes(filters.author.toLowerCase())) &&
-      file.departmentHead.toLowerCase().includes(filters.deptHead.toLowerCase()) &&
-      file.docID.toLowerCase().includes(filters.docID.toLowerCase()) &&
-      (!filters.startDate || file.reviewDate >= filters.startDate) &&
-      (!filters.endDate || file.reviewDate <= filters.endDate) &&
-      (!filters.startDateUpload || file.uploadDate >= filters.startDateUpload) &&
-      (!filters.endDateUpload || file.uploadDate <= filters.endDateUpload)
-    );
 
-    const matchesFilters =
-      (selectedType.length === 0 || selectedType.includes(file.documentType)) &&
-      (selectedDiscipline.length === 0 || selectedDiscipline.includes(file.discipline)) &&
-      (selectedStatus.length === 0 || selectedStatus.includes(file.status));
+    // 3. Excel Column Filters (Handles Dates & Status formatting internally via getFilterValuesForCell)
+    for (const [colId, filterObj] of Object.entries(columnFilters)) {
+      const selected = filterObj?.selected;
+      if (!selected || !Array.isArray(selected)) continue;
 
-    const isViewerOnly =
-      canIn(access, "DMS", ["viewer"]) &&
-      !canIn(access, "DMS", ["systemAdmin", "contributor"]);
+      current = current.filter(row => {
+        // We use getFilterValuesForCell here, so the row data is formatted (e.g. "in_review" becomes "In Review")
+        // before comparison. This matches the values the user selected in the popup.
+        const cellValues = getFilterValuesForCell(row, colId);
+        return cellValues.some(v => selected.includes(v));
+      });
+    }
 
-    // Filter files based on approval
-    const matchesApproval = isViewerOnly
-      ? file.status.toLowerCase() === "approved"
-      : true;
+    // 4. Viewer Only Restriction
+    const isViewerOnly = canIn(access, "DMS", ["viewer"]) && !canIn(access, "DMS", ["systemAdmin", "contributor"]);
+    if (isViewerOnly) {
+      current = current.filter(f => f.status.toLowerCase() === "approved");
+    }
 
-    return matchesSearchQuery && matchesFilters && matchesApproval && matchTextFilters;
-  });
+    // 5. Sorting
+    const { colId, direction } = sortConfig;
+    const dir = direction === 'desc' ? -1 : 1;
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Set to start of today
+    current.sort((a, b) => {
+      let av, bv;
 
-  const overdueCount = filteredFiles.filter(doc => {
-    const reviewDate = new Date(doc.reviewDate);
-    reviewDate.setHours(0, 0, 0, 0); // Normalize to date-only
-    return !isNaN(reviewDate) && reviewDate < today;
-  }).length;
+      if (colId === "uploader") {
+        av = a.userID?.username || "";
+        bv = b.userID?.username || "";
+      } else if (colId === "owner") {
+        // sort by first owner if array
+        let rawA = a.owner; try { if (typeof rawA === 'string' && rawA.startsWith('[')) rawA = JSON.parse(rawA); } catch { }
+        let rawB = b.owner; try { if (typeof rawB === 'string' && rawB.startsWith('[')) rawB = JSON.parse(rawB); } catch { }
+        av = Array.isArray(rawA) ? rawA[0] : rawA;
+        bv = Array.isArray(rawB) ? rawB[0] : rawB;
+      } else {
+        av = a[colId];
+        bv = b[colId];
+      }
 
+      // Handle Date objects if sorting by date columns
+      if (colId === "reviewDate" || colId === "uploadDate") {
+        const da = new Date(av).getTime();
+        const db = new Date(bv).getTime();
+        return (da - db) * dir;
+      }
+
+      // Handle Strings
+      const sa = String(av || "").toLowerCase();
+      const sb = String(bv || "").toLowerCase();
+      return sa.localeCompare(sb) * dir;
+    });
+
+    return current;
+  }, [files, searchQuery, selectedType, selectedDiscipline, selectedStatus, columnFilters, sortConfig, access]);
+
+
+  const overdueCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return filteredFiles.filter(doc => {
+      const d = new Date(doc.reviewDate);
+      d.setHours(0, 0, 0, 0);
+      return !isNaN(d) && d < today;
+    }).length;
+  }, [filteredFiles]);
 
   if (error) {
     return <div>Error: {error}</div>;
@@ -485,7 +542,7 @@ const FileInfo = () => {
       {upload && (<UploadPopup onClose={closeUpload} />)}
       {update && (<UpdateFileModal isModalOpen={update} closeModal={closeUpdate} fileID={updateID} />)}
 
-      {isSidebarVisible && (
+      {isSidebarVisible ? (
         <div className="sidebar-um">
           <div className="sidebar-toggle-icon" title="Hide Sidebar" onClick={() => setIsSidebarVisible(false)}>
             <FontAwesomeIcon icon={faCaretLeft} />
@@ -493,28 +550,6 @@ const FileInfo = () => {
           <div className="sidebar-logo-um">
             <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
             <p className="logo-text-um">Document Management</p>
-          </div>
-
-          <div className="filter-dm-fi">
-            <p className="filter-text-dm-fi">Filter</p>
-            <div className="button-container-dm-fi">
-              {(type === "All Document" || isTrashView) && (
-                <div className="fi-info-popup-page-select-container">
-                  <Select options={docTypes.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedType(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Document Type"
-                    classNamePrefix="sb" />
-                </div>
-              )}
-              <div className="fi-info-popup-page-select-container">
-                <Select options={disciplines.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedDiscipline(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Discipline"
-                  classNamePrefix="sb" />
-              </div>
-              {can(access, "DMS", "systemAdmin") && (
-                <div className="fi-info-popup-page-select-container">
-                  <Select options={docStatus.map(d => ({ value: d, label: formatStatus(d) }))} isMulti onChange={(selected) => setSelectedStatus(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Status"
-                    classNamePrefix="sb" />
-                </div>
-              )}
-            </div>
           </div>
           {!isTrashView && canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
             <div className="filter-dm-fi-2">
@@ -533,9 +568,7 @@ const FileInfo = () => {
             <p className="logo-text-dm-fi">{isTrashView ? `Trash` : (type === "Policy" ? "Policies" : `${type}s`)}</p>
           </div>
         </div>
-      )}
-
-      {!isSidebarVisible && (
+      ) : (
         <div className="sidebar-hidden">
           <div className="sidebar-toggle-icon" title="Show Sidebar" onClick={() => setIsSidebarVisible(true)}>
             <FontAwesomeIcon icon={faCaretRight} />
@@ -606,17 +639,19 @@ const FileInfo = () => {
         <div className="table-flameproof-card">
           <div className="flameproof-table-header-label-wrapper">
             <label className="risk-control-label">{(type === "Policy" ? "Policies" : `${type}s`)}</label>
-            <FontAwesomeIcon
-              icon={faSort}
-              title="Select Columns to Display"
-              className="top-right-button-control-att"
-              onClick={openSortModal}
-            />
           </div>
           <div className="table-container-file">
             <table>
               <thead>
-                <FilterFileName access={access} canIn={canIn} filters={filters} onFilterChange={handleFilterChange} trashed={isTrashView} />
+                <FilterFileName
+                  access={access}
+                  canIn={canIn}
+                  onHeaderClick={openExcelFilterPopup}
+                  sortConfig={sortConfig}
+                  excelFilters={columnFilters}
+                  trashed={isTrashView}
+                  all={type === "All Document"}
+                />
               </thead>
               <tbody>
                 {filteredFiles.map((file, index) => (
@@ -632,9 +667,8 @@ const FileInfo = () => {
                       {(hoveredFileId === file._id && !isTrashView) && (
                         <PopupMenu file={file} openUpdate={openUpdate} openRenameModal={openRename} handlePreview={handlePreview} isActionAvailable={isActionAvailable} isOpen={hoveredFileId === file._id} openDownloadModal={openDownloadModal} setHoveredFileId={setHoveredFileId} canIn={canIn} access={access} />
                       )}
-
                     </td>
-                    <td className="col">{file.documentType}</td>
+                    {type === "All Document" && (<td className="col">{file.documentType}</td>)}
                     {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
                       <td className={`col ${getStatusClass(file.status)}`}>{formatStatus(file.status)}</td>
                     )}
@@ -656,7 +690,7 @@ const FileInfo = () => {
                     <td className="col">{file.departmentHead}</td>
                     <td className="col">{(file.docID)}</td>
                     <td className={`col ${getReviewClass(file.reviewDate)}`}>{formatDate(file.reviewDate)}</td>
-                    <td className="col">{file.userID.username ? (file.userID.username === "Willem" ? file.userID.username + " Harmse" : file.userID.username) : ""}</td>
+                    <td className="col">{file.userID?.username ? (file.userID.username === "Willem" ? file.userID.username + " Harmse" : file.userID.username) : ""}</td>
                     <td className="col">{formatDate(file.uploadDate)}</td>
                     {canIn(access, "DMS", ["systemAdmin"]) && (
                       <td className={isTrashView ? "col-act trashed" : "col-act"}>
@@ -685,8 +719,143 @@ const FileInfo = () => {
         </div>
       </div>
 
+      {/* --- EXCEL FILTER POPUP (EXACT COPY OF STRUCTURE) --- */}
+      {excelFilter.open && (
+        <div
+          className="excel-filter-popup"
+          ref={excelPopupRef}
+          style={{
+            position: "fixed",
+            top: excelFilter.pos.top,
+            left: excelFilter.pos.left,
+            width: excelFilter.pos.width,
+            zIndex: 9999,
+          }}
+          onWheel={handleInnerScrollWheel}
+        >
+          <div className="excel-filter-sortbar">
+            <button
+              type="button"
+              className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                sortConfig.direction === "asc" ? "active" : ""
+                }`}
+              onClick={() => toggleSort(excelFilter.colId, "asc")}
+            >
+              Sort A to Z
+            </button>
+
+            <button
+              type="button"
+              className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                sortConfig.direction === "desc" ? "active" : ""
+                }`}
+              onClick={() => toggleSort(excelFilter.colId, "desc")}
+            >
+              Sort Z to A
+            </button>
+          </div>
+
+          <input
+            type="text"
+            className="excel-filter-search"
+            placeholder="Search"
+            value={excelSearch}
+            onChange={(e) => setExcelSearch(e.target.value)}
+          />
+
+          {(() => {
+            const colId = excelFilter.colId;
+
+            const allValues = Array.from(
+              new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
+            ).sort((a, b) => String(a).localeCompare(String(b)));
+
+            const visibleValues = allValues.filter(v =>
+              String(v).toLowerCase().includes(excelSearch.toLowerCase())
+            );
+
+            const allVisibleSelected =
+              visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+            const toggleValue = (v) => {
+              setExcelSelected(prev => {
+                const next = new Set(prev);
+                if (next.has(v)) next.delete(v);
+                else next.add(v);
+                return next;
+              });
+            };
+
+            const toggleAllVisible = (checked) => {
+              setExcelSelected(prev => {
+                const next = new Set(prev);
+                visibleValues.forEach(v => {
+                  if (checked) next.add(v);
+                  else next.delete(v);
+                });
+                return next;
+              });
+            };
+
+            const onOk = () => {
+              const selectedArr = Array.from(excelSelected);
+              const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+              setColumnFilters(prev => {
+                const next = { ...prev };
+                if (isAllSelected) delete next[colId];
+                else next[colId] = { selected: selectedArr };
+                return next;
+              });
+
+              setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            };
+
+            const onCancel = () => {
+              setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            };
+
+            return (
+              <>
+                <div className="excel-filter-list">
+                  <label className="excel-filter-item">
+                    <span className="excel-filter-checkbox">
+                      <input
+                        type="checkbox"
+                        className="checkbox-excel-attend"
+                        checked={allVisibleSelected}
+                        onChange={(e) => toggleAllVisible(e.target.checked)}
+                      />
+                    </span>
+                    <span className="excel-filter-text">(Select All)</span>
+                  </label>
+
+                  {visibleValues.map(v => (
+                    <label className="excel-filter-item" key={String(v)}>
+                      <span className="excel-filter-checkbox">
+                        <input
+                          type="checkbox"
+                          className="checkbox-excel-attend"
+                          checked={excelSelected.has(v)}
+                          onChange={() => toggleValue(v)}
+                        />
+                      </span>
+                      <span className="excel-filter-text">{v}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="excel-filter-actions">
+                  <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                  <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} deleteFileFromTrash={deleteFileFromTrash} isTrashView={isTrashView} loading={loading} selectedFileName={selectedFileName} />)}
-      {isSortModalOpen && (<SortPopup closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} />)}
       {isDownloadModalOpen && (<DownloadPopup closeDownloadModal={closeDownloadModal} confirmDownload={confirmDownload} downloadFileName={downloadFileName} loading={loading} />)}
       {rename && (<RenameDocument documentName={documentRenameName} isOpen={rename} onClose={closeRename} fileID={updateID} />)}
       <ToastContainer />

@@ -44,9 +44,6 @@ const TopBarCertifiers = ({ openSort, canIn, access, isTrashView, toggleTrashVie
 
     return (
         <div className="icons-container">
-            <div className="sort-menu-icon-um">
-                <FontAwesomeIcon onClick={openSort} icon={faSort} title="Sort" />
-            </div>
             <div className="burger-menu-icon-um-home">
                 <FontAwesomeIcon onClick={() => navigate("/FrontendDMS/home")} icon={faHome} title="Home" />
             </div>

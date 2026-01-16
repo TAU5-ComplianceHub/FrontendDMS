@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faCirclePlus, faClipboardCheck, faDownload, faEdit, faFileAlt, faFileSignature, faHardHat, faHome, faIndustry, faListOl, faMagnifyingGlass, faRotate, faScaleBalanced, faTableList, faTrash, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faCirclePlus, faClipboardCheck, faDownload, faEdit, faFileAlt, faFileSignature, faHardHat, faHome, faIndustry, faListOl, faMagnifyingGlass, faRotate, faScaleBalanced, faTableList, faTrash, faTriangleExclamation, faFilter, faSortUp, faSortDown } from '@fortawesome/free-solid-svg-icons';
 import { faSort, faSpinner, faX, faFileCirclePlus, faFolderOpen, faSearch, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
@@ -71,6 +71,20 @@ const DigitalWarehouseRemoved = () => {
   const [selectedMoveFile, setSelectedMoveFile] = useState(null);
   const [selectedMoveSite, setSelectedMoveSite] = useState(null);
   const [showNew, setShowNew] = useState(false);
+
+  // --- EXCEL FILTER STATE ---
+  const excelPopupRef = useRef(null);
+  const [excelFilter, setExcelFilter] = useState({
+    open: false,
+    colId: null,
+    anchorRect: null,
+    pos: { top: 0, left: 0, width: 0 }
+  });
+  const [excelSearch, setExcelSearch] = useState("");
+  const [excelSelected, setExcelSelected] = useState(new Set());
+  const [filters, setFilters] = useState({});
+  const DEFAULT_SORT = { colId: null, direction: "asc" };
+  const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
 
   const openSortModal = () => setIsSortModalOpen(true);
   const closeSortModal = () => setIsSortModalOpen(false);
@@ -385,17 +399,151 @@ const DigitalWarehouseRemoved = () => {
     return className;
   };
 
-  const filteredFiles = files.filter((file) => {
-    const matchesSearchQuery = (
-      file.component.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  // --- Excel Filter Logic ---
+  const BLANK = "(Blanks)";
+  const getFilterValuesForCell = (row, colId) => {
+    let val;
+    if (colId === "component") val = row.component;
+    else if (colId === "serial") val = row.serialNumber;
+    else if (colId === "site") val = row.asset.site.site;
+    else if (colId === "asset") val = row.asset.assetNr;
+    else if (colId === "date") val = formatDate(row.warehouseReplaceDate);
+    else val = row[colId];
 
-    const matchesFilters =
-      (selectedSite.length === 0 || selectedSite.includes(file.asset.site.site)) &&
-      (selectedAssetForComponent.length === 0 || selectedAssetForComponent.includes(file.asset.assetNr));
+    const s = val == null ? "" : String(val).trim();
+    return s === "" ? [BLANK] : [s];
+  };
 
-    return matchesSearchQuery && matchesFilters;
-  });
+  const toggleSort = (colId, direction) => {
+    setSortConfig(prev => {
+      if (prev?.colId === colId && prev?.direction === direction) {
+        return DEFAULT_SORT;
+      }
+      return { colId, direction };
+    });
+  };
+
+  const openExcelFilterPopup = (colId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.target.closest("th");
+    const rect = th.getBoundingClientRect();
+
+    // Build unique values
+    const values = Array.from(
+      new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
+    ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+    const existing = filters?.[colId]?.selected;
+    const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+    setExcelSelected(initialSelected);
+    setExcelSearch("");
+    setExcelFilter({
+      open: true,
+      colId,
+      anchorRect: rect,
+      pos: {
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: Math.max(220, rect.width),
+      },
+    });
+  };
+
+  const handleInnerScrollWheel = (e) => {
+    const el = e.currentTarget;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const delta = e.deltaY;
+    const goingDown = delta > 0;
+    const atTop = scrollTop <= 0;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+    if ((goingDown && atBottom) || (!goingDown && atTop)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (goingDown && atBottom) el.scrollTop = scrollHeight - clientHeight;
+      else if (!goingDown && atTop) el.scrollTop = 0;
+      return;
+    }
+  };
+
+  useEffect(() => {
+    if (!excelFilter.open) return;
+    const el = excelPopupRef.current;
+    if (!el) return;
+    const popupRect = el.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const margin = 8;
+    let newTop = excelFilter.pos.top;
+    let newLeft = excelFilter.pos.left;
+
+    if (popupRect.bottom > viewportH - margin) {
+      const anchor = excelFilter.anchorRect;
+      if (anchor) newTop = Math.max(margin, anchor.top - popupRect.height - 4);
+    }
+    if (popupRect.right > viewportW - margin) {
+      const overflow = popupRect.right - (viewportW - margin);
+      newLeft = Math.max(margin, newLeft - overflow);
+    }
+    if (popupRect.left < margin) newLeft = margin;
+
+    if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+      setExcelFilter(prev => ({ ...prev, pos: { ...prev.pos, top: newTop, left: newLeft } }));
+    }
+  }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (excelFilter.open && excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
+        setExcelFilter(prev => ({ ...prev, open: false }));
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [excelFilter.open]);
+
+  // --- End Excel Logic ---
+
+  const filteredFiles = useMemo(() => {
+    let current = [...files];
+
+    // 1. Search Query (Existing)
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      current = current.filter(file => (
+        file.component.toLowerCase().includes(q)
+      ));
+    }
+
+    // 2. Sidebar Filters (Existing)
+    if (selectedSite.length > 0) current = current.filter(f => selectedSite.includes(f.asset.site.site));
+    if (selectedAssetForComponent.length > 0) current = current.filter(f => selectedAssetForComponent.includes(f.asset.assetNr));
+
+    // 3. Excel Column Filters (New)
+    for (const [colId, filterObj] of Object.entries(filters)) {
+      const selected = filterObj?.selected;
+      if (!selected || !Array.isArray(selected)) continue;
+      current = current.filter(row => {
+        const cellValues = getFilterValuesForCell(row, colId);
+        return cellValues.some(v => selected.includes(v));
+      });
+    }
+
+    // 4. Sort
+    if (sortConfig.colId) {
+      const { colId, direction } = sortConfig;
+      const dir = direction === 'desc' ? -1 : 1;
+      current.sort((a, b) => {
+        const av = getFilterValuesForCell(a, colId)[0];
+        const bv = getFilterValuesForCell(b, colId)[0];
+        return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+      });
+    }
+
+    return current;
+  }, [files, searchQuery, selectedSite, selectedAssetForComponent, filters, sortConfig]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -410,6 +558,26 @@ const DigitalWarehouseRemoved = () => {
     }
   }, [isLoadingTable, filteredFiles.length]);
 
+  const renderHeader = (colId, title) => {
+    const isFiltered = filters[colId]?.selected?.length > 0;
+    const isSorted = sortConfig.colId === colId;
+
+    return (
+      <th className={`flame-${colId}-filter col cursor-pointer`} onClick={(e) => openExcelFilterPopup(colId, e)}>
+        <div className="fileinfo-container-filter">
+          <span className="fileinfo-title-filter" style={{ cursor: 'pointer' }}>
+            {title}
+            {(isFiltered || isSorted) && (
+              <span style={{ marginLeft: "10px", fontSize: "12px" }}>
+                {(isFiltered || isSorted) && <FontAwesomeIcon icon={faFilter} style={{ marginRight: isSorted ? "4px" : "0", color: "white" }} />}
+              </span>
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
   return (
     <div className="file-info-container">
       {isSidebarVisible && (
@@ -422,19 +590,6 @@ const DigitalWarehouseRemoved = () => {
             <p className="logo-text-um">EPA Management</p>
           </div>
 
-          <div className="filter-dm-fi">
-            <p className="filter-text-dm-fi">Filter</p>
-            <div className="button-container-dm-fi">
-              <div className="fi-info-popup-page-select-container">
-                <Select options={sites.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedSite(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Site"
-                  classNamePrefix="sb" />
-              </div>
-              <div className="fi-info-popup-page-select-container">
-                <Select options={assets.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedAssetForComponent(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Asset"
-                  classNamePrefix="sb" />
-              </div>
-            </div>
-          </div>
           <div className="sidebar-logo-dm-fi">
             <img src={`${process.env.PUBLIC_URL}/flameWarehouse2.svg`} alt="Logo" className="icon-risk-rm" />
             <p className="logo-text-dm-fi">{(`Removed Components`)}</p>
@@ -483,24 +638,18 @@ const DigitalWarehouseRemoved = () => {
               className="top-right-button-control-att"
               onClick={exportSID}
             />
-            <FontAwesomeIcon
-              icon={faSort}
-              title="Select Columns to Display"
-              className={`top-right-button-control-att-2`}
-              onClick={openSortModal}
-            />
           </div>
           <div className="table-container-file-flameproof-all-assets">
             <table>
               <thead>
                 <tr className="trashed">
                   <th className="flame-num-filter col" style={{ width: "5%" }}>Nr</th>
-                  <th className="flame-type-filter col" style={{ width: "20%" }}>Component Name</th>
-                  <th className="flame-ass-nr-filter col" style={{ width: "20%" }}>Serial Number</th>
-                  <th className="flame-area-filter col" style={{ width: "15%" }}>Site</th>
-                  <th className="flame-owner-filter col" style={{ width: "15%" }}>Asset</th>
-                  <th className={`flame-head-filter`} style={{ width: "20%" }}>Replacement Date</th>
-                  <th className="flame-act-filter col" style={{ width: "5%" }}>Action</th>
+                  {renderHeader("component", "Component Name")}
+                  {renderHeader("serial", "Serial Number")}
+                  {renderHeader("site", "Site")}
+                  {renderHeader("asset", "Asset")}
+                  {renderHeader("date", "Replacement Date")}
+                  {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<th className="flame-act-filter col" style={{ width: "5%" }}>Action</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -557,7 +706,42 @@ const DigitalWarehouseRemoved = () => {
       {showMovePopup && (<MoveRepairedComponent refresh={fetchFiles} closeModal={closeMoveModal} file={selectedMoveFile} moveNormal={moveNormal} newCertificate={openNew} />)}
       {showNew && (<MoveComponentWarehousePopup onClose={() => setShowNew(false)} data={selectedMoveFile} refresh={fetchFiles} />)}
       {isDownloadModalOpen && (<DownloadPopup closeDownloadModal={closeDownloadModal} confirmDownload={confirmDownload} downloadFileName={downloadFileName} loading={loading} />)}
-      {isSortModalOpen && (<SortPopupAsset closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} />)}
+
+      {/* --- EXCEL FILTER POPUP (From IBRATable) --- */}
+      {excelFilter.open && (
+        <div className="excel-filter-popup" ref={excelPopupRef} style={{ position: "fixed", top: excelFilter.pos.top, left: excelFilter.pos.left, width: excelFilter.pos.width, zIndex: 9999 }} onWheel={handleInnerScrollWheel}>
+          <div className="excel-filter-sortbar">
+            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "asc")}>Sort A to Z</button>
+            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "desc")}>Sort Z to A</button>
+          </div>
+          <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+          {(() => {
+            const colId = excelFilter.colId;
+            const allValues = Array.from(new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))).sort((a, b) => String(a).localeCompare(String(b)));
+            const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+            const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+            const toggleValue = (v) => { setExcelSelected(prev => { const next = new Set(prev); if (next.has(v)) next.delete(v); else next.add(v); return next; }); };
+            const toggleAllVisible = (checked) => { setExcelSelected(prev => { const next = new Set(prev); visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); }); return next; }); };
+            const onOk = () => {
+              const selectedArr = Array.from(excelSelected);
+              const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+              setFilters(prev => { const next = { ...prev }; if (isAllSelected) delete next[colId]; else next[colId] = { selected: selectedArr }; return next; });
+              setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            };
+            const onCancel = () => { setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } }); };
+            return (
+              <>
+                <div className="excel-filter-list">
+                  <label className="excel-filter-item"><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={allVisibleSelected} onChange={(e) => toggleAllVisible(e.target.checked)} /></span><span className="excel-filter-text">(Select All)</span></label>
+                  {visibleValues.map(v => (<label className="excel-filter-item" key={String(v)}><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={excelSelected.has(v)} onChange={() => toggleValue(v)} /></span><span className="excel-filter-text">{v}</span></label>))}
+                </div>
+                <div className="excel-filter-actions"><button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button><button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button></div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       <ToastContainer />
     </div >
   );

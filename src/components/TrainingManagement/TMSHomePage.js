@@ -100,7 +100,7 @@ const TMSHomePage = () => {
                             <h3 className="document-title-fi-home">Visitor Management</h3>
                         </>
                     </div>
-                    {false && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/onlineTrainingHome")}>
+                    {true && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/onlineTrainingHome")}>
                         <>
                             <div className="icon-dept">
                                 <FontAwesomeIcon icon={faCircle} style={{ color: "#002060" }} className={"icon-dept"} />

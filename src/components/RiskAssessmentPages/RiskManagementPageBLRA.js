@@ -1105,15 +1105,6 @@ const RiskManagementPageBLRA = () => {
             });
         }
 
-        if (formData.references.length === 0) {
-            newErrors.reference = true;
-        } else {
-            formData.references.forEach((row, index) => {
-                if (!row.ref) newErrors.reference = true;
-                if (!row.refDesc) newErrors.reference = true;
-            });
-        }
-
         if (formData.ibra.length === 0) {
             newErrors.ibra = true;
         } else {
@@ -2160,7 +2151,7 @@ const RiskManagementPageBLRA = () => {
 
                     <ExecutiveSummary readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.execSummary} handleInputChange={handleInputChange} />
                     <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={false} />
                     <PicturesTable readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
 
                     <div className="input-row-buttons-risk-create">

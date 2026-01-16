@@ -1427,11 +1427,9 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                 className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
                                                 rowSpan={2}
                                                 onClick={e => {
-                                                    // If resizing just happened → ignore this click
                                                     if (isResizingRef.current) return;
-
-                                                    // Only open when clicking the TH itself
-                                                    if (e.target !== e.currentTarget) return;
+                                                    // Prevent opening if the user specifically clicked the resize handle
+                                                    if (e.target.closest('.ibra-col-resizer')) return;
 
                                                     openExcelFilterPopup(columnId, e);
                                                 }}
@@ -1480,11 +1478,8 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                 key={idx}
                                                 className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
                                                 onClick={e => {
-                                                    // If resizing just happened → ignore this click
                                                     if (isResizingRef.current) return;
-
-                                                    // Only open when clicking the TH itself
-                                                    if (e.target !== e.currentTarget) return;
+                                                    if (e.target.closest('.ibra-col-resizer')) return;
 
                                                     openExcelFilterPopup(columnId, e);
                                                 }}

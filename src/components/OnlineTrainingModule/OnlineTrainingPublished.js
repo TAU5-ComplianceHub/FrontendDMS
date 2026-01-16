@@ -1,15 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCaretLeft, faCaretRight, faDownload, faFolderOpen, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { faRotate } from '@fortawesome/free-solid-svg-icons';
-import { faSort, faSpinner, faX, faSearch, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faColumns } from "@fortawesome/free-solid-svg-icons";
+import { faSort, faSpinner, faX, faSearch, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faColumns, faFilter } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { toast, ToastContainer } from "react-toastify";
-import PopupMenuPubInduction from "../VisitorsInduction/InductionCreation/PopupMenuPubInduction";
 import TopBar from "../Notifications/TopBar";
 import DeletePopup from "../FileInfo/DeletePopup";
-import PublishedInductionPreviewPage from "../VisitorsInduction/InductionCreation/PublishedInductionPreviewPage";
 import PopupMenuOnlineTraining from "./PopupMenuOnlineTraining";
 
 const OnlineTrainingPublished = () => {
@@ -28,7 +26,22 @@ const OnlineTrainingPublished = () => {
     const [isPreview, setIsPreview] = useState(false);
     const [previewID, setPreviewID] = useState(false);
 
-    // ----- horizontal drag-to-scroll logic (same as VisitorsInductionHomePage) -----
+    // --- Unified Sort Configuration ---
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+
+    // --- Excel Filter States ---
+    const [activeExcelFilters, setActiveExcelFilters] = useState({});
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const excelPopupRef = useRef(null);
+
     const scrollerRef = useRef(null);
     const dragRef = useRef({
         active: false,
@@ -139,6 +152,7 @@ const OnlineTrainingPublished = () => {
     };
 
     const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
         const date = new Date(dateString); // Convert to Date object
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
@@ -147,6 +161,7 @@ const OnlineTrainingPublished = () => {
     };
 
     const getStatusClass = (status) => {
+        if (!status) return 'status-default';
         switch (status.toLowerCase()) {
             case 'published': return 'status-approved';
             case 'in review': return 'status-pending';
@@ -217,15 +232,181 @@ const OnlineTrainingPublished = () => {
         return fileName.replace(/\.[^/.]+$/, "");
     };
 
-    const filteredFiles = files.filter((file) => {
-        const matchesSearchQuery = (
-            file.formData.courseTitle.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+    // --- Excel Filtering Logic Helpers ---
 
-        return matchesSearchQuery;
-    });
+    const getFilterValuesForCell = (row, colId, index) => {
+        // 1. Static/Index Column
+        if (colId === "nr") return [String(index + 1)];
 
-    // -------- Column selector setup (mirrors VisitorsInductionHomePage, no filters) --------
+        // 2. Simple Strings & Dates
+        if (colId === "name") return [removeFileExtension(row.formData.courseTitle)];
+        if (colId === "version") return [String(row.version)];
+        if (colId === "firstPublishedBy") return [row.publisher?.username || "N/A"];
+        if (colId === "firstPublishedDate") return [formatDate(row.datePublished)];
+        if (colId === "lastReviewedBy") return [row.reviewer?.username || "N/A"];
+        if (colId === "lastReviewDate") return [formatDate(row.dateReviewed)];
+
+        // 3. Status (Conditional)
+        if (colId === "status") {
+            const val = row.approvalState ? "In Approval" : row.documentStatus;
+            return [val];
+        }
+
+        // 4. Arrays (Approvers)
+        if (colId === "approvers") {
+            const list = row.approvers || [];
+            if (list.length === 0) return ["N/A"];
+            // Return array of names for checkbox list
+            return list.map(appr => appr.user?.username || "Unknown");
+        }
+
+        // Default fallback
+        const val = row[colId];
+        return [val ? String(val).trim() : "N/A"];
+    };
+
+    const openExcelFilterPopup = (colId, e) => {
+        if (colId === "action") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Gather unique values from ALL files
+        const values = Array.from(
+            new Set(
+                (files || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = activeExcelFilters[colId];
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    };
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT; // Reset to default "nr" sort
+            }
+            return { colId, direction };
+        });
+    };
+
+    // --- Main Processing: Search -> Filter -> Sort ---
+
+    const processedFiles = useMemo(() => {
+        let current = [...files];
+
+        // 1. Global Search (on course title)
+        if (searchQuery) {
+            const lowerQ = searchQuery.toLowerCase();
+            current = current.filter(f =>
+                f.formData.courseTitle.toLowerCase().includes(lowerQ)
+            );
+        }
+
+        // 2. Excel Column Filters
+        // We use original index for 'nr' filter value
+        current = current.filter((row, originalIndex) => {
+            for (const [colId, selectedValues] of Object.entries(activeExcelFilters)) {
+                if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+                const cellValues = getFilterValuesForCell(row, colId, originalIndex);
+                // If any of the cell's values match one of the selected checkboxes, keep row
+                const match = cellValues.some(v => selectedValues.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 3. Sorting
+        const { colId, direction } = sortConfig;
+        const dir = direction === "desc" ? -1 : 1;
+
+        if (colId === "nr") {
+            // Default load order (assumed files order)
+        } else {
+            const normalize = (v) => {
+                const s = v == null ? "" : String(v).trim();
+                return s === "" ? "(Blanks)" : s;
+            };
+
+            const tryDate = (v) => {
+                if (!v) return null;
+                const d = new Date(v);
+                return isNaN(d.getTime()) ? null : d.getTime();
+            }
+
+            current.sort((a, b) => {
+                let valA, valB;
+
+                // Map colId to data value
+                switch (colId) {
+                    case "name":
+                        valA = a.formData.courseTitle; valB = b.formData.courseTitle; break;
+                    case "version":
+                        valA = a.version; valB = b.version; break;
+                    case "status":
+                        valA = a.approvalState ? "In Approval" : a.documentStatus;
+                        valB = b.approvalState ? "In Approval" : b.documentStatus;
+                        break;
+                    case "firstPublishedBy":
+                        valA = a.publisher?.username; valB = b.publisher?.username; break;
+                    case "firstPublishedDate":
+                        valA = a.datePublished; valB = b.datePublished; break;
+                    case "lastReviewedBy":
+                        valA = a.reviewer?.username; valB = b.reviewer?.username; break;
+                    case "lastReviewDate":
+                        valA = a.dateReviewed; valB = b.dateReviewed; break;
+                    case "approvers":
+                        // Sort by first approver name for simplicity
+                        valA = (a.approvers?.[0]?.user?.username) ?? "";
+                        valB = (b.approvers?.[0]?.user?.username) ?? "";
+                        break;
+                    default:
+                        valA = a[colId]; valB = b[colId];
+                }
+
+                // Handle Dates
+                if (["firstPublishedDate", "lastReviewDate"].includes(colId)) {
+                    const da = tryDate(valA);
+                    const db = tryDate(valB);
+                    if (da !== null && db !== null) return (da - db) * dir;
+                }
+
+                // Handle Numbers
+                if (colId === "version") {
+                    return (Number(valA) - Number(valB)) * dir;
+                }
+
+                // Handle Strings
+                const normA = normalize(valA);
+                const normB = normalize(valB);
+
+                if (normA === "(Blanks)" && normB !== "(Blanks)") return 1;
+                if (normA !== "(Blanks)" && normB === "(Blanks)") return -1;
+
+                return normA.localeCompare(normB, undefined, { numeric: true, sensitivity: 'base' }) * dir;
+            });
+        }
+
+        return current;
+
+    }, [files, searchQuery, activeExcelFilters, sortConfig]);
+
     const allColumns = [
         {
             id: "nr",
@@ -376,7 +557,6 @@ const OnlineTrainingPublished = () => {
     const availableColumns = allColumns;
 
     const toggleColumn = (id) => {
-        // pin Nr & Action like VisitorsInductionHomePage
         if (id === "nr" || id === "action") return;
 
         setShowColumns(prev =>
@@ -406,6 +586,65 @@ const OnlineTrainingPublished = () => {
     // when more than the main columns are visible, allow wide scroll
     const isWide = visibleCount > MAIN_COLUMNS_COUNT;
     // -------------------------------------------------------------------
+
+    // --- Cleanup Popup Listeners ---
+    useEffect(() => {
+        if (!excelFilter.open) return;
+
+        const handleClickOutside = (e) => {
+            if (e.target.closest('.excel-filter-popup')) return;
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+        };
+
+        const handleScroll = (e) => {
+            if (e.target.closest('.excel-filter-popup')) return;
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, [excelFilter.open]);
+
+    // --- Popup Positioning ---
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
+        }
+
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
+
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos, excelSearch]);
 
     return (
         <div className="gen-file-info-container">
@@ -453,7 +692,7 @@ const OnlineTrainingPublished = () => {
                         {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
                     </div>
 
-                    <div className={`info-box-fih`}>Number of Courses: {filteredFiles.length}</div>
+                    <div className={`info-box-fih`}>Number of Courses: {processedFiles.length}</div>
 
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
@@ -465,7 +704,6 @@ const OnlineTrainingPublished = () => {
                     <div className="flameproof-table-header-label-wrapper">
                         <label className="risk-control-label">{"Published Courses"}</label>
 
-                        {/* Column selector icon (same look & feel as VisitorsInductionHomePage) */}
                         <FontAwesomeIcon
                             icon={faColumns}
                             title="Select Columns to Display"
@@ -533,7 +771,6 @@ const OnlineTrainingPublished = () => {
                     </div>
 
                     <div className="table-container-file-flameproof-all-assets">
-                        {/* Horizontal scroll wrapper (same as VisitorsInductionHomePage) */}
                         <div
                             className={`limit-table-height-visitor-wrap ${isDraggingX ? 'dragging' : ''} ${isWide ? 'wide' : ''}`}
                             ref={scrollerRef}
@@ -547,42 +784,68 @@ const OnlineTrainingPublished = () => {
                             <table className={`limit-table-height-visitor ${isWide ? 'wide' : ''}`} style={{ height: "0" }}>
                                 <thead className="gen-head">
                                     <tr>
-                                        {visibleColumns.map(col => (
-                                            <th key={col.id} className={col.thClass}>
-                                                {col.title}
-                                            </th>
-                                        ))}
+                                        {visibleColumns.map(col => {
+                                            const isAction = col.id === "action";
+                                            const isActiveFilter = activeExcelFilters[col.id];
+                                            const isActiveSort = sortConfig.colId === col.id && col.id !== "nr";
+
+                                            return (
+                                                <th
+                                                    key={col.id}
+                                                    className={col.thClass}
+                                                    onClick={(e) => {
+                                                        if (isAction) return;
+                                                        openExcelFilterPopup(col.id, e);
+                                                    }}
+                                                    style={{ cursor: isAction ? "default" : "pointer", position: "relative" }}
+                                                >
+                                                    {col.title}
+                                                    {/* Show icons */}
+                                                    {(isActiveFilter || isActiveSort) && (
+                                                        <FontAwesomeIcon
+                                                            icon={faFilter}
+                                                            className="th-filter-icon"
+                                                            style={{ marginLeft: "8px", opacity: 0.8 }}
+                                                        />
+                                                    )}
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredFiles.map((file, index) => (
-                                        <tr key={file._id} className={`file-info-row-height gen-tr`}>
-                                            {visibleColumns.map(col => {
-                                                // If this is the status column, compute the status and class
-                                                const isStatusCol = col.id === "status";
-                                                const statusValue = isStatusCol
-                                                    ? (file.approvalState ? "In Approval" : file.documentStatus)
-                                                    : null;
-                                                const statusClass = isStatusCol && statusValue
-                                                    ? getStatusClass(statusValue)
-                                                    : "";
+                                    {processedFiles.length === 0 ? (
+                                        <tr><td colSpan={visibleColumns.length} className="cent-values-gen">No courses found.</td></tr>
+                                    ) : (
+                                        processedFiles.map((file, index) => (
+                                            <tr key={file._id} className={`file-info-row-height gen-tr`}>
+                                                {visibleColumns.map(col => {
+                                                    // If this is the status column, compute the status and class
+                                                    const isStatusCol = col.id === "status";
+                                                    const statusValue = isStatusCol
+                                                        ? (file.approvalState ? "In Approval" : file.documentStatus)
+                                                        : null;
+                                                    const statusClass = isStatusCol && statusValue
+                                                        ? getStatusClass(statusValue)
+                                                        : "";
 
-                                                return (
-                                                    <td
-                                                        key={`${file._id}-${col.id}`}
-                                                        className={`${col.tdClass} ${statusClass}`}
-                                                        onClick={
-                                                            col.onCellClick
-                                                                ? () => col.onCellClick(file)
-                                                                : undefined
-                                                        }
-                                                    >
-                                                        {col.td(file, index)}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
+                                                    return (
+                                                        <td
+                                                            key={`${file._id}-${col.id}`}
+                                                            className={`${col.tdClass} ${statusClass}`}
+                                                            onClick={
+                                                                col.onCellClick
+                                                                    ? () => col.onCellClick(file)
+                                                                    : undefined
+                                                            }
+                                                        >
+                                                            {col.td(file, index)}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -590,8 +853,140 @@ const OnlineTrainingPublished = () => {
                 </div>
             </div>
 
+            {/* Excel Filter Popup */}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                        >
+                            Sort A to Z
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(
+                            new Set((files || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
+                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+                        const allVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            setActiveExcelFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = selectedArr;
+                                return next;
+                            });
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
+
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
-            {isPreview && (<PublishedInductionPreviewPage draftID={previewID} closeModal={closePreview} />)}
+            {/* isPreview && (<PublishedInductionPreviewPage draftID={previewID} closeModal={closePreview} />) */}
             <ToastContainer />
         </div>
     );

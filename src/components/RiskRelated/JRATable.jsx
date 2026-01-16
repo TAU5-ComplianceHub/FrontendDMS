@@ -1,35 +1,33 @@
-import React, { useEffect, useState, useRef, useMemo, useLayoutEffect, startTransition } from "react";
+import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import './JRATable.css';
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlus, faArrowsUpDown, faCopy, faMagicWandSparkles, faTableColumns, faTimes, faInfoCircle, faCirclePlus, faDownload, faSpinner, faPlusCircle, faArrowUpRightFromSquare, faFilter, faArrowsLeftRight, faArrowsRotate, faFlag } from '@fortawesome/free-solid-svg-icons';
-import Hazard from "./RiskInfo/Hazard";
+import { faTrash, faPlus, faArrowsUpDown, faCopy, faTableColumns, faTimes, faInfoCircle, faPlusCircle, faArrowUpRightFromSquare, faFilter, faArrowsLeftRight, faArrowsRotate, faFlag } from '@fortawesome/free-solid-svg-icons';
+import HazardJRA from "./RiskInfo/HazardJRA";
 import UnwantedEvent from "./RiskInfo/UnwantedEvent";
 import TaskExecution from "./RiskInfo/TaskExecution";
 import ControlExecution from "./RiskInfo/ControlExecution";
-import CurrentControls from "./RiskInfo/CurrentControls";
-import { saveAs } from 'file-saver';
-import axios from "axios";
-import HazardJRA from "./RiskInfo/HazardJRA";
-import Go_Nogo from "./RiskInfo/Go_Nogo";
 import CurrentControlsJRA from "./RiskInfo/CurrentControlsJRA";
 import JRAPopup from "./JRAPopup";
+import Go_Nogo from "./RiskInfo/Go_Nogo";
 
 const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, readOnly = false }) => {
     const [rowData, setRowData] = useState([]);
     const [showJRAPopup, setShowJRAPopup] = useState(false);
     const ibraBoxRef = useRef(null);
-    const [filters, setFilters] = useState({});
     const tableWrapperRef = useRef(null);
     const [hoveredBody, setHoveredBody] = useState({ rowId: null, bodyIdx: null });
     const savedWidthRef = useRef(null);
+
+    // Help Popups
     const [helpHazards, setHelpHazards] = useState(false);
     const [helpUnwantedEvents, setHelpUnwantedEvents] = useState(false);
     const [helpResponsible, setHelpResponsible] = useState(false);
     const [helpSub, setHelpSub] = useState(false);
     const [helpTaskExecution, setHelpTaskExecution] = useState(false);
     const [go_noGO, setGo_noGO] = useState(false);
+
     const syncGroups = useRef({});
     const [armedDragRow, setArmedDragRow] = useState(null);
     const [draggedRowId, setDraggedRowId] = useState(null);
@@ -41,6 +39,46 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
     const resizeStartWidthRef = useRef(0);
     const [wrapperWidth, setWrapperWidth] = useState(0);
     const [showFlagged, setShowFlagged] = useState(false);
+
+    // --- Excel Filter State ---
+    const excelPopupRef = useRef(null);
+    const [filters, setFilters] = useState({});
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+    const initialOrderRef = useRef(new Map());
+    const BLANK = "(Blanks)";
+
+    const getDefaultShowColumns = () => [
+        "nr",
+        "main",
+        "hazards",
+        "sub",
+        "UE",
+        "taskExecution",
+        "controls",
+        "go",
+        ...(readOnly ? [] : ["action"]),
+    ];
+
+    const getDefaultColumnWidths = () => ({
+        nr: 50,
+        main: 220,
+        hazards: 200,
+        sub: 550,
+        UE: 200,
+        taskExecution: 200,
+        controls: 550,
+        go: 120,
+        action: 50,
+    });
 
     const [columnWidths, setColumnWidths] = useState({
         nr: 50,
@@ -66,29 +104,151 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         action: { min: 50, max: 50 },
     };
 
-    const getDefaultColumnWidths = () => ({
-        nr: 50,
-        main: 220,
-        hazards: 200,
-        sub: 550,
-        UE: 200,
-        taskExecution: 200,
-        controls: 550,
-        go: 120,
-        action: 50,
-    });
+    // --- Helper: Get Filter Values for a specific row/col ---
+    const getFilterValuesForCell = (row, colId) => {
+        if (!row) return [BLANK];
 
-    const getDefaultShowColumns = () => [
-        "nr",
-        "main",
-        "hazards",
-        "sub",
-        "UE",
-        "taskExecution",
-        "controls",
-        "go",
-        ...(readOnly ? [] : ["action"]),
-    ];
+        // 1. Root level columns
+        if (colId === "nr") return [String(row.nr)];
+        if (colId === "main") return row.main ? [String(row.main).trim()] : [BLANK];
+
+        // 2. Body level columns (Collect unique values across all bodies in this row)
+        const values = new Set();
+        if (row.jraBody && Array.isArray(row.jraBody)) {
+            row.jraBody.forEach(body => {
+                let targetArray = [];
+                switch (colId) {
+                    case "hazards": targetArray = body.hazards?.map(h => h.hazard); break;
+                    case "UE": targetArray = body.UE?.map(u => u.ue); break;
+                    case "sub": targetArray = body.sub?.map(s => s.task); break;
+                    case "taskExecution": targetArray = body.taskExecution?.map(t => t.R); break;
+                    case "controls": targetArray = body.controls?.map(c => c.control); break;
+                    case "go": targetArray = body.go_noGo?.map(g => g.go); break;
+                    default: break;
+                }
+
+                if (targetArray) {
+                    targetArray.forEach(val => {
+                        if (val != null && String(val).trim() !== "") {
+                            values.add(String(val).trim());
+                        }
+                    });
+                }
+            });
+        }
+
+        const clean = Array.from(values);
+        return clean.length > 0 ? clean : [BLANK];
+    };
+
+    // --- Initial Order for Reset Sort ---
+    useEffect(() => {
+        if (!formData.jra || formData.jra.length === 0) return;
+        const map = initialOrderRef.current;
+        const hasAll = formData.jra.every(r => map.has(r.id));
+        if (hasAll) return;
+
+        formData.jra.forEach((r, idx) => {
+            if (!map.has(r.id)) map.set(r.id, map.size + idx);
+        });
+    }, [formData.jra]);
+
+    // --- Toggle Sort ---
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT;
+            }
+            return { colId, direction };
+        });
+    };
+
+    // --- Open Filter Popup ---
+    function openExcelFilterPopup(colId, e) {
+        if (colId === "action") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Collect all unique values for this column across ALL rows
+        const values = Array.from(
+            new Set(
+                (formData.jra || []).flatMap(r => getFilterValuesForCell(r, colId))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    // --- Handle Inner Scroll to prevent propagation ---
+    const handleInnerScrollWheel = (e) => {
+        const el = e.currentTarget;
+        const { scrollTop, scrollHeight, clientHeight } = el;
+        const delta = e.deltaY;
+        const goingDown = delta > 0;
+        const atTop = scrollTop <= 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+        if ((goingDown && atBottom) || (!goingDown && atTop)) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (goingDown && atBottom) el.scrollTop = scrollHeight - clientHeight;
+            else if (!goingDown && atTop) el.scrollTop = 0;
+            return;
+        }
+    };
+
+    // --- Adjust Popup Position ---
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
+        }
+
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
+
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelSearch]);
+
 
     const closeJRAPopup = () => {
         setShowJRAPopup(false);
@@ -232,157 +392,106 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         });
     };
 
-    const openHazardsHelp = () => {
-        setHelpHazards(true);
-    };
+    const openHazardsHelp = () => setHelpHazards(true);
+    const openUnwantedEventsHelp = () => setHelpUnwantedEvents(true);
+    const openResponsibleHelp = () => setHelpResponsible(true);
+    const openSubHelp = () => setHelpSub(true);
+    const openTaskExecutionHelp = () => setHelpTaskExecution(true);
+    const openGo_noGo = () => setGo_noGO(true);
 
-    const openUnwantedEventsHelp = () => {
-        setHelpUnwantedEvents(true);
-    };
+    const closeHazardsHelp = () => setHelpHazards(false);
+    const closeUnwantedEventsHelp = () => setHelpUnwantedEvents(false);
+    const closeResponsibleHelp = () => setHelpResponsible(false);
+    const closeSubHelp = () => setHelpSub(false);
+    const closeTaskExecutionHelp = () => setHelpTaskExecution(false);
+    const closeGo_noGo = () => setGo_noGO(false);
 
-    const openResponsibleHelp = () => {
-        setHelpResponsible(true);
-    };
+    // --- Filtered Rows Logic ---
+    const filteredRows = useMemo(() => {
+        let current = [...formData.jra];
 
-    const openSubHelp = () => {
-        setHelpSub(true);
-    };
+        // 1. Filtering
+        current = current.filter(row => {
+            for (const [colId, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+                if (!selected || !Array.isArray(selected)) continue;
 
-    const openTaskExecutionHelp = () => {
-        setHelpTaskExecution(true);
-    };
-
-    const openGo_noGo = () => {
-        setGo_noGO(true)
-    }
-
-    const closeGo_noGo = () => {
-        setGo_noGO(false)
-    }
-
-    const closeHazardsHelp = () => {
-        setHelpHazards(false);
-    };
-
-    const closeUnwantedEventsHelp = () => {
-        setHelpUnwantedEvents(false);
-    };
-
-    const closeResponsibleHelp = () => {
-        setHelpResponsible(false);
-    };
-
-    const closeSubHelp = () => {
-        setHelpSub(false);
-    };
-
-    const closeTaskExecutionHelp = () => {
-        setHelpTaskExecution(false);
-    };
-
-    const [filterPopup, setFilterPopup] = useState({
-        visible: false,
-        column: null,
-        pos: { top: 0, left: 0, width: 0 }
-    });
-
-    function extractBodyValues(body, colId) {
-        switch (colId) {
-            case "hazards": return body.hazards.map(h => h.hazard);
-            case "UE": return body.UE.map(u => u.ue);
-            case "sub": return body.sub.map(s => s.task);
-            case "taskExecution": return body.taskExecution.map(te => te.R);
-            case "controls": return body.controls.map(c => c.control);
-            default: return [];
-        }
-    }
-
-    function applyFilter(value) {
-        setFilters(prev => ({
-            ...prev,
-            [filterPopup.column]: value
-        }));
-        setFilterPopup(prev => ({ ...prev, visible: false }));
-    }
-
-    function clearFilter() {
-        setFilters(prev => {
-            const next = { ...prev };
-            delete next[filterPopup.column];
-            return next;
-        });
-        setFilterPopup(prev => ({ ...prev, visible: false }));
-    }
-
-    function openFilterPopup(colId, e) {
-        const rect = e.target.getBoundingClientRect();
-        setFilterPopup({
-            visible: true,
-            column: colId,
-            pos: {
-                top: rect.bottom + window.scrollY + 4,
-                left: rect.left + window.scrollX,
-                width: rect.width
+                // Get values for this row/column
+                const cellValues = getFilterValuesForCell(row, colId);
+                // If overlap exists between cell values and selected filter values
+                const match = cellValues.some(v => selected.includes(v));
+                if (!match) return false;
             }
-        });
-    }
 
-    const filteredRows = formData.jra.reduce((acc, row) => {
-        let keepRow = true;
-        let survivingBodies = row.jraBody;
-
-        // 1. Apply Text Filters
-        for (const [colId, text] of Object.entries(filters)) {
-            const lcText = text.toLowerCase();
-
-            if (colId === "nr") {
-                if (!String(row.nr).toLowerCase().includes(lcText)) {
-                    keepRow = false;
-                    break;
-                }
-            } else if (colId === "main") {
-                if (!row.main.toLowerCase().includes(lcText)) {
-                    keepRow = false;
-                    break;
-                }
-            } else {
-                survivingBodies = survivingBodies.filter(body =>
-                    extractBodyValues(body, colId)
-                        .some(val => val.toLowerCase().includes(lcText))
+            // 2. Flag Filtering
+            if (showFlagged) {
+                const isRowFlagged = row.rowFlagged;
+                const hasFlaggedBody = row.jraBody.some(body =>
+                    body.subStepFlagged ||
+                    body.hazards?.some(h => h.flagged) ||
+                    body.UE?.some(u => u.flagged)
                 );
-                if (survivingBodies.length === 0) {
-                    keepRow = false;
-                    break;
-                }
+                if (!isRowFlagged && !hasFlaggedBody) return false;
             }
+
+            return true;
+        });
+
+        // 3. Sorting
+        const colId = sortConfig?.colId || "nr";
+
+        if (colId === "nr") {
+            const order = initialOrderRef.current;
+            current.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+            // Renumber visually
+            current.forEach((r, i) => (r.nr = i + 1));
+            return current;
         }
 
-        // 2. Apply Flag Filter (if enabled)
-        if (keepRow && showFlagged) {
-            const isRowFlagged = row.rowFlagged;
+        const dir = sortConfig?.direction === "desc" ? -1 : 1;
 
-            survivingBodies = survivingBodies.filter(body => {
-                // Check specific flags on this body
-                const isSubFlagged = body.subStepFlagged;
-                const isHazFlagged = body.hazards?.some(h => h.flagged);
-                const isUEFlagged = body.UE?.some(u => u.flagged);
-
-                // Keep the body if it has a flag OR if the parent Main Step is flagged
-                return isRowFlagged || isSubFlagged || isHazFlagged || isUEFlagged;
-            });
-
-            // If no bodies survived the flag check, hide the whole row
-            if (survivingBodies.length === 0) {
-                keepRow = false;
-            }
+        const normalize = (v) => {
+            const s = v == null ? "" : String(v).trim();
+            return s === "" ? BLANK : s;
         }
 
-        if (keepRow) {
-            acc.push({ ...row, jraBody: survivingBodies });
+        const tryNumber = (v) => {
+            const s = String(v).replace(/,/g, "").trim();
+            if (!/^[-+]?\d*(?:\.\d+)?$/.test(s) || s === "" || s === "." || s === "+" || s === "-") return null;
+            const n = Number(s);
+            return Number.isFinite(n) ? n : null;
         }
-        return acc;
 
-    }, []);
+        current.sort((a, b) => {
+            // For sorting nested data, we typically use the first value or a concatenation. 
+            // Here we use the first value found in getFilterValuesForCell (which returns sorted array)
+            const valsA = getFilterValuesForCell(a, colId);
+            const valsB = getFilterValuesForCell(b, colId);
+
+            const av = normalize(valsA[0]);
+            const bv = normalize(valsB[0]);
+
+            const aBlank = av === BLANK;
+            const bBlank = bv === BLANK;
+
+            if (aBlank && !bBlank) return 1;
+            if (!aBlank && bBlank) return -1;
+
+            const an = tryNumber(av);
+            const bn = tryNumber(bv);
+
+            if (an != null && bn != null) return (an - bn) * dir;
+
+            return String(av).localeCompare(String(bv), undefined, {
+                sensitivity: "base",
+                numeric: true
+            }) * dir;
+        });
+
+        current.forEach((r, i) => (r.nr = i + 1));
+        return current;
+
+    }, [formData.jra, filters, showFlagged, sortConfig]);
 
     const insertBodyRow = (rowId, insertAtIndex) => {
         setFormData(prev => {
@@ -391,9 +500,9 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
                 const newEntry = {
                     idBody: uuidv4(),
-                    subStepFlagged: false, // <--- ADD THIS
-                    hazards: [{ hazard: "", flagged: false }], // <--- ADD FLAG
-                    UE: [{ ue: "", flagged: false }], // <--- ADD FLAG
+                    subStepFlagged: false,
+                    hazards: [{ hazard: "", flagged: false }],
+                    UE: [{ ue: "", flagged: false }],
                     sub: [{ task: "" }],
                     taskExecution: [{ R: "" }],
                     controls: [{ control: "" }],
@@ -417,12 +526,12 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 id: uuidv4(),
                 nr: null,
                 main: "",
-                rowFlagged: false, // <--- ADD THIS
+                rowFlagged: false,
                 jraBody: [{
                     idBody: uuidv4(),
-                    subStepFlagged: false, // <--- ADD THIS
-                    hazards: [{ hazard: "Work Execution", flagged: false }], // <--- ADD FLAG
-                    UE: [{ ue: "Non-adherence...", flagged: false }], // <--- ADD FLAG
+                    subStepFlagged: false,
+                    hazards: [{ hazard: "Work Execution", flagged: false }],
+                    UE: [{ ue: "Non-adherence...", flagged: false }],
                     sub: [{ task: "" }],
                     taskExecution: [{ R: "" }],
                     controls: [{ control: "" }],
@@ -460,30 +569,12 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
     const openInfo = (type) => {
         switch (type) {
-            case "hazards": {
-                openHazardsHelp();
-                break;
-            }
-            case "UE": {
-                openUnwantedEventsHelp();
-                break;
-            }
-            case "sub": {
-                openSubHelp();
-                break;
-            }
-            case "taskExecution": {
-                openTaskExecutionHelp();
-                break;
-            }
-            case "controls": {
-                openResponsibleHelp();
-                break;
-            }
-            case "go": {
-                openGo_noGo();
-                break;
-            }
+            case "hazards": openHazardsHelp(); break;
+            case "UE": openUnwantedEventsHelp(); break;
+            case "sub": openSubHelp(); break;
+            case "taskExecution": openTaskExecutionHelp(); break;
+            case "controls": openResponsibleHelp(); break;
+            case "go": openGo_noGo(); break;
         }
     }
 
@@ -496,7 +587,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                     if (prev.jra.length === 1) {
                         toast.clearWaitingQueue();
                         toast.dismiss();
-
                         toast.error("You must keep at least one row.", {
                             closeButton: true,
                             autoClose: 800,
@@ -633,7 +723,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         while (result.length < 5) {
             result.push(`blank-${result.length}`);
         }
-        // only force-add actions when not readOnly
         if (!readOnly && !result.includes("action")) {
             result.push("action");
         }
@@ -693,11 +782,9 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
     };
 
     const displayColumns = getDisplayColumns();
-
     const defaultColumns = useMemo(() => getDefaultShowColumns(), [readOnly]);
     const defaultWidths = useMemo(() => getDefaultColumnWidths(), []);
 
-    // current table width based on visible columns
     const visibleMeasuredColumns = displayColumns.filter(
         (id) => columnWidths[id] != null && !id.startsWith("blank-")
     );
@@ -706,44 +793,40 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         0
     );
 
-    // when do we show the Fit button?
     const showFitButton =
         wrapperWidth > 0 &&
         tableWidth > 0 &&
-        tableWidth < wrapperWidth - 1; // small tolerance
+        tableWidth < wrapperWidth - 1;
 
-    // are the currently shown columns exactly the defaults (same order)?
     const isUsingDefaultColumns =
         showColumns.length === defaultColumns.length &&
         defaultColumns.every((id, idx) => showColumns[idx] === id);
 
-    // is any column wider than its default width?
     const anyColumnWiderThanDefault = Object.keys(defaultWidths).some((id) => {
         const current = columnWidths[id] ?? defaultWidths[id];
         const def = defaultWidths[id];
-        return current > def; // literally "made wider than the default"
+        return current > def;
     });
 
     const anyColumnLessWiderThanDefault = Object.keys(defaultWidths).some((id) => {
         const current = columnWidths[id] ?? defaultWidths[id];
         const def = defaultWidths[id];
-        return current < def; // literally "made wider than the default"
+        return current < def;
     });
 
-    // when do we show Reset?
     const showResetButton =
         !isUsingDefaultColumns || anyColumnWiderThanDefault || anyColumnLessWiderThanDefault;
 
     useEffect(() => {
         const popupSelector = '.floating-dropdown';
         const columnSelector = '.column-selector-popup';
-        const filterSelector = ".jra-filter-popup";
+        const excelSelector = '.excel-filter-popup';
 
         const handleClickOutside = (e) => {
             const outside =
                 !e.target.closest(popupSelector) &&
                 !e.target.closest(columnSelector) &&
-                !e.target.closest(filterSelector) &&
+                !e.target.closest(excelSelector) &&
                 !e.target.closest('input');
             if (outside) {
                 closeDropdowns();
@@ -751,18 +834,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         };
 
         const handleScroll = (e) => {
-            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(columnSelector) || e.target.closest(filterSelector);
-
-            if (
-                e.target.closest(popupSelector) ||
-                e.target.closest(columnSelector) ||
-                e.target.closest(filterSelector)
-            ) {
-                return;
-            }
-            else {
-                console.log("Scroll detected outside of dropdowns or popups");
-            }
+            const isInsidePopup = e.target.closest(popupSelector) || e.target.closest(columnSelector) || e.target.closest(excelSelector);
 
             if (!isInsidePopup) {
                 closeDropdowns();
@@ -771,7 +843,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
         const closeDropdowns = () => {
             setShowColumnSelector(null);
-            setFilterPopup(false);
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
         };
 
         document.addEventListener('mousedown', handleClickOutside);
@@ -783,15 +855,15 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
             document.removeEventListener('touchstart', handleClickOutside);
             window.removeEventListener('scroll', handleScroll, true);
         };
-    }, [showColumnSelector, filterPopup]);
+    }, [showColumnSelector, excelFilter]);
 
     const startColumnResize = (e, colId) => {
         if (readOnly) return;
 
         e.preventDefault();
-        e.stopPropagation(); // don’t trigger header click or scroll-drag
+        e.stopPropagation();
 
-        const th = e.currentTarget.parentElement; // the <th>
+        const th = e.currentTarget.parentElement;
         const currentWidth =
             columnWidths[colId] || (th ? th.getBoundingClientRect().width : 0) || 0;
 
@@ -817,7 +889,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 [col]: Math.round(newWidth),
             }));
 
-            // let the header click know we actually dragged
             isResizingRef.current = true;
         };
 
@@ -825,8 +896,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
             resizingColRef.current = null;
             resizeStartXRef.current = 0;
             resizeStartWidthRef.current = 0;
-
-            // small timeout so click handlers after mouseup don't fire as a "click"
             setTimeout(() => {
                 isResizingRef.current = false;
             }, 0);
@@ -860,20 +929,15 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         );
         if (!totalWidth) return;
 
-        // Only grow when the table is smaller (use case: dragged too small)
         if (totalWidth >= wrapperWidth) {
-            return; // nothing to do
+            return;
         }
 
         const scale = wrapperWidth / totalWidth;
 
-        // First pass: proportional scaling
         let newWidths = visibleCols.map((id) => getWidth(id) * scale);
-
-        // Round
         newWidths = newWidths.map((w) => Math.round(w));
 
-        // Fix rounding drift to exactly match wrapperWidth
         let diff =
             wrapperWidth -
             newWidths.reduce((sum, w) => sum + w, 0);
@@ -901,30 +965,19 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         const defaultColumns = getDefaultShowColumns();
         const defaultWidths = getDefaultColumnWidths();
 
-        // Reset state
         setShowColumns(defaultColumns);
         setColumnWidths(defaultWidths);
         setShowColumnSelector(false);
 
-        // Immediately fit those default widths to the wrapper
         fitTableToWidth(defaultColumns, defaultWidths);
     };
 
     const getRowFlagStatus = (row) => {
-        // 1. Check Main Step Flag
         if (row.rowFlagged) return true;
-
-        // 2. Check JRA Body (Hazards, UE, Sub-steps)
         return row.jraBody.some(body => {
-            // Check Sub-step/Control Group Flag
             if (body.subStepFlagged) return true;
-
-            // Check Hazards Flags
             if (body.hazards?.some(h => h.flagged)) return true;
-
-            // Check Unwanted Events Flags
             if (body.UE?.some(u => u.flagged)) return true;
-
             return false;
         });
     };
@@ -1046,7 +1099,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                     return (
                                         <th
                                             key={index}
-                                            className={`${column.className} jra-header-cell ${filters[columnId] ? 'jra-filter-active' : ''}`}
+                                            className={`${column.className} jra-header-cell ${filters[columnId] ? '' : ''}`}
                                             style={{
                                                 position: 'relative',
                                                 width: width ? `${width}px` : undefined,
@@ -1054,15 +1107,12 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                 maxWidth: limits.max ? `${limits.max}px` : undefined,
                                             }}
                                             onClick={e => {
-                                                // if we dragged, don't treat this as a "click"
                                                 if (isResizingRef.current) return;
-
-                                                // don't open filters from icon/resizer clicks
+                                                // Don't open if clicked icon or resize handle
                                                 if (e.target.closest('.header-icon') || e.target.closest('.ibra-col-resizer')) {
                                                     return;
                                                 }
-
-                                                openFilterPopup(columnId, e);
+                                                openExcelFilterPopup(columnId, e);
                                             }}
                                         >
                                             {column.icon && (
@@ -1078,7 +1128,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
                                             <div>
                                                 {column.title.split('(')[0].trim()}
-                                                {filters[columnId] && (
+                                                {(filters[columnId] || (sortConfig.colId === columnId && columnId !== "nr")) && (
                                                     <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
                                                 )}
                                             </div>
@@ -1126,8 +1176,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
                                                     const meta = availableColumns.find(c => c.id === colId);
                                                     const cls = meta?.className || "";
-
-
                                                     const limits = columnSizeLimits[colId] || {};
                                                     const width = columnWidths[colId];
                                                     const commonCellStyle = {
@@ -1135,7 +1183,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                         minWidth: limits.min ? `${limits.min}px` : undefined,
                                                         maxWidth: limits.max ? `${limits.max}px` : undefined,
                                                     };
-
 
                                                     if (colId === "nr" && bodyIdx === 0) {
                                                         return (
@@ -1173,15 +1220,15 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                                 style={commonCellStyle}
                                                             >
                                                                 <div className="main-cell-content">
-                                                                        {getRowFlagStatus(row) && (<span
-                                                                            className={
-                                                                                "ibra-main-flag-icon" +
-                                                                                (getRowFlagStatus(row) ? " active" : "")
-                                                                            }
-                                                                            title={getRowFlagStatus(row) ? "Unflag main area" : "Flag main area"}
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faFlag} />
-                                                                        </span>)}
+                                                                    {getRowFlagStatus(row) && (<span
+                                                                        className={
+                                                                            "ibra-main-flag-icon" +
+                                                                            (getRowFlagStatus(row) ? " active" : "")
+                                                                        }
+                                                                        title={getRowFlagStatus(row) ? "Unflag main area" : "Flag main area"}
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faFlag} />
+                                                                    </span>)}
                                                                     <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{row.main}</div>
                                                                 </div>
                                                                 {!readOnly && (<>
@@ -1247,7 +1294,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                         return (
                                                             <td key={colIdx} className={`hazard-cell`} style={commonCellStyle}>
                                                                 {body.hazards.map((hObj, hIdx) => {
-                                                                    const isFirst = bodyIdx === 0;
                                                                     return (
                                                                         <div key={hIdx} className="static-cell hazard-static jra-normal-text">
                                                                             {hObj.hazard}
@@ -1270,7 +1316,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                         return (
                                                             <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
                                                                 {body.UE.map((uObj, uIdx) => {
-                                                                    const isFirst = bodyIdx === 0;
                                                                     return (
                                                                         <div key={uIdx} className="jra-normal-text">
                                                                             {uObj.ue}
@@ -1405,47 +1450,138 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 </div>
             </div>
 
-            {filterPopup.visible && (
+            {/* Excel-style Filter Popup */}
+            {excelFilter.open && (
                 <div
-                    className="jra-filter-popup"
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
                     style={{
-                        position: 'fixed',
-                        top: filterPopup.pos.top,
-                        left: filterPopup.pos.left - 10,
-                        width: filterPopup.pos.width,
-                        zIndex: 10000
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
                     }}
+                    onWheel={handleInnerScrollWheel}
                 >
-                    <input
-                        className="jra-filter-input"
-                        type="text"
-                        placeholder="Filter..."
-                        defaultValue={filters[filterPopup.column] || ''}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') applyFilter(e.target.value);
-                        }}
-                    />
-                    <div className="jra-filter-buttons">
+                    <div className="excel-filter-sortbar">
                         <button
                             type="button"
-                            className="jra-filter-apply"
-                            onClick={() => {
-                                const val = document
-                                    .querySelector('.jra-filter-input')
-                                    .value;
-                                applyFilter(val);
-                            }}
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
                         >
-                            Apply
+                            Sort A to Z
                         </button>
+
                         <button
                             type="button"
-                            className="jra-filter-clear"
-                            onClick={clearFilter}
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
                         >
-                            Clear
+                            Sort Z to A
                         </button>
                     </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(
+                            new Set((formData.jra || []).flatMap(r => getFilterValuesForCell(r, colId)))
+                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const allVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                            setFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = { selected: selectedArr };
+                                return next;
+                            });
+
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             )}
 

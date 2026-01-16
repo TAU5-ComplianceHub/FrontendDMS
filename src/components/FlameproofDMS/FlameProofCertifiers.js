@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faCirclePlus, faClipboardCheck, faDownload, faEdit, faFileAlt, faFileSignature, faHardHat, faHome, faIndustry, faListOl, faMagnifyingGlass, faScaleBalanced, faTableList, faTrash, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
+import { faArrowsRotate, faBook, faBookOpen, faCaretLeft, faCaretRight, faCertificate, faChalkboardTeacher, faCirclePlus, faClipboardCheck, faDownload, faEdit, faFileAlt, faFileSignature, faHardHat, faHome, faIndustry, faListOl, faMagnifyingGlass, faScaleBalanced, faTableList, faTrash, faTriangleExclamation, faFilter, faSortUp, faSortDown } from '@fortawesome/free-solid-svg-icons';
 import { faSort, faSpinner, faX, faFileCirclePlus, faFolderOpen, faSearch, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
@@ -48,6 +48,20 @@ const FlameProofCertifiers = () => {
   const [selectedFileName, setSelectedFileName] = useState(null);
   const [isTrashView, setIsTrashView] = useState(false);
   const [hoveredFileId, setHoveredFileId] = useState(null);
+
+  // --- EXCEL FILTER STATE ---
+  const excelPopupRef = useRef(null);
+  const [excelFilter, setExcelFilter] = useState({
+    open: false,
+    colId: null,
+    anchorRect: null,
+    pos: { top: 0, left: 0, width: 0 }
+  });
+  const [excelSearch, setExcelSearch] = useState("");
+  const [excelSelected, setExcelSelected] = useState(new Set());
+  const [filters, setFilters] = useState({});
+  const DEFAULT_SORT = { colId: null, direction: "asc" };
+  const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
 
   const getComplianceColor = (status) => {
     if (status.toLowerCase() === "valid" || status.toLowerCase() === "accredited") return "status-good";
@@ -158,11 +172,6 @@ const FlameProofCertifiers = () => {
     closeSortModal();
   };
 
-  // put this near the top (outside component) or inside the component before usage
-  const natCompare = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-  const sortByAssetNr = (arr) =>
-    [...arr].sort((a, b) => natCompare.compare(a.assetNr || '', b.assetNr || ''));
-
   const fetchFiles = async () => {
     setIsLoadingTable(true);
     const route = isTrashView ? `/api/flameProofCertifiers/getDeletedCerts` : `/api/flameProofCertifiers/getCerts`;
@@ -185,6 +194,7 @@ const FlameProofCertifiers = () => {
       setAuthorities(uniqueCertifiers);
       setStatus(uniqueStatus);
 
+      // Initial Sort
       const sortedCertifiers = defaultStatusSort(data.certifiers);
 
       setFiles(Array.isArray(sortedCertifiers) ? sortedCertifiers : []);
@@ -209,16 +219,163 @@ const FlameProofCertifiers = () => {
     setSearchQuery("");
   };
 
-  const filteredFiles = defaultStatusSort(
-    files.filter((file) => {
+  const formatDate = (dateString) => {
+    if (dateString === null || !dateString) return "—"
+    const date = new Date(dateString); // Convert to Date object
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
+    const day = String(date.getDate()).padStart(2, '0'); // Pad day with leading zero
+    return `${year}-${month}-${day}`;
+  };
+
+  // --- Excel Filter Logic ---
+  const BLANK = "(Blanks)";
+  const getFilterValuesForCell = (row, colId) => {
+    let val;
+    if (colId === "authority") val = row.authority;
+    else if (colId === "licenseNumber") val = row.licenseNumber;
+    else if (colId === "issue") val = formatDate(row.licenseIssueDate);
+    else if (colId === "expiry") val = formatDate(row.licenseExpiryDate);
+    else if (colId === "status") val = row.status;
+    else val = row[colId];
+
+    const s = val == null ? "" : String(val).trim();
+    return s === "" ? [BLANK] : [s];
+  };
+
+  const toggleSort = (colId, direction) => {
+    setSortConfig(prev => {
+      if (prev?.colId === colId && prev?.direction === direction) {
+        return DEFAULT_SORT;
+      }
+      return { colId, direction };
+    });
+  };
+
+  const openExcelFilterPopup = (colId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.target.closest("th");
+    const rect = th.getBoundingClientRect();
+
+    // Build unique values
+    const values = Array.from(
+      new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
+    ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+    const existing = filters?.[colId]?.selected;
+    const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+    setExcelSelected(initialSelected);
+    setExcelSearch("");
+    setExcelFilter({
+      open: true,
+      colId,
+      anchorRect: rect,
+      pos: {
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: Math.max(220, rect.width),
+      },
+    });
+  };
+
+  const handleInnerScrollWheel = (e) => {
+    const el = e.currentTarget;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const delta = e.deltaY;
+    const goingDown = delta > 0;
+    const atTop = scrollTop <= 0;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+    if ((goingDown && atBottom) || (!goingDown && atTop)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (goingDown && atBottom) el.scrollTop = scrollHeight - clientHeight;
+      else if (!goingDown && atTop) el.scrollTop = 0;
+      return;
+    }
+  };
+
+  useEffect(() => {
+    if (!excelFilter.open) return;
+    const el = excelPopupRef.current;
+    if (!el) return;
+    const popupRect = el.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const margin = 8;
+    let newTop = excelFilter.pos.top;
+    let newLeft = excelFilter.pos.left;
+
+    if (popupRect.bottom > viewportH - margin) {
+      const anchor = excelFilter.anchorRect;
+      if (anchor) newTop = Math.max(margin, anchor.top - popupRect.height - 4);
+    }
+    if (popupRect.right > viewportW - margin) {
+      const overflow = popupRect.right - (viewportW - margin);
+      newLeft = Math.max(margin, newLeft - overflow);
+    }
+    if (popupRect.left < margin) newLeft = margin;
+
+    if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+      setExcelFilter(prev => ({ ...prev, pos: { ...prev.pos, top: newTop, left: newLeft } }));
+    }
+  }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (excelFilter.open && excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
+        setExcelFilter(prev => ({ ...prev, open: false }));
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [excelFilter.open]);
+
+  // --- End Excel Logic ---
+
+  const filteredFiles = useMemo(() => {
+    let current = [...files];
+
+    // 1. Search Query
+    if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      const matchesSearchQuery = (file.authority || "").toLowerCase().includes(q);
-      const matchesFilters =
-        (selectedStatus.length === 0 || selectedStatus.includes(file.status)) &&
-        (selectedAuthority.length === 0 || selectedAuthority.includes(file.authority));
-      return matchesSearchQuery && matchesFilters;
-    })
-  );
+      current = current.filter(file => (
+        file.authority.toLowerCase().includes(q)
+      ));
+    }
+
+    // 2. Sidebar Filters
+    if (selectedStatus.length > 0) current = current.filter(f => selectedStatus.includes(f.status));
+    if (selectedAuthority.length > 0) current = current.filter(f => selectedAuthority.includes(f.authority));
+
+    // 3. Excel Column Filters
+    for (const [colId, filterObj] of Object.entries(filters)) {
+      const selected = filterObj?.selected;
+      if (!selected || !Array.isArray(selected)) continue;
+      current = current.filter(row => {
+        const cellValues = getFilterValuesForCell(row, colId);
+        return cellValues.some(v => selected.includes(v));
+      });
+    }
+
+    // 4. Sort
+    if (sortConfig.colId) {
+      const { colId, direction } = sortConfig;
+      const dir = direction === 'desc' ? -1 : 1;
+      current.sort((a, b) => {
+        const av = getFilterValuesForCell(a, colId)[0];
+        const bv = getFilterValuesForCell(b, colId)[0];
+        return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+      });
+    } else {
+      // Fallback to default sort if no column sort is active
+      current = defaultStatusSort(current);
+    }
+
+    return current;
+  }, [files, searchQuery, selectedStatus, selectedAuthority, filters, sortConfig]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -232,15 +389,6 @@ const FlameProofCertifiers = () => {
       setShowNoAssets(false);
     }
   }, [isLoadingTable, filteredFiles.length]);
-
-  const formatDate = (dateString) => {
-    if (dateString === null || !dateString) return "—"
-    const date = new Date(dateString); // Convert to Date object
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-based
-    const day = String(date.getDate()).padStart(2, '0'); // Pad day with leading zero
-    return `${year}-${month}-${day}`;
-  };
 
   const downloadFile = async (fileId, fileName) => {
     try {
@@ -390,6 +538,26 @@ const FlameProofCertifiers = () => {
     return { validCount: v, expiredCount: e, notUploadedCount: n, invalidCount: e + n };
   }, [filteredFiles]);
 
+  const renderHeader = (colId, title) => {
+    const isFiltered = filters[colId]?.selected?.length > 0;
+    const isSorted = sortConfig.colId === colId;
+
+    return (
+      <th className={`flame-certification-${colId === "authority" ? "auth" : colId === "licenseNumber" ? "license-nr" : colId === "status" ? "status" : "license-date"}-filter col cursor-pointer`} onClick={(e) => openExcelFilterPopup(colId, e)}>
+        <div className="fileinfo-container-filter">
+          <span className="fileinfo-title-filter" style={{ cursor: 'pointer' }}>
+            {title}
+            {(isFiltered || isSorted) && (
+              <span style={{ marginLeft: "10px", fontSize: "12px" }}>
+                {(isFiltered || isSorted) && <FontAwesomeIcon icon={faFilter} style={{ marginRight: isSorted ? "4px" : "0", color: "white" }} />}
+              </span>
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
   return (
     <div className="file-info-container">
       {isSidebarVisible && (
@@ -479,116 +647,155 @@ const FlameProofCertifiers = () => {
           <TopBarCertifiers toggleTrashView={toggleTrashView} isTrashView={isTrashView} openSort={openSortModal} canIn={canIn} access={access} />
         </div>
 
-        <div className="table-container-file">
-          <table>
-            <thead>
-              <tr className={isTrashView ? 'trashed' : ""}>
-                <th className="flame-certification-num-filter col">Nr</th>
-                <th className="flame-certification-auth-filter col">Certification Body</th>
-                <th className="flame-certification-license-nr-filter col">Accreditation Number</th>
-                <th className="flame-certification-license-date-filter col">Initial Accreditation Date</th>
-                <th className="flame-certification-license-date-filter col">Expiry Date</th>
-                <th className="flame-certification-status-filter col">Status</th>
-                <th className="flame-certification-act-filter col">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingTable && (
-                <tr>
-                  <td colSpan={
-                    7
-                  } style={{ textAlign: "center", padding: 20 }}>
-                    <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading Certification Bodies.
-                  </td>
+        <div className="table-flameproof-card">
+          <div className="flameproof-table-header-label-wrapper">
+            <label className="risk-control-label">Certification Bodies</label>
+          </div>
+          <div className="table-container-file-flameproof-all-assets">
+            <table>
+              <thead>
+                <tr className={isTrashView ? 'trashed' : ""}>
+                  <th className="flame-certification-num-filter col">Nr</th>
+                  {renderHeader("authority", "Certification Body")}
+                  {renderHeader("licenseNumber", "Accreditation Number")}
+                  {renderHeader("issue", "Initial Accreditation Date")}
+                  {renderHeader("expiry", "Expiry Date")}
+                  {renderHeader("status", "Status")}
+                  <th className="flame-certification-act-filter col">Action</th>
                 </tr>
-              )}
+              </thead>
+              <tbody>
+                {isLoadingTable && (
+                  <tr>
+                    <td colSpan={
+                      7
+                    } style={{ textAlign: "center", padding: 20 }}>
+                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading Certification Bodies.
+                    </td>
+                  </tr>
+                )}
 
-              {!isLoadingTable && showNoAssets && (
-                <tr>
-                  <td colSpan={
-                    7
-                  } style={{ textAlign: "center", padding: 20 }}>
-                    No Certification Bodies Registered.
-                  </td>
-                </tr>
-              )}
+                {!isLoadingTable && showNoAssets && (
+                  <tr>
+                    <td colSpan={
+                      7
+                    } style={{ textAlign: "center", padding: 20 }}>
+                      No Certification Bodies Registered.
+                    </td>
+                  </tr>
+                )}
 
-              {filteredFiles.map((file, index) => (
-                <tr key={index} style={{ cursor: "pointer" }} className={`file-info-row-height`} onClick={() => setHoveredFileId(hoveredFileId === file._id ? null : file._id)}>
-                  <td className="col">{index + 1}</td>
-                  <td className="col" style={{ textAlign: "center", position: "relative" }}>
-                    {file.authority}
-                    {(hoveredFileId === file._id && !file.isPlaceholder) && (
-                      <PopupMenuOptionsCertifier file={file} isOpen={hoveredFileId === file._id} setHoveredFileId={setHoveredFileId} />
-                    )}
-                  </td>
-                  <td className="file-name-cell" style={{ textAlign: "center" }}>{(file.licenseNumber)}</td>
-                  <td className="col">{formatDate(file.licenseIssueDate)}</td>
-                  <td className={`col`}>{formatDate(file.licenseExpiryDate)}</td>
-                  <td className={`col ${getComplianceColor(file.status)}`}>{file.status}</td>
-                  {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<td className={"col-act"}>
-                    {!isTrashView && (
-                      <>
-                        <button
-                          className={"flame-delete-button-fi-new col-but-res"}
-                          onClick={(e) => {
-                            e.stopPropagation();         // ⛔ prevent row click
-                            openModify(file);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faEdit} title="Modify Certifier" />
-                        </button>
-                        {file.status.toLowerCase() !== "not uploaded" && (<button
-                          className={"flame-delete-button-fi-new col-but-res"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDownloadModal(file._id, file.fileName)
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faDownload} title="Download License" />
-                        </button>)}
-                        <button
-                          className={"flame-delete-button-fi-new col-but"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openModal(file._id, file.authority);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faTrash} title="Delete Certifier" />
-                        </button>
-                      </>
-                    )}
-                    {isTrashView && (
-                      <>
-                        <button
-                          className={"flame-delete-button-fi-new col-but-res"}
-                          onClick={(e) => {
-                            e.stopPropagation();         // ⛔ prevent row click
-                            restoreFile(file._id);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faArrowsRotate} title="Restore Certifier" />
-                        </button>
-                        <button
-                          className={"flame-delete-button-fi-new col-but"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openModal(file._id, file.authority);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faTrash} title="Delete Certifier From Trash" />
-                        </button>
-                      </>
-                    )}
-                  </td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                {filteredFiles.map((file, index) => (
+                  <tr key={index} style={{ cursor: "pointer" }} className={`file-info-row-height`} onClick={() => setHoveredFileId(hoveredFileId === file._id ? null : file._id)}>
+                    <td className="col">{index + 1}</td>
+                    <td className="col" style={{ textAlign: "center", position: "relative" }}>
+                      {file.authority}
+                      {(hoveredFileId === file._id && !file.isPlaceholder) && (
+                        <PopupMenuOptionsCertifier file={file} isOpen={hoveredFileId === file._id} setHoveredFileId={setHoveredFileId} />
+                      )}
+                    </td>
+                    <td className="file-name-cell" style={{ textAlign: "center" }}>{(file.licenseNumber)}</td>
+                    <td className="col">{formatDate(file.licenseIssueDate)}</td>
+                    <td className={`col`}>{formatDate(file.licenseExpiryDate)}</td>
+                    <td className={`col ${getComplianceColor(file.status)}`}>{file.status}</td>
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<td className={"col-act"}>
+                      {!isTrashView && (
+                        <>
+                          <button
+                            className={"flame-delete-button-fi-new col-but-res"}
+                            onClick={(e) => {
+                              e.stopPropagation();         // ⛔ prevent row click
+                              openModify(file);
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faEdit} title="Modify Certifier" />
+                          </button>
+                          {file.status.toLowerCase() !== "not uploaded" && (<button
+                            className={"flame-delete-button-fi-new col-but-res"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDownloadModal(file._id, file.fileName)
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faDownload} title="Download License" />
+                          </button>)}
+                          <button
+                            className={"flame-delete-button-fi-new col-but"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openModal(file._id, file.authority);
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faTrash} title="Delete Certifier" />
+                          </button>
+                        </>
+                      )}
+                      {isTrashView && (
+                        <>
+                          <button
+                            className={"flame-delete-button-fi-new col-but-res"}
+                            onClick={(e) => {
+                              e.stopPropagation();         // ⛔ prevent row click
+                              restoreFile(file._id);
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faArrowsRotate} title="Restore Certifier" />
+                          </button>
+                          <button
+                            className={"flame-delete-button-fi-new col-but"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openModal(file._id, file.authority);
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faTrash} title="Delete Certifier From Trash" />
+                          </button>
+                        </>
+                      )}
+                    </td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      {isSortModalOpen && (<SortPopupCertifiers closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} assetType={false} />)}
+      {/* --- EXCEL FILTER POPUP (From IBRATable) --- */}
+      {excelFilter.open && (
+        <div className="excel-filter-popup" ref={excelPopupRef} style={{ position: "fixed", top: excelFilter.pos.top, left: excelFilter.pos.left, width: excelFilter.pos.width, zIndex: 9999 }} onWheel={handleInnerScrollWheel}>
+          <div className="excel-filter-sortbar">
+            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "asc")}>Sort A to Z</button>
+            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "desc")}>Sort Z to A</button>
+          </div>
+          <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+          {(() => {
+            const colId = excelFilter.colId;
+            const allValues = Array.from(new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))).sort((a, b) => String(a).localeCompare(String(b)));
+            const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+            const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+            const toggleValue = (v) => { setExcelSelected(prev => { const next = new Set(prev); if (next.has(v)) next.delete(v); else next.add(v); return next; }); };
+            const toggleAllVisible = (checked) => { setExcelSelected(prev => { const next = new Set(prev); visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); }); return next; }); };
+            const onOk = () => {
+              const selectedArr = Array.from(excelSelected);
+              const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+              setFilters(prev => { const next = { ...prev }; if (isAllSelected) delete next[colId]; else next[colId] = { selected: selectedArr }; return next; });
+              setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            };
+            const onCancel = () => { setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } }); };
+            return (
+              <>
+                <div className="excel-filter-list">
+                  <label className="excel-filter-item"><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={allVisibleSelected} onChange={(e) => toggleAllVisible(e.target.checked)} /></span><span className="excel-filter-text">(Select All)</span></label>
+                  {visibleValues.map(v => (<label className="excel-filter-item" key={String(v)}><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={excelSelected.has(v)} onChange={() => toggleValue(v)} /></span><span className="excel-filter-text">{v}</span></label>))}
+                </div>
+                <div className="excel-filter-actions"><button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button><button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button></div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {upload && (<UploadCertifierLicense onClose={closeUpload} />)}
       {isDownloadModalOpen && (<DownloadPopup closeDownloadModal={closeDownloadModal} confirmDownload={confirmDownload} downloadFileName={downloadFileName} loading={loading} />)}
       {modify && (<UpdateCertifierLicense onClose={closeModify} certifierData={certifierEdit} />)}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCaretLeft, faCaretRight, faX, faFileCirclePlus, faSearch, faArrowLeft, faEdit, faTrash, faShare, faShareAlt, faCirclePlay, faCirclePlus, faBookOpen, faDownload, faBook, faUser, faUserGroup, faColumns, faFilter, faSort } from '@fortawesome/free-solid-svg-icons';
@@ -18,8 +18,23 @@ const VisitorManagementPage = () => {
     const access = getCurrentUser();
     const [hoveredFileId, setHoveredFileId] = useState(null);
     const [isSortModalOpen, setIsSortModalOpen] = useState(false);
-    const [sortField, setSortField] = useState("");
-    const [sortOrder, setSortOrder] = useState("ascending");
+
+    // Unified Sort Configuration
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+
+    // Excel Filter States
+    const [activeExcelFilters, setActiveExcelFilters] = useState({});
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const excelPopupRef = useRef(null);
+
     const navigate = useNavigate();
     const scrollerRef = React.useRef(null);
     const dragRef = React.useRef({
@@ -92,6 +107,7 @@ const VisitorManagementPage = () => {
     };
 
     const formatStatus = (type) => {
+        if (!type) return "-";
         if (type === "requiresRetake") return "Requires Retake"
         return type
             .replace(/_/g, ' ')
@@ -128,7 +144,7 @@ const VisitorManagementPage = () => {
     }, [navigate]);
 
     const fetchFiles = async () => {
-        const route = `/api/visitorDevices/getVisitorsWithDevices`; // ⬅️ changed
+        const route = `/api/visitorDevices/getVisitorsWithDevices`;
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
                 headers: {
@@ -154,14 +170,8 @@ const VisitorManagementPage = () => {
     const openSortModal = () => setIsSortModalOpen(true);
     const closeSortModal = () => setIsSortModalOpen(false);
 
-    const handleSort = () => {
-        const sortedFiles = [...files].sort((a, b) => {
-            const fieldA = a[sortField]?.toString().toLowerCase() || "";
-            const fieldB = b[sortField]?.toString().toLowerCase() || "";
-            if (sortOrder === "ascending") return fieldA.localeCompare(fieldB);
-            return fieldB.localeCompare(fieldA);
-        });
-        setFiles(sortedFiles);
+    // Sort logic integrated into processedFiles, but wrapper for popup if needed
+    const handleGlobalSort = () => {
         closeSortModal();
     };
 
@@ -178,19 +188,17 @@ const VisitorManagementPage = () => {
         { id: "phone", title: "Contact Number", thClass: "visitor-management-phone-filter", td: (f) => extractNumbers(f.contactNr) ?? "-" },
         { id: "idnum", title: "ID/Passport", thClass: "visitor-management-id-filter", td: (f) => f.idNumber ?? "-" },
         { id: "company", title: "Company", thClass: "visitor-management-company-filter", td: (f) => f.company ?? "-" },
-        { id: "createdBy", title: "Profile Created By", thClass: "visitor-management-profileBy-filter", td: (f) => f.profileCreatedBy.username ?? "-" },
+        { id: "createdBy", title: "Profile Created By", thClass: "visitor-management-profileBy-filter", td: (f) => f.profileCreatedBy?.username ?? "-" },
         { id: "validity", title: "Induction Validity", thClass: "visitor-management-valid-filter", td: (f) => formatStatus(f.validity) ?? "-" },
         { id: "createdDate", title: "Profile Creation Date", thClass: "visitor-management-added-filter", td: (f) => formatDate(f.dateAdded) ?? "-" },
         { id: "completionDate", title: "Induction Completion Date", thClass: "visitor-management-comp-filter", td: (v) => formatDate(v.completionDate) ?? "-" },
         { id: "expiry", title: "Induction Expiry Date", thClass: "visitor-management-exp-filter", td: (f) => formatDate(f.expiryDate) },
         { id: "version", title: "Induction Version Nr", thClass: "visitor-management-vers-filter", td: (f) => f.indicationVersion ?? "-" },
-        // "action" column is permission-based, we add it dynamically below
+        // "action" column is permission-based
     ];
 
     const [showColumns, setShowColumns] = useState(() => {
-        // default starter set
         const base = ["nr", "name", "surname", "company", "createdBy", "createdDate", "completionDate", "expiry"];
-        // include action for contributors/admins
         return canIn(access, "TMS", ["systemAdmin", "contributor"]) ? [...base, "action"] : base;
     });
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -202,7 +210,6 @@ const VisitorManagementPage = () => {
 
     const toggleColumn = (id) => {
         setShowColumns(prev => {
-            // nr + action are pinned (like IBRA’s nr/action)
             if (id === "nr" || id === "action") return prev;
             return prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id];
         });
@@ -213,7 +220,6 @@ const VisitorManagementPage = () => {
             const allIds = availableColumns.map(c => c.id);
             setShowColumns(allIds);
         } else {
-            // minimal: only Nr (and Action if allowed)
             setShowColumns(
                 canIn(access, "TMS", ["systemAdmin", "contributor"]) ? ["nr", "action"] : ["nr"]
             );
@@ -227,92 +233,218 @@ const VisitorManagementPage = () => {
 
     const visibleColumns = availableColumns.filter(c => showColumns.includes(c.id));
     const visibleCount = visibleColumns.length;
-    // Wide-mode when more than 9 columns (as requested)
     const isWide = visibleCount > 9;
 
-    // which header popup is open
-    const [openHeader, setOpenHeader] = useState(null);
+    // --- Excel Filtering Helpers ---
 
-    // column filters (text + date)
-    const [colFilters, setColFilters] = useState({
-        name: '',
-        surname: '',
-        email: '',
-        phone: '',
-        idnum: '',
-        company: '',
-        createdBy: '',
-        validity: '',
-        version: '',
-        createdFrom: '',
-        createdTo: '',
-        completionFrom: '',
-        completionTo: '',
-        expiryFrom: '',   // yyyy-mm-dd
-        expiryTo: ''      // yyyy-mm-dd
-    });
+    const getFilterValuesForCell = (row, colId, index) => {
+        // Handle fields that need formatting
+        if (colId === "nr") return [String(index + 1)]; // using index based on original load
+        if (colId === "phone") return [extractNumbers(row.contactNr ?? "")];
+        if (colId === "createdBy") return [row.profileCreatedBy?.username ?? "-"];
+        if (colId === "validity") return [formatStatus(row.validity ?? "-")];
 
-    const dateFilterConfig = {
-        createdDate: {
-            fromKey: "createdFrom",
-            toKey: "createdTo",
-            label: "Profile Creation Date"
-        },
-        completionDate: {
-            fromKey: "completionFrom",
-            toKey: "completionTo",
-            label: "Induction Completion Date"
-        },
-        expiry: {
-            fromKey: "expiryFrom",
-            toKey: "expiryTo",
-            label: "Induction Expiry Date"
-        }
+        // Dates
+        if (colId === "createdDate") return [formatDate(row.dateAdded)];
+        if (colId === "completionDate") return [formatDate(row.completionDate)];
+        if (colId === "expiry") return [formatDate(row.expiryDate)];
+
+        // Standard fields (name, surname, etc)
+        // Map colId to actual data key if different
+        let key = colId;
+        if (colId === "idnum") key = "idNumber";
+        if (colId === "version") key = "indicationVersion";
+
+        const val = row[key];
+        return [val ? String(val).trim() : "-"];
     };
 
-    const setFilter = (field, val) => setColFilters(f => ({ ...f, [field]: val }));
+    const openExcelFilterPopup = (colId, e) => {
+        if (colId === "action") return;
 
-    const filteredFiles = files.filter((file) => {
-        const matchesSearchQuery =
-            (file.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (file.surname ?? "").toLowerCase().includes(searchQuery.toLowerCase());
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
 
-        // Text filters (case-insensitive, guard nulls)
-        const matchesText =
-            (colFilters.name ? (file.name ?? "").toLowerCase().includes(colFilters.name.toLowerCase()) : true) &&
-            (colFilters.surname ? (file.surname ?? "").toLowerCase().includes(colFilters.surname.toLowerCase()) : true) &&
-            (colFilters.email ? (file.email ?? "").toLowerCase().includes(colFilters.email.toLowerCase()) : true) &&
-            (colFilters.phone ? extractNumbers(file.contactNr ?? "").toLowerCase().includes(colFilters.phone.toLowerCase()) : true) &&
-            (colFilters.idnum ? (file.idNumber ?? "").toLowerCase().includes(colFilters.idnum.toLowerCase()) : true) &&
-            (colFilters.company ? (file.company ?? "").toLowerCase().includes(colFilters.company.toLowerCase()) : true) &&
-            (colFilters.createdBy ? ((file.profileCreatedBy?.username) ?? "").toLowerCase().includes(colFilters.createdBy.toLowerCase()) : true) &&
-            (colFilters.version ? (file.indicationVersion ?? "").toLowerCase().includes(colFilters.version.toLowerCase()) : true) &&
-            (colFilters.validity
-                ? formatStatus(file.validity ?? "").toLowerCase().includes(colFilters.validity.toLowerCase())
-                : true);
+        // Build unique values across ALL rows
+        const values = Array.from(
+            new Set(
+                (files || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
 
-        // Date range filters
-        const created = file.dateAdded ? new Date(file.dateAdded) : null;
-        const completion = file.completionDate ? new Date(file.completionDate) : null;
-        const expiry = file.expiryDate ? new Date(file.expiryDate) : null;
+        const existing = activeExcelFilters[colId];
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
 
-        const createdFromOK = colFilters.createdFrom ? (created && created >= new Date(colFilters.createdFrom)) : true;
-        const createdToOK = colFilters.createdTo ? (created && created <= new Date(colFilters.createdTo)) : true;
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
 
-        const completionFromOK = colFilters.completionFrom ? (completion && completion >= new Date(colFilters.completionFrom)) : true;
-        const completionToOK = colFilters.completionTo ? (completion && completion <= new Date(colFilters.completionTo)) : true;
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    };
 
-        const expiryFromOK = colFilters.expiryFrom ? (expiry && expiry >= new Date(colFilters.expiryFrom)) : true;
-        const expiryToOK = colFilters.expiryTo ? (expiry && expiry <= new Date(colFilters.expiryTo)) : true;
+    // --- Sorting Logic ---
 
-        return (
-            matchesSearchQuery &&
-            matchesText &&
-            createdFromOK && createdToOK &&
-            completionFromOK && completionToOK &&
-            expiryFromOK && expiryToOK
-        );
-    });
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT; // Reset to default if clicked again
+            }
+            return { colId, direction };
+        });
+    };
+
+    // --- Main Data Processing (Filter + Sort) ---
+
+    const processedFiles = useMemo(() => {
+        let current = [...files];
+
+        // 1. Global Search
+        if (searchQuery) {
+            const lowerQ = searchQuery.toLowerCase();
+            current = current.filter(f =>
+                (f.name ?? "").toLowerCase().includes(lowerQ) ||
+                (f.surname ?? "").toLowerCase().includes(lowerQ) ||
+                (f.idNumber ?? "").toLowerCase().includes(lowerQ) ||
+                (f.company ?? "").toLowerCase().includes(lowerQ)
+            );
+        }
+
+        // 2. Excel Column Filters
+        // We need original index for "nr" filter, but usually filter applies to data content. 
+        // For "nr", we just use the current index in the full list as the "value".
+        current = current.filter((row, originalIndex) => {
+            for (const [colId, selectedValues] of Object.entries(activeExcelFilters)) {
+                if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+                const cellValues = getFilterValuesForCell(row, colId, originalIndex);
+                const match = cellValues.some(v => selectedValues.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 3. Sorting
+        const colId = sortConfig.colId;
+        const dir = sortConfig.direction === "desc" ? -1 : 1;
+
+        if (colId === "nr") {
+            // Default load order (assumed to be 'files' order)
+        } else {
+            const normalize = (v) => {
+                const s = v == null ? "" : String(v).trim();
+                return s === "" ? "(Blanks)" : s;
+            };
+
+            const tryDate = (v) => {
+                if (!v) return null;
+                const d = new Date(v);
+                return isNaN(d.getTime()) ? null : d.getTime();
+            }
+
+            current.sort((a, b) => {
+                // Map column ID to data key
+                let keyA = a[colId];
+                let keyB = b[colId];
+
+                // Remap keys if necessary
+                if (colId === "idnum") { keyA = a.idNumber; keyB = b.idNumber; }
+                if (colId === "phone") { keyA = extractNumbers(a.contactNr); keyB = extractNumbers(b.contactNr); }
+                if (colId === "createdBy") { keyA = a.profileCreatedBy?.username; keyB = b.profileCreatedBy?.username; }
+                if (colId === "version") { keyA = a.indicationVersion; keyB = b.indicationVersion; }
+
+                // Date specific sorting
+                if (colId === "createdDate") { keyA = a.dateAdded; keyB = b.dateAdded; }
+                if (colId === "completionDate") { keyA = a.completionDate; keyB = b.completionDate; }
+                if (colId === "expiry") { keyA = a.expiryDate; keyB = b.expiryDate; }
+
+                // Check for dates
+                if (["createdDate", "completionDate", "expiry"].includes(colId)) {
+                    const da = tryDate(keyA);
+                    const db = tryDate(keyB);
+                    if (da !== null && db !== null) return (da - db) * dir;
+                }
+
+                const av = normalize(keyA);
+                const bv = normalize(keyB);
+
+                if (av === "(Blanks)" && bv !== "(Blanks)") return 1;
+                if (av !== "(Blanks)" && bv === "(Blanks)") return -1;
+
+                return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
+            });
+        }
+
+        return current;
+
+    }, [files, searchQuery, activeExcelFilters, sortConfig]);
+
+
+    // --- Popup Close Logic ---
+    useEffect(() => {
+        if (!excelFilter.open) return;
+
+        const handleClickOutside = (e) => {
+            if (e.target.closest('.excel-filter-popup')) return;
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+        };
+
+        const handleScroll = (e) => {
+            if (e.target.closest('.excel-filter-popup')) return;
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, [excelFilter.open]);
+
+    // Popup Positioning
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
+        }
+
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
+
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos, excelSearch]);
 
     return (
         <div className="file-info-container">
@@ -373,12 +505,6 @@ const VisitorManagementPage = () => {
                             title="Select Columns to Display"
                             className="top-right-button-control-att"
                             onClick={() => setShowColumnSelector(v => !v)}
-                        />
-                        <FontAwesomeIcon
-                            icon={faSort}
-                            title="Select Columns to Display"
-                            className="top-right-button-control-att-2"
-                            onClick={openSortModal}
                         />
                         {showColumnSelector && (
                             <div className="column-selector-popup"
@@ -442,131 +568,29 @@ const VisitorManagementPage = () => {
                             <thead>
                                 <tr>
                                     {visibleColumns.map(col => {
-                                        const isText = ["name", "surname", "email", "company", "createdBy", "idnum", "phone", "validity", "version"].includes(col.id);
-                                        const isDate = !!dateFilterConfig[col.id];
-                                        const isStatic = ["nr", "action"].includes(col.id);
-
-                                        const cfg = isDate ? dateFilterConfig[col.id] : null;
-
-                                        const textActive = isText && !!colFilters[col.id];
-                                        const dateActive = isDate && (!!colFilters[cfg.fromKey] || !!colFilters[cfg.toKey]);
-                                        const thActive = textActive || dateActive;
+                                        const isAction = col.id === "action";
+                                        const isActiveFilter = activeExcelFilters[col.id];
+                                        const isActiveSort = sortConfig.colId === col.id && col.id !== "nr";
 
                                         return (
-                                            <th key={col.id} className={`${col.thClass} col ${thActive ? "th-filter-active" : ""}`}>
-                                                {isStatic && <span className="fileinfo-title-filter-1">{col.title}</span>}
+                                            <th
+                                                key={col.id}
+                                                className={`${col.thClass} col`}
+                                                onClick={(e) => {
+                                                    if (isAction) return;
+                                                    openExcelFilterPopup(col.id, e);
+                                                }}
+                                                style={{ cursor: isAction ? "default" : "pointer", position: "relative" }}
+                                            >
+                                                <span className="fileinfo-title-filter-1">{col.title}</span>
 
-                                                {isText && (
-                                                    <div className="fileinfo-container-filter">
-                                                        <span
-                                                            className="fileinfo-title-filter"
-                                                            onClick={() => setOpenHeader(prev => prev === col.id ? null : col.id)}
-                                                            title={`Filter by ${col.title}`}
-                                                        >
-                                                            {col.title} {textActive && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
-                                                        </span>
-
-                                                        {openHeader === col.id && (
-                                                            <div className="fileinfo-menu-filter" onMouseLeave={() => setOpenHeader(null)}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={`Filter by ${col.title.toLowerCase()}`}
-                                                                    className="filter-input-file"
-                                                                    value={colFilters[col.id] ?? ""}
-                                                                    onChange={(e) => setFilter(col.id, e.target.value)}
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                {isDate && cfg && (
-                                                    <div className="fileinfo-container-filter">
-                                                        <span
-                                                            className="fileinfo-title-filter"
-                                                            onClick={() => setOpenHeader(prev => prev === col.id ? null : col.id)}
-                                                            title={`Filter by ${cfg.label}`}
-                                                        >
-                                                            {col.title} {dateActive && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
-                                                        </span>
-
-                                                        {openHeader === col.id && (
-                                                            <div className="date-menu-filter" onMouseLeave={() => setOpenHeader(null)}>
-                                                                <div className="date-filter-row">
-                                                                    <label className="date-label">From</label>
-
-                                                                    <DatePicker
-                                                                        value={colFilters[cfg.fromKey] || ""}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) =>
-                                                                            setFilter(cfg.fromKey, val?.format("YYYY-MM-DD"))
-                                                                        }
-                                                                        rangeHover={false}
-                                                                        highlightToday={false}
-                                                                        editable={false}
-                                                                        inputClass="filter-input-date"
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-
-                                                                    {colFilters[cfg.fromKey] && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setFilter(cfg.fromKey, "")}
-                                                                            style={{
-                                                                                background: "none",
-                                                                                border: "none",
-                                                                                color: "#666",
-                                                                                cursor: "pointer",
-                                                                                fontSize: "14px",
-                                                                                padding: "2px 6px",
-                                                                            }}
-                                                                            title="Clear filter"
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faTrash} title='Clear Filter' />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <div className="date-filter-row">
-                                                                    <label className="date-label">To:</label>
-
-                                                                    <DatePicker
-                                                                        value={colFilters[cfg.toKey] || ""}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) =>
-                                                                            setFilter(cfg.toKey, val?.format("YYYY-MM-DD"))
-                                                                        }
-                                                                        rangeHover={false}
-                                                                        highlightToday={false}
-                                                                        editable={false}
-                                                                        inputClass="filter-input-date"
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-
-                                                                    {colFilters[cfg.toKey] && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setFilter(cfg.toKey, "")}
-                                                                            style={{
-                                                                                background: "none",
-                                                                                border: "none",
-                                                                                color: "#666",
-                                                                                cursor: "pointer",
-                                                                                fontSize: "14px",
-                                                                                padding: "2px 6px",
-                                                                            }}
-                                                                            title="Clear filter"
-                                                                        >
-                                                                            <FontAwesomeIcon icon={faTrash} title='Clear Filter' />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                {/* Show filter/sort icons */}
+                                                {(isActiveFilter || isActiveSort) && (
+                                                    <FontAwesomeIcon
+                                                        icon={faFilter}
+                                                        className="th-filter-icon"
+                                                        style={{ marginLeft: "8px", opacity: 0.8 }}
+                                                    />
                                                 )}
                                             </th>
                                         );
@@ -575,7 +599,7 @@ const VisitorManagementPage = () => {
                             </thead>
 
                             <tbody>
-                                {filteredFiles.length === 0 ? (
+                                {processedFiles.length === 0 ? (
                                     <tr className="empty-row">
                                         <td colSpan={visibleColumns.length} style={{ textAlign: "center" }}>
                                             <div className="empty-state">
@@ -584,7 +608,7 @@ const VisitorManagementPage = () => {
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredFiles.map((file, index) => (
+                                    processedFiles.map((file, index) => (
                                         <tr key={file._id ?? index} className="file-info-row-height vihr-expandable-row" style={{ cursor: "pointer" }} onClick={() => navigate(`/FrontendDMS/visitorDevices/${file._id}`)}>
                                             {visibleColumns.map(col => {
                                                 if (col.id === "validity") {
@@ -595,7 +619,7 @@ const VisitorManagementPage = () => {
                                                     );
                                                 }
 
-                                                const value = col.id === "nr" ? col.td(file, index) : (col.td ? col.td(file, index) : "-");
+                                                const value = col.id === "nr" ? (index + 1) : (col.td ? col.td(file, index) : "-");
                                                 return (
                                                     <td key={`${file._id ?? index}-${col.id}`} className="col" style={{ textAlign: "center" }}>
                                                         {value ?? "-"}
@@ -611,7 +635,142 @@ const VisitorManagementPage = () => {
                 </div >
             </div >
 
-            {isSortModalOpen && (<SortPopupVisitorManagementPage closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} />)}
+            {/* Excel Filter Popup */}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                        >
+                            Sort A to Z
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+
+                        // Recalculate unique values for the list
+                        const allValues = Array.from(
+                            new Set((files || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
+                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const allVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                            setActiveExcelFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = selectedArr;
+                                return next;
+                            });
+
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
             <ToastContainer />
         </div >
     );

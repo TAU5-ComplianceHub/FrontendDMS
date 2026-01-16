@@ -5,13 +5,17 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBars, faTimes } from "@fortawesome/free-solid-svg-icons";
 import axios from "axios";
 
-const BurgerMenuFI = ({ isOpen, setIsOpen, admin, reset, setReset, isProfile, visitor = false }) => {
+const BurgerMenuFI = ({ isOpen, setIsOpen, admin, reset, setReset, isProfile, visitor = false, student = false }) => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
         if (visitor) {
             sessionStorage.removeItem("visitorToken");
             navigate("/FrontendDMS/visitorLogin");
+        }
+        else if (student) {
+            sessionStorage.removeItem("studentToken");
+            navigate("/FrontendDMS/studentLogin");
         }
         else {
             localStorage.removeItem("token");

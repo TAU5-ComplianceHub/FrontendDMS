@@ -429,7 +429,7 @@ const OnlineTrainingReviewPage = () => {
 
     fd.append("draft", JSON.stringify(payload));
 
-    await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/modifyPublishedInduction/${loadedIDRef.current}`, {
+    await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/modifyPublishedCourse/${loadedIDRef.current}`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${localStorage.getItem('token')}` },
       body: fd
@@ -505,7 +505,7 @@ const OnlineTrainingReviewPage = () => {
       if (!response.ok) throw new Error("Failed to generate document");
       const data = await response.json();
 
-      toast.success(`Induction Successfully Approved.`, {
+      toast.success(`Course Successfully Approved.`, {
         closeButton: true,
         autoClose: 800, // 1.5 seconds
         style: {
@@ -529,7 +529,7 @@ const OnlineTrainingReviewPage = () => {
     try {
       setShowPublishLoader(true);
 
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/loadPublishedInduction/${loadID}`, {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/loadPublishedCourse/${loadID}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` } // if your load route is protected
       });
       const storedData = await response.json();
@@ -783,7 +783,7 @@ const OnlineTrainingReviewPage = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/republishInduction/${fileID}`, {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/republishCourse/${fileID}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -794,7 +794,7 @@ const OnlineTrainingReviewPage = () => {
 
       if (!response.ok) throw new Error("Failed to generate document");
 
-      toast.success(`Induction Published`, {
+      toast.success(`Course Published`, {
         closeButton: true,
         autoClose: 800, // 1.5 seconds
         style: {
@@ -832,7 +832,7 @@ const OnlineTrainingReviewPage = () => {
       if (!response.ok) throw new Error("Failed to generate document");
       const data = await response.json();
 
-      toast.success(`Induction Publishing Approval Started.`, {
+      toast.success(`Course Publishing Approval Started.`, {
         closeButton: true,
         autoClose: 800, // 1.5 seconds
         style: {
@@ -946,7 +946,7 @@ const OnlineTrainingReviewPage = () => {
           {showPublishLoader && (
             <div className="file-info-loading" role="status" aria-live="polite" aria-label="Loading">
               <div className="file-info-loading__spinner" />
-              <div className="file-info-loading__text">Loading Published Induction</div>
+              <div className="file-info-loading__text">Loading Published Course</div>
             </div>
           )}
           {!showPublishLoader && (

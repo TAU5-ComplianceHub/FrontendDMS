@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from 'jwt-decode';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -22,6 +22,18 @@ const InductionDrafts = () => {
     const [userID, setUserID] = useState('');
     const navigate = useNavigate();
 
+    // Excel Filter States
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const [activeExcelFilters, setActiveExcelFilters] = useState({});
+    const excelPopupRef = useRef(null);
+
     useEffect(() => {
         const storedToken = localStorage.getItem("token");
         if (storedToken) {
@@ -30,58 +42,100 @@ const InductionDrafts = () => {
         }
     }, [navigate]);
 
-    const toggleSort = (field) => {
-        if (sortBy !== field) {
-            setSortBy(field);
-            setSortDir('asc');
-            return;
-        }
-        if (sortDir === 'asc') { setSortDir('desc'); return; }
-        setSortBy(null);
-        setSortDir(null);
+    // Helper for formatted values
+    const formatDateTime = (dateString) => {
+        if (!dateString) return "Not Updated Yet";
+        const date = new Date(dateString);
+        const options = {
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: true,
+            timeZone: 'Africa/Johannesburg'
+        };
+        const formatter = new Intl.DateTimeFormat(undefined, options);
+        const parts = formatter.formatToParts(date);
+        const datePart = `${parts.find(p => p.type === 'year').value}-${parts.find(p => p.type === 'month').value}-${parts.find(p => p.type === 'day').value}`;
+        const timePart = `${parts.find(p => p.type === 'hour').value}:${parts.find(p => p.type === 'minute').value} ${parts.find(p => p.type === 'dayPeriod').value}`;
+        return `${datePart} ${timePart}`;
     };
 
-    const SortIcon = ({ field }) => {
-        if (sortBy !== field) return null;
-        if (sortDir === 'asc') return <FontAwesomeIcon icon={faSortUp} style={{ marginLeft: 6 }} />;
-        if (sortDir === 'desc') return <FontAwesomeIcon icon={faSortDown} style={{ marginLeft: 6 }} />;
-        return null;
+    const getRawValue = (item, colId) => {
+        switch (colId) {
+            case "name": return item.formData?.courseTitle || "";
+            case "createdBy": return item.creator?.username || "Unknown";
+            case "creationDate": return formatDateTime(item.dateCreated);
+            case "lastModifiedBy": return item.lockActive ? item.lockOwner?.username : (item.updater?.username || "-");
+            case "lastModifiedDate": return item.lockActive ? "Active" : item.dateUpdated ? formatDateTime(item.dateUpdated) : "Not Updated Yet";
+            default: return "";
+        }
+    };
+
+    const toggleSort = (field) => {
+        if (sortBy === field && sortDir === 'asc') {
+            // If already asc, toggle to desc
+            setSortDir('desc');
+        } else if (sortBy === field && sortDir === 'desc') {
+            // If desc, reset
+            setSortBy(null);
+            setSortDir(null);
+        } else {
+            // New field or null -> asc
+            setSortBy(field);
+            setSortDir('asc');
+        }
+    };
+
+    const toggleExcelSort = (field, dir) => {
+        if (sortBy === field && sortDir === dir) {
+            setSortBy(null);
+            setSortDir(null);
+        } else {
+            setSortBy(field);
+            setSortDir(dir);
+        }
     };
 
     const filteredDrafts = useMemo(() => {
         const q = query.trim().toLowerCase();
-        if (!q) return drafts;
-        return drafts.filter(d =>
-            (d?.formData?.title || '').toLowerCase().includes(q)
-        );
-    }, [drafts, query]);
+
+        return drafts.filter(d => {
+            const matchesQuery = !q || (d?.formData?.title || '').toLowerCase().includes(q);
+
+            // Excel Filters
+            let excelMatch = true;
+            for (const [colId, selectedSet] of Object.entries(activeExcelFilters)) {
+                if (!selectedSet) continue;
+                const val = getRawValue(d, colId);
+                if (!selectedSet.has(val)) {
+                    excelMatch = false;
+                    break;
+                }
+            }
+
+            return matchesQuery && excelMatch;
+        });
+    }, [drafts, query, activeExcelFilters]);
 
     const displayDrafts = useMemo(() => {
         const list = [...filteredDrafts];
-
-        const getTime = (d) => {
-            if (sortBy === 'created') return new Date(d.dateCreated).getTime();
-            if (sortBy === 'modified') return d.dateUpdated ? new Date(d.dateUpdated).getTime() : null;
-            return null;
-        };
 
         return list.sort((a, b) => {
             // 1) Publishable first
             if (a.publishable && !b.publishable) return -1;
             if (!a.publishable && b.publishable) return 1;
 
-            // 2) Then apply current sort (if any)
             if (!sortBy || !sortDir) return 0;
 
-            const at = getTime(a);
-            const bt = getTime(b);
+            const valA = getRawValue(a, sortBy);
+            const valB = getRawValue(b, sortBy);
 
-            // Always push "Not Updated Yet" (null) to the bottom, regardless of direction
-            if (at == null && bt == null) return 0;
-            if (at == null) return 1;
-            if (bt == null) return -1;
+            // Special handling for dates if needed, otherwise string compare
+            if (sortBy === 'creationDate' || sortBy === 'lastModifiedDate') {
+                // Simple string compare works for formatted ISO-like dates, but formatDateTime output is YYYY-MM-DD
+                // Ideally use raw dates, but for excel filter consistency we sort the display values
+            }
 
-            return sortDir === 'asc' ? at - bt : bt - at;
+            const dir = sortDir === 'asc' ? 1 : -1;
+            return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * dir;
         });
     }, [filteredDrafts, sortBy, sortDir]);
 
@@ -94,26 +148,15 @@ const InductionDrafts = () => {
         const getDraftDocuments = async () => {
             setIsLoading(true);
             setShowNoDrafts(false);
-            let route;
             const token = localStorage.getItem("token");
-
-            route = `${process.env.REACT_APP_URL}/api/visitorDrafts/getDrafts/${userID}`
-
+            const route = `${process.env.REACT_APP_URL}/api/visitorDrafts/getDrafts/${userID}`
             try {
                 const response = await fetch(route, {
                     method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`,
-                    },
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 });
-
-                if (!response.ok) {
-                    throw new Error("Failed to fetch drafts");
-                }
-
+                if (!response.ok) throw new Error("Failed to fetch drafts");
                 const data = await response.json();
-                console.log(data);
                 setDrafts(data);
             } catch (error) {
                 console.error("Failed to fetch drafts:", error);
@@ -121,7 +164,6 @@ const InductionDrafts = () => {
                 setIsLoading(false);
             }
         };
-
         getDraftDocuments();
     }, [userID]);
 
@@ -134,69 +176,29 @@ const InductionDrafts = () => {
         }
     }, [isLoading, drafts]);
 
-    const formatDateTime = (dateString) => {
-        const date = new Date(dateString);
-        const options = {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'Africa/Johannesburg' // Change to your desired timezone
-        };
-
-        const formatter = new Intl.DateTimeFormat(undefined, options);
-        const parts = formatter.formatToParts(date);
-
-        const datePart = `${parts.find(p => p.type === 'year').value}-${parts.find(p => p.type === 'month').value}-${parts.find(p => p.type === 'day').value}`;
-        const timePart = `${parts.find(p => p.type === 'hour').value}:${parts.find(p => p.type === 'minute').value} ${parts.find(p => p.type === 'dayPeriod').value}`;
-
-        return `${datePart} ${timePart}`;
-    };
-
     const confirmDelete = (draftId, title, creator) => {
         setDeleteConfirm({ open: true, draftId });
         setTitle(title);
-
-        if (creator === userID) {
-            setAuthor(true);
-        }
-        else if (creator !== userID) {
-            setAuthor(false);
-        }
-
+        if (creator === userID) setAuthor(true);
+        else if (creator !== userID) setAuthor(false);
         setDeletePopup(true);
     };
 
     const handleDelete = async () => {
         const { draftId } = deleteConfirm;
         if (!draftId) return;
-
-        let route;
-        route = `${process.env.REACT_APP_URL}/api/visitorDrafts/delete/${draftId}`
-
+        const route = `${process.env.REACT_APP_URL}/api/visitorDrafts/delete/${draftId}`
         try {
             const response = await fetch(`${route}`, {
                 method: "DELETE",
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
-                },
+                headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
             });
-
-            if (!response.ok) {
-                throw new Error("Failed to delete draft");
-            }
-
+            if (!response.ok) throw new Error("Failed to delete draft");
             setDrafts(drafts.filter(draft => draft._id !== draftId));
-
-            if (drafts.length === 0) {
-                setShowNoDrafts(true);
-            }
+            if (drafts.length === 0) setShowNoDrafts(true);
         } catch (error) {
             console.error("Failed to delete draft:", error);
         }
-
         setDeleteConfirm({ open: false, draftId: null });
         closeDelete();
     };
@@ -204,6 +206,42 @@ const InductionDrafts = () => {
     const clearSearch = () => {
         setQuery("");
     }
+
+    // Excel Filter Popup Logic
+    function openExcelFilterPopup(colId, e) {
+        if (!colId) return;
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        const allValues = Array.from(new Set(drafts.map(d => getRawValue(d, colId)))).sort();
+        const currentFilter = activeExcelFilters[colId];
+        const initialSelected = currentFilter ? new Set(currentFilter) : new Set(allValues);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (excelPopupRef.current && !excelPopupRef.current.contains(e.target) && !e.target.closest('th')) {
+                setExcelFilter(prev => ({ ...prev, open: false }));
+            }
+        };
+        if (excelFilter.open) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [excelFilter.open]);
+
+    const handleInnerScrollWheel = (e) => e.stopPropagation();
 
     return (
         <div className="gen-file-info-container">
@@ -269,11 +307,26 @@ const InductionDrafts = () => {
                                 <thead className="gen-head">
                                     <tr>
                                         <th className="gen-th ibraGenNr" style={{ width: "5%" }}>Nr</th>
-                                        <th className="gen-th ibraGenFN" style={{ width: "30%" }}>Draft Visitor Induction</th>
-                                        <th className="gen-th ibraGenVer" style={{ width: "15%" }}>Created By</th>
-                                        <th className="gen-th ibraGenStatus" style={{ width: "15%" }}>Creation Date</th>
-                                        <th className="gen-th ibraGenPB" style={{ width: "15%" }}>Last Modified By</th>
-                                        <th className="gen-th ibraGenPD" style={{ width: "15%" }}>Last Modification Date</th>
+                                        <th className="gen-th ibraGenFN" style={{ width: "30%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("name", e)}>
+                                            Draft Visitor Induction
+                                            {(sortBy === "name" || activeExcelFilters["name"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                        </th>
+                                        <th className="gen-th ibraGenVer" style={{ width: "15%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("createdBy", e)}>
+                                            Created By
+                                            {(sortBy === "createdBy" || activeExcelFilters["createdBy"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                        </th>
+                                        <th className="gen-th ibraGenStatus" style={{ width: "15%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("creationDate", e)}>
+                                            Creation Date
+                                            {(sortBy === "creationDate" || activeExcelFilters["creationDate"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                        </th>
+                                        <th className="gen-th ibraGenPB" style={{ width: "15%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("lastModifiedBy", e)}>
+                                            Last Modified By
+                                            {(sortBy === "lastModifiedBy" || activeExcelFilters["lastModifiedBy"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                        </th>
+                                        <th className="gen-th ibraGenPD" style={{ width: "15%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("lastModifiedDate", e)}>
+                                            Last Modification Date
+                                            {(sortBy === "lastModifiedDate" || activeExcelFilters["lastModifiedDate"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
+                                        </th>
                                         <th className="gen-th ibraGenType" style={{ width: "5%" }}>Action</th>
                                     </tr>
                                 </thead>
@@ -285,7 +338,7 @@ const InductionDrafts = () => {
                                                     <td style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial", textAlign: "center" }}>
                                                         {index + 1}
                                                     </td>
-                                                    <td style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial" }}>{`${item.formData.courseTitle}`}</td>
+                                                    <td style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial" }}>{item.formData.courseTitle}</td>
                                                     <td className="cent-draft-class" style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial" }}>
                                                         {item.creator?.username || "Unknown"}
                                                     </td>
@@ -303,7 +356,7 @@ const InductionDrafts = () => {
                                                         <button
                                                             className={"action-button-load-draft delete-button-load-draft"}
                                                             style={{ width: "100%" }}
-                                                            onClick={() => confirmDelete(item._id, item.formData.courseTitle, item?.creator?._id)}
+                                                            onClick={(e) => { e.stopPropagation(); confirmDelete(item._id, item.formData.courseTitle, item?.creator?._id) }}
                                                         >
                                                             <FontAwesomeIcon icon={faTrash} title="Remove Draft" style={{ color: item.approvalState ? "white" : "black" }} />
                                                         </button>
@@ -334,6 +387,46 @@ const InductionDrafts = () => {
                 </div>
             </div>
             {deletePopup && (<DeleteDraftPopup closeModal={closeDelete} deleteDraft={handleDelete} draftName={title} author={author} />)}
+
+            {excelFilter.open && (
+                <div className="excel-filter-popup" ref={excelPopupRef} style={{ position: "fixed", top: excelFilter.pos.top, left: excelFilter.pos.left, width: excelFilter.pos.width, zIndex: 9999 }} onWheel={handleInnerScrollWheel}>
+                    <div className="excel-filter-sortbar">
+                        <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "asc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "asc")}>Sort A to Z</button>
+                        <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "desc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "desc")}>Sort Z to A</button>
+                    </div>
+                    <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(new Set(drafts.map(d => getRawValue(d, colId)))).sort();
+                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => setExcelSelected(prev => { const next = new Set(prev); if (next.has(v)) next.delete(v); else next.add(v); return next; });
+                        const toggleAllVisible = (checked) => setExcelSelected(prev => { const next = new Set(prev); visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); }); return next; });
+
+                        const onOk = () => {
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            setActiveExcelFilters(prev => { const next = { ...prev }; if (isAllSelected) delete next[colId]; else next[colId] = excelSelected; return next; });
+                            setExcelFilter(prev => ({ ...prev, open: false }));
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item"><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={allVisibleSelected} onChange={(e) => toggleAllVisible(e.target.checked)} /></span><span className="excel-filter-text">(Select All)</span></label>
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={excelSelected.has(v)} onChange={() => toggleValue(v)} /></span><span className="excel-filter-text">{v}</span></label>
+                                    ))}
+                                </div>
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={() => setExcelFilter(prev => ({ ...prev, open: false }))}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
         </div>
     );
 };

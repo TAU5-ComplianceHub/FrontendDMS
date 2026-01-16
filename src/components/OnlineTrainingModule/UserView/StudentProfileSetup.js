@@ -1,0 +1,367 @@
+import React, { useMemo, useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ToastContainer, toast } from "react-toastify";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUser, faEnvelope, faPhone, faIdCard, faBuilding } from "@fortawesome/free-solid-svg-icons";
+import "react-toastify/dist/ReactToastify.css";
+import PhoneInput from 'react-phone-input-2';
+import { parsePhoneNumberFromString, getCountryCallingCode } from 'libphonenumber-js';
+import 'react-phone-input-2/lib/style.css'
+import SplashScreenValidateLink from "../../Construction/SplashScreenValidateLink";
+import StudentOTPLink from "./StudentOTPLink";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const reasonToMessage = (reason, extra) => {
+    switch (reason) {
+        case "not_found": return "This student link could not be found.";
+        case "no_link": return "No link is associated with this student.";
+        case "mismatch": return "The link does not match the one on record.";
+        case "expired": return `This student link has expired${extra ? ` (${extra})` : ""}.`;
+        case "server_error":
+        default: return "Unable to validate your link at the moment.";
+    }
+};
+
+const StudentProfileSetup = ({
+    // keep for clarity; we'll construct the final endpoint including id + ?link=...
+    submitUrlBase = `${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/updateStudentFromLink`,
+    validateUrlBase = `${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/validateStudentLink`,
+    loginRedirectPath = "/",
+}) => {
+    const location = useLocation();
+    const qs = useMemo(() => new URLSearchParams(location.search), [location.search]);
+
+    const studentId = qs.get("id") || "";
+    const currentUrl = typeof window !== "undefined" ? window.location.href : "";
+    const [student, setStudent] = useState(null);
+    const [form, setForm] = useState({
+        name: "",
+        surname: "",
+        email: "",
+        contact: "",
+        idNumber: "",
+        company: "",
+    });
+    const navigate = useNavigate();
+    const [otpCompleted, setOTPCompleted] = useState(false);
+
+    const [consent1, setConsent1] = useState(false);
+    const [consent2, setConsent2] = useState(false);
+
+    const [isValidating, setIsValidating] = useState(true);
+    const [isBlocked, setIsBlocked] = useState(false); // when true, the page is disabled
+    const [submitting, setSubmitting] = useState(false);
+    const [country, setCountry] = useState('za'); // default to ZA
+    const [loadingScreen, setLoadingScreen] = useState(true);
+
+    useEffect(() => {
+        if (!form.contact) return;
+        const parsed = parsePhoneNumberFromString(form.contact);
+        if (parsed?.country) setCountry(parsed.country);
+        // if no parsed country, keep existing state
+    }, [form.contact]);
+
+    useEffect(() => {
+        (async () => {
+            // No id in query? Treat as invalid.
+            if (!studentId) {
+                toast.error("Missing student ID in the link.");
+                setIsBlocked(true);
+                setIsValidating(false);
+                setTimeout(() => (window.location.href = loginRedirectPath), 5000);
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `${validateUrlBase}/${studentId}`
+                );
+
+                if (res.status === 201) {
+                    setTimeout(() => {
+                        setLoadingScreen(false);
+                        navigate("/FrontendDMS/studentLogin");
+                    }, 1000);
+
+                    return;
+                }
+
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    const msg = reasonToMessage(data?.reason, data?.expiredAt);
+                    toast.error(msg, { autoClose: 4000 });
+                    setIsBlocked(true);
+                    setIsValidating(false);
+                    setTimeout(() => (window.location.href = loginRedirectPath), 5000);
+                    return;
+                }
+
+                setIsBlocked(false);
+                setIsValidating(false);
+                setTimeout(() => {
+                    setLoadingScreen(false);
+                }, 1000);
+            } catch (e) {
+                console.error("Validation error:", e);
+                toast.error("Network error while validating the link.");
+                setIsBlocked(true);
+                setIsValidating(false);
+                setTimeout(() => (window.location.href = loginRedirectPath), 5000);
+            }
+        })();
+    }, [studentId, validateUrlBase, loginRedirectPath, currentUrl]);
+
+    const onChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+    useEffect(() => {
+        console.log("Student data loaded:", student);
+        if (student) {
+            setForm({
+                name: student.name || "",
+                surname: student.surname || "",
+                email: student.email || "",
+                contact: student.contactNr || student.contact || "",
+                idNumber: student.idNumber || student.passport || "",
+                company: student.company || "",
+            });
+        }
+    }, [student]);
+
+    const validate = () => {
+        const f = {
+            name: form.name.trim(),
+            surname: form.surname.trim(),
+            email: form.email.trim(),
+            contact: form.contact,
+            idNumber: form.idNumber.replace(/\s+/g, ""),
+            company: form.company.trim(),
+        };
+
+        if (!consent1 || !consent2) return "Please agree to both confirmations to continue.";
+
+        for (const [k, v] of Object.entries(f)) {
+            if (!v) return `Please fill in the ${k === "idNumber" ? "ID Number" : k} field.`;
+        }
+
+        if (!EMAIL_RE.test(f.email)) return "Please enter a valid email address.";
+        return null;
+    };
+
+    const handleResendOTP = async () => {
+        try {
+            const res = await fetch(
+                `${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/resendOTP/${studentId}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+
+            if (!res.ok) {
+                const msg = await res.text().catch(() => "");
+                throw new Error(msg || `HTTP ${res.status}`);
+            }
+
+            toast.success("OTP Resent to email.", { autoClose: 1500 });
+        } catch (err) {
+            toast.error("Could not resend OTP.", { autoClose: 1600 });
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (isBlocked || isValidating) return; // hard block if validation failed or still running
+
+        const error = validate();
+        if (error) {
+            toast.error(error, { autoClose: 1600 });
+            return;
+        }
+
+        const formattedContact = form.contact.startsWith('+')
+            ? form.contact
+            : `+${form.contact}`;
+
+        const payload = {
+            name: form.name.trim(),
+            surname: form.surname.trim(),
+            email: form.email.trim(),
+            contactNr: formattedContact,
+            idNumber: form.idNumber.replace(/\s+/g, ""),
+            company: form.company.trim(),
+        };
+
+        try {
+            setSubmitting(true);
+            const res = await fetch(
+                `${submitUrlBase}/${studentId}`,
+                {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                }
+            );
+
+            if (!res.ok) {
+                const msg = await res.text().catch(() => "");
+                throw new Error(msg || `HTTP ${res.status}`);
+            }
+
+            toast.success("Submitted!", { autoClose: 1500 });
+
+            setTimeout(() => {
+                navigate(`/FrontendDMS/studentPasswordSetup/${studentId}`);
+            }, 1500);
+        } catch (err) {
+            console.error("Submit failed:", err);
+            toast.error("Submission failed. Please try again.", { autoClose: 1600 });
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Simple overlay to prevent interaction while validating or blocked
+    const pageDisabled = isBlocked || isValidating;
+
+    return (
+        <div className="visitors-induction-container" style={{ position: "relative" }}>
+            {pageDisabled && (
+                <div
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        background: "rgba(255,255,255,0.6)",
+                        backdropFilter: "blur(2px)",
+                        zIndex: 5,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 600,
+                    }}
+                >
+                    {isValidating ? "Validating link…" : "Access denied"}
+                </div>
+            )}
+
+            <div className="visitors-induction-card visitors-induction-card-wide" aria-disabled={pageDisabled}>
+                <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="ComplianceHub" className="visitors-induction-logo-img" />
+                <div className="visitors-induction-login-title">ComplianceHub{"\u2122"}</div>
+                <div className="visitor-info-heading">Student Information</div>
+
+                <form onSubmit={handleSubmit} noValidate style={{ pointerEvents: pageDisabled ? "none" : "auto", opacity: pageDisabled ? 0.5 : 1 }}>
+                    <div className="visitors-grid">
+                        <div className="visitors-induction-form-group">
+                            <div className="visitors-induction-input-container">
+                                <i><FontAwesomeIcon icon={faUser} /></i>
+                                <input type="text" name="name" placeholder="Name" value={form.name} onChange={onChange} required />
+                            </div>
+                        </div>
+
+                        <div className="visitors-induction-form-group">
+                            <div className="visitors-induction-input-container">
+                                <i><FontAwesomeIcon icon={faUser} /></i>
+                                <input type="text" name="surname" placeholder="Surname" value={form.surname} onChange={onChange} required />
+                            </div>
+                        </div>
+
+                        <div className="visitors-induction-form-group">
+                            <div className="visitors-induction-input-container">
+                                <i><FontAwesomeIcon icon={faEnvelope} /></i>
+                                <input type="email" name="email" placeholder="Email" value={form.email} onChange={onChange} required />
+                            </div>
+                        </div>
+
+                        <div className="visitors-induction-form-group">
+                            <div className="visitors-induction-input-container">
+                                <PhoneInput
+                                    international
+                                    country={country || 'za'}
+                                    defaultCountry="za"
+                                    placeholder="Contact Number"
+                                    countryCodeEditable={false}
+                                    value={form.contact || undefined} // controlled value
+                                    onChange={(value) =>
+                                        setForm(f => ({ ...f, contact: value }))
+                                    }
+                                    name="contact"
+                                    id="contact"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div className="visitors-induction-form-group">
+                            <div className="visitors-induction-input-container">
+                                <i><FontAwesomeIcon icon={faIdCard} /></i>
+                                <input
+                                    type="text"
+                                    name="idNumber"
+                                    placeholder="ID /Passport Number"
+                                    value={form.idNumber}
+                                    onChange={onChange}
+                                    required
+                                    maxLength={32}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="visitors-induction-form-group">
+                            <div className="visitors-induction-input-container">
+                                <i><FontAwesomeIcon icon={faBuilding} /></i>
+                                <input
+                                    type="text"
+                                    name="company"
+                                    placeholder="Company"
+                                    value={form.company}
+                                    onChange={onChange}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <label className="consent-row">
+                        <input
+                            type="checkbox"
+                            checked={consent1}
+                            onChange={(e) => setConsent1(e.target.checked)}
+                        />
+                        <span>
+                            By submitting this form, I consent to the collection, storage, and
+                            use of my personal information for student verification, site
+                            access, and compliance with safety and security requirements.
+                            <span className="required-asterisk"> *</span>
+                        </span>
+                    </label>
+
+                    <label className="consent-row" style={{ marginBottom: "30px" }}>
+                        <input
+                            type="checkbox"
+                            checked={consent2}
+                            onChange={(e) => setConsent2(e.target.checked)}
+                        />
+                        <span>
+                            I confirm that my information provided above is accurate.
+                            <span className="required-asterisk"> *</span>
+                        </span>
+                    </label>
+
+                    <div className="visitors-induction-login-button-container">
+                        <button
+                            type="submit"
+                            className="visitors-induction-login-button visitors-submit"
+                            disabled={submitting || pageDisabled}
+                        >
+                            {submitting ? "Submitting…" : "Submit"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {!otpCompleted && (<StudentOTPLink otpCompleted={otpCompleted} setOtpCompleted={setOTPCompleted} userID={studentId} setStudent={setStudent} resendOTP={handleResendOTP} />)}
+            {loadingScreen && (<SplashScreenValidateLink />)}
+            <ToastContainer />
+        </div>
+    );
+};
+
+export default StudentProfileSetup;

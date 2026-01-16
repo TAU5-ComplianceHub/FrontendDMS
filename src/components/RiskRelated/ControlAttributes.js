@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../Notifications/TopBar";
@@ -18,16 +18,32 @@ const ControlAttributes = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const navigate = useNavigate();
     const [isSidebarVisible, setIsSidebarVisible] = useState(true);
-    const [filteredControls, setFilteredControls] = useState([]);
+    // Removed manual filteredControls state in favor of useMemo
     const [searchPopupVisible, setSearchPopupVisible] = useState(false);
     const [searchInput, setSearchInput] = useState("");
     const access = getCurrentUser();
-    const scrollerRef = useRef(null);   // the horizontal scroller (wrapper div)
-    const tbodyRef = useRef(null);      // to listen for row pointer events
+    const scrollerRef = useRef(null);
+    const tbodyRef = useRef(null);
     const drag = useRef({ active: false, startX: 0, startLeft: 0 });
     const [addControl, setAddControl] = useState(false);
     const [modifyControl, setModifyControl] = useState(false);
     const [modifyingControl, setModifyingControl] = useState("")
+
+    // --- Unified Sort Configuration ---
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+
+    // --- Excel Filter States ---
+    const [activeExcelFilters, setActiveExcelFilters] = useState({});
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const excelPopupRef = useRef(null);
 
     const openAddControl = () => {
         setAddControl(true);
@@ -49,14 +65,12 @@ const ControlAttributes = () => {
     }
 
     const onNativeDragStart = (e) => {
-        // Kill native drag/ghost image that can fade elements
         e.preventDefault();
     };
 
     const onRowPointerDown = (e) => {
-        // 🔴 Do NOT start drag when clicking on the edit button or other interactive elements
         if (
-            e.target.closest(".rca-action-btn") ||                  // your edit button
+            e.target.closest(".rca-action-btn") ||
             e.target.closest(".risk-control-attributes-action-cell") ||
             e.target.closest("button") ||
             e.target.closest("a") ||
@@ -84,8 +98,8 @@ const ControlAttributes = () => {
         const scroller = scrollerRef.current;
         if (!scroller) return;
         const dx = e.clientX - drag.current.startX;
-        scroller.scrollLeft = drag.current.startLeft - dx; // pan like a scrollbar
-        e.preventDefault(); // avoid text selection while dragging
+        scroller.scrollLeft = drag.current.startLeft - dx;
+        e.preventDefault();
     };
 
     const endRowDrag = (e) => {
@@ -109,7 +123,6 @@ const ControlAttributes = () => {
 
     const handleDownload = async () => {
         const dataToStore = controls;
-
         const documentName = `Site Controls Output Register`;
 
         try {
@@ -126,32 +139,25 @@ const ControlAttributes = () => {
 
             const blob = await response.blob();
             saveAs(blob, `${documentName}.xlsx`);
-            //saveAs(blob, `${documentName}.pdf`);
         } catch (error) {
             console.error("Error generating document:", error);
         }
     };
 
-    // Fetch files from the API
     const fetchControls = async () => {
         const route = `/api/riskInfo/controls`;
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`);
-
             if (!response.ok) {
                 throw new Error('Failed to fetch files');
             }
-
             const data = await response.json();
-
-            // 🔥 SORT HERE
+            // Initial sort by control name as per existing logic, but this is just initial state.
+            // The processedControls will handle display order based on sortConfig.
             const sortedControls = data.controls.sort((a, b) =>
                 a.control.localeCompare(b.control, undefined, { sensitivity: 'base' })
             );
-
             setControls(sortedControls);
-            setFilteredControls(sortedControls);
-
         } catch (error) {
             setError(error.message);
         }
@@ -162,17 +168,118 @@ const ControlAttributes = () => {
     const handleCloseSearch = () => {
         setSearchPopupVisible(false)
         setSearchInput("");
-        setFilteredControls(controls);
     };
 
     const handleSearchChange = (e) => {
-        const value = e.target.value;
-        setSearchInput(value);
-        const filtered = controls.filter(c =>
-            c.control.toLowerCase().includes(value.toLowerCase())
-        );
-        setFilteredControls(filtered);
+        setSearchInput(e.target.value);
     };
+
+    // --- Excel Filtering Logic Helpers ---
+
+    const getFilterValuesForCell = (row, colId, index) => {
+        if (colId === "nr") return [String(index + 1)];
+        // Handle critical specifically if it needs standardizing (e.g. Yes/No)
+        if (colId === "critical") return [row.critical ? String(row.critical).trim() : "-"];
+
+        const val = row[colId];
+        return [val ? String(val).trim() : "-"];
+    };
+
+    const openExcelFilterPopup = (colId, e) => {
+        if (colId === "action") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Build unique values across ALL rows
+        const values = Array.from(
+            new Set(
+                (controls || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = activeExcelFilters[colId];
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    };
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT; // Reset to default "nr" sort
+            }
+            return { colId, direction };
+        });
+    };
+
+    // --- Main Processing: Search -> Filter -> Sort ---
+
+    const processedControls = useMemo(() => {
+        let current = [...controls];
+
+        // 1. Global Search (on control name)
+        if (searchInput) {
+            const lowerQ = searchInput.toLowerCase();
+            current = current.filter(c =>
+                c.control.toLowerCase().includes(lowerQ)
+            );
+        }
+
+        // 2. Excel Column Filters
+        current = current.filter((row, originalIndex) => {
+            for (const [colId, selectedValues] of Object.entries(activeExcelFilters)) {
+                if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+                const cellValues = getFilterValuesForCell(row, colId, originalIndex);
+                const match = cellValues.some(v => selectedValues.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 3. Sorting
+        const { colId, direction } = sortConfig;
+        const dir = direction === "desc" ? -1 : 1;
+
+        if (colId === "nr") {
+            // Default load order (assumed to be 'controls' order)
+        } else {
+            const normalize = (v) => {
+                const s = v == null ? "" : String(v).trim();
+                return s === "" ? "(Blanks)" : s;
+            };
+
+            current.sort((a, b) => {
+                const valA = a[colId];
+                const valB = b[colId];
+
+                const normA = normalize(valA);
+                const normB = normalize(valB);
+
+                if (normA === "(Blanks)" && normB !== "(Blanks)") return 1;
+                if (normA !== "(Blanks)" && normB === "(Blanks)") return -1;
+
+                return normA.localeCompare(normB, undefined, { numeric: true, sensitivity: 'base' }) * dir;
+            });
+        }
+
+        return current;
+
+    }, [controls, searchInput, activeExcelFilters, sortConfig]);
+
     const availableColumns = [
         { id: "nr", title: "Nr" },
         { id: "control", title: "Control" },
@@ -187,7 +294,6 @@ const ControlAttributes = () => {
         { id: "action", title: "Action" },
     ];
 
-    // Default: all columns ON except performance + quality
     const [showColumns, setShowColumns] = useState([
         "nr",
         "control",
@@ -205,7 +311,6 @@ const ControlAttributes = () => {
     const allColumnIds = availableColumns.map(c => c.id);
 
     const toggleColumn = (columnId) => {
-        // Never allow Nr to be hidden
         if (columnId === "nr") return;
         if (columnId === "action") return;
 
@@ -219,10 +324,8 @@ const ControlAttributes = () => {
 
     const toggleAllColumns = (selectAll) => {
         if (selectAll) {
-            // Select every column (nr included)
             setShowColumns(allColumnIds);
         } else {
-            // Keep only Nr when "select none"
             setShowColumns(["nr", "action"]);
         }
     };
@@ -346,19 +449,14 @@ const ControlAttributes = () => {
 
         setColumnWidths(prev => {
             const updated = { ...prev, [colId]: newWidth };
-
-            // recompute the *total* width so the "fit" / "reset" buttons know
             const visibleCols = getDisplayColumns().filter(
                 id => typeof updated[id] === "number"
             );
-
             const totalWidth = visibleCols.reduce(
                 (sum, id) => sum + (updated[id] || 0),
                 0
             );
-
             setTableWidth(totalWidth);
-
             return updated;
         });
     };
@@ -426,7 +524,6 @@ const ControlAttributes = () => {
         const prevWidths = visibleCols.map(id => columnWidths[id]);
         const totalWidth = prevWidths.reduce((a, b) => a + b, 0);
 
-        // Only grow when table narrower than wrapper
         if (totalWidth >= wrapperWidth) {
             setTableWidth(totalWidth);
             return;
@@ -516,6 +613,65 @@ const ControlAttributes = () => {
         if (!hasFittedOnce) return;
         fitTableToWidth();
     }, [isSidebarVisible, showColumns]);
+
+    // Cleanup Popup Listeners
+    useEffect(() => {
+        if (!excelFilter.open) return;
+
+        const handleClickOutside = (e) => {
+            if (e.target.closest('.excel-filter-popup')) return;
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+        };
+
+        const handleScroll = (e) => {
+            if (e.target.closest('.excel-filter-popup')) return;
+            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, [excelFilter.open]);
+
+    // Popup Positioning
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const margin = 8;
+
+        let newTop = excelFilter.pos.top;
+        let newLeft = excelFilter.pos.left;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) {
+                const desiredTop = anchor.top - popupRect.height - 4;
+                newTop = Math.max(margin, desiredTop);
+            }
+        }
+
+        if (popupRect.right > viewportW - margin) {
+            const overflow = popupRect.right - (viewportW - margin);
+            newLeft = Math.max(margin, newLeft - overflow);
+        }
+        if (popupRect.left < margin) newLeft = margin;
+
+        if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({
+                ...prev,
+                pos: { ...prev.pos, top: newTop, left: newLeft }
+            }));
+        }
+    }, [excelFilter.open, excelFilter.pos, excelSearch]);
 
     return (
         <div className="risk-control-attributes-container">
@@ -707,6 +863,7 @@ const ControlAttributes = () => {
                                                     : undefined,
                                                 minWidth: columnSizeLimits.action?.min,
                                                 maxWidth: columnSizeLimits.action?.max,
+                                                cursor: "default"
                                             }}
                                         >
                                             <span>Action</span>
@@ -718,185 +875,62 @@ const ControlAttributes = () => {
                                     )}
                                 </tr>
                                 <tr>
-                                    {showColumns.includes("nr") && (
-                                        <th
-                                            className="risk-control-attributes-nr"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.nr ? `${columnWidths.nr}px` : undefined,
-                                                minWidth: columnSizeLimits.nr?.min,
-                                                maxWidth: columnSizeLimits.nr?.max,
-                                            }}
-                                        >
-                                            <span>Nr</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "nr")}
-                                            />
-                                        </th>
-                                    )}
+                                    {/* Render header columns dynamically with filter logic */}
+                                    {availableColumns.map(col => {
+                                        if (col.id === "action") return null; // Handled in rowSpan above
+                                        if (!showColumns.includes(col.id)) return null;
 
-                                    {showColumns.includes("control") && (
-                                        <th
-                                            className="risk-control-attributes-control"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.control ? `${columnWidths.control}px` : undefined,
-                                                minWidth: columnSizeLimits.control?.min,
-                                                maxWidth: columnSizeLimits.control?.max,
-                                            }}
-                                        >
-                                            <span>Control</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "control")}
-                                            />
-                                        </th>
-                                    )}
+                                        // Map to current CSS classes
+                                        const classMap = {
+                                            nr: "risk-control-attributes-nr",
+                                            control: "risk-control-attributes-control",
+                                            description: "risk-control-attributes-description",
+                                            performance: "risk-control-attributes-perf",
+                                            critical: "risk-control-attributes-critcal",
+                                            act: "risk-control-attributes-act",
+                                            activation: "risk-control-attributes-activation",
+                                            hierarchy: "risk-control-attributes-hiearchy",
+                                            quality: "risk-control-attributes-quality",
+                                            cons: "risk-control-attributes-cons"
+                                        };
 
-                                    {showColumns.includes("description") && (
-                                        <th
-                                            className="risk-control-attributes-description"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.description ? `${columnWidths.description}px` : undefined,
-                                                minWidth: columnSizeLimits.description?.min,
-                                                maxWidth: columnSizeLimits.description?.max,
-                                            }}
-                                        >
-                                            <span>Control Description</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "description")}
-                                            />
-                                        </th>
-                                    )}
+                                        const isActiveFilter = activeExcelFilters[col.id];
+                                        const isActiveSort = sortConfig.colId === col.id && col.id !== "nr";
 
-                                    {showColumns.includes("performance") && (
-                                        <th
-                                            className="risk-control-attributes-perf"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.performance ? `${columnWidths.performance}px` : undefined,
-                                                minWidth: columnSizeLimits.performance?.min,
-                                                maxWidth: columnSizeLimits.performance?.max,
-                                            }}
-                                        >
-                                            <span>Performance Requirements &amp; Verification</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "performance")}
-                                            />
-                                        </th>
-                                    )}
-
-                                    {showColumns.includes("critical") && (
-                                        <th
-                                            className="risk-control-attributes-critcal"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.critical ? `${columnWidths.critical}px` : undefined,
-                                                minWidth: columnSizeLimits.critical?.min,
-                                                maxWidth: columnSizeLimits.critical?.max,
-                                            }}
-                                        >
-                                            <span>Critical Control</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "critical")}
-                                            />
-                                        </th>
-                                    )}
-
-                                    {showColumns.includes("act") && (
-                                        <th
-                                            className="risk-control-attributes-act"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.act ? `${columnWidths.act}px` : undefined,
-                                                minWidth: columnSizeLimits.act?.min,
-                                                maxWidth: columnSizeLimits.act?.max,
-                                            }}
-                                        >
-                                            <span>Act, Object or System</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "act")}
-                                            />
-                                        </th>
-                                    )}
-
-                                    {showColumns.includes("activation") && (
-                                        <th
-                                            className="risk-control-attributes-activation"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.activation ? `${columnWidths.activation}px` : undefined,
-                                                minWidth: columnSizeLimits.activation?.min,
-                                                maxWidth: columnSizeLimits.activation?.max,
-                                            }}
-                                        >
-                                            <span>Control Activation (Pre or Post Unwanted Event)</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "activation")}
-                                            />
-                                        </th>
-                                    )}
-
-                                    {showColumns.includes("hierarchy") && (
-                                        <th
-                                            className="risk-control-attributes-hiearchy"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.hierarchy ? `${columnWidths.hierarchy}px` : undefined,
-                                                minWidth: columnSizeLimits.hierarchy?.min,
-                                                maxWidth: columnSizeLimits.hierarchy?.max,
-                                            }}
-                                        >
-                                            <span>Hierarchy of Controls</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "hierarchy")}
-                                            />
-                                        </th>
-                                    )}
-
-                                    {showColumns.includes("quality") && (
-                                        <th
-                                            className="risk-control-attributes-quality"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.quality ? `${columnWidths.quality}px` : undefined,
-                                                minWidth: columnSizeLimits.quality?.min,
-                                                maxWidth: columnSizeLimits.quality?.max,
-                                            }}
-                                        >
-                                            <span>Control Quality</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "quality")}
-                                            />
-                                        </th>
-                                    )}
-
-                                    {showColumns.includes("cons") && (
-                                        <th
-                                            className="risk-control-attributes-cons"
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.cons ? `${columnWidths.cons}px` : undefined,
-                                                minWidth: columnSizeLimits.cons?.min,
-                                                maxWidth: columnSizeLimits.cons?.max,
-                                            }}
-                                        >
-                                            <span>Main Consequence Addressed</span>
-                                            <div
-                                                className="rca-col-resizer"
-                                                onMouseDown={e => startColumnResize(e, "cons")}
-                                            />
-                                        </th>
-                                    )}
+                                        return (
+                                            <th
+                                                key={col.id}
+                                                className={classMap[col.id]}
+                                                onClick={(e) => {
+                                                    // Prevent open if resizing
+                                                    if (isResizingRef.current) return;
+                                                    // Only open if clicking header background, not resizer
+                                                    if (e.target.classList.contains('rca-col-resizer')) return;
+                                                    openExcelFilterPopup(col.id, e);
+                                                }}
+                                                style={{
+                                                    position: "relative",
+                                                    width: columnWidths[col.id] ? `${columnWidths[col.id]}px` : undefined,
+                                                    minWidth: columnSizeLimits[col.id]?.min,
+                                                    maxWidth: columnSizeLimits[col.id]?.max,
+                                                    cursor: col.id === "nr" ? "default" : "pointer"
+                                                }}
+                                            >
+                                                <span>{col.title}</span>
+                                                {(isActiveFilter || isActiveSort) && (
+                                                    <FontAwesomeIcon
+                                                        icon={faFilter}
+                                                        className="th-filter-icon"
+                                                        style={{ marginLeft: "8px", opacity: 0.8 }}
+                                                    />
+                                                )}
+                                                <div
+                                                    className="rca-col-resizer"
+                                                    onMouseDown={e => startColumnResize(e, col.id)}
+                                                />
+                                            </th>
+                                        );
+                                    })}
                                 </tr>
                             </thead>
                             <tbody
@@ -907,8 +941,8 @@ const ControlAttributes = () => {
                                 onPointerCancel={endRowDrag}
                                 onDragStart={onNativeDragStart}
                             >
-                                {filteredControls.map((row, index) => (
-                                    <tr className="table-scroll-wrapper-attributes-controls" key={index}>
+                                {processedControls.map((row, index) => (
+                                    <tr className="table-scroll-wrapper-attributes-controls" key={row._id ?? index}>
                                         {showColumns.includes("nr") && (
                                             <td className="procCent" style={{ fontSize: "14px" }}>
                                                 {index + 1}
@@ -979,6 +1013,143 @@ const ControlAttributes = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Excel Filter Popup */}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onWheel={(e) => e.stopPropagation()}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                        >
+                            Sort A to Z
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+
+                        const allValues = Array.from(
+                            new Set((controls || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
+                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const allVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                            setActiveExcelFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = selectedArr;
+                                return next;
+                            });
+
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        const onCancel = () => {
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
+
             {addControl && (<AddControlPopup onClose={closeAddControl} />)}
             {modifyControl && (<EditControlPopup onClose={closeModifyControl} data={modifyingControl} />)}
             <ToastContainer />

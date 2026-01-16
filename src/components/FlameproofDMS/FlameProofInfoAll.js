@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCaretLeft, faCaretRight, faColumns, faDownload, faEdit, faFileExport, faHardHat, faMagnifyingGlass, faTableList, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faCaretLeft, faCaretRight, faColumns, faDownload, faEdit, faFileExport, faHardHat, faMagnifyingGlass, faTableList, faTrash, faFilter, faSortUp, faSortDown, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { faSort, faX, faFileCirclePlus, faSearch, faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
@@ -57,6 +57,22 @@ const FlameProofInfoAll = () => {
   const [hoveredFileId, setHoveredFileId] = useState("");
   const [openComponentUpdate, setOpenComponentUpdate] = useState(false);
   const [componentAssetUpdate, setComponentAssetUpdate] = useState("");
+  const [showNoAssets, setShowNoAssets] = useState(false);
+  const [isLoadingTable, setIsLoadingTable] = useState(true);
+
+  // --- EXCEL FILTER STATE ---
+  const excelPopupRef = useRef(null);
+  const [excelFilter, setExcelFilter] = useState({
+    open: false,
+    colId: null,
+    anchorRect: null,
+    pos: { top: 0, left: 0, width: 0 }
+  });
+  const [excelSearch, setExcelSearch] = useState("");
+  const [excelSelected, setExcelSelected] = useState(new Set());
+  const [filters, setFilters] = useState({});
+  const DEFAULT_SORT = { colId: null, direction: "asc" };
+  const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
 
   const exportSID = async () => {
     try {
@@ -218,6 +234,7 @@ const FlameProofInfoAll = () => {
 
   // Fetch files from the API
   const fetchFiles = async () => {
+    setIsLoadingTable(true);
     const route = `/api/flameproof/assets/all-sites`;
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
@@ -241,6 +258,8 @@ const FlameProofInfoAll = () => {
       setAssetTypes(uniqueTypes);
     } catch (error) {
       setError(error.message);
+    } finally {
+      setIsLoadingTable(false);
     }
   };
 
@@ -276,23 +295,6 @@ const FlameProofInfoAll = () => {
       .replace(/\b\w/g, char => char.toUpperCase());
   };
 
-  const iconMap = {
-    "All Document": "allDocumentsDMS.svg",
-    "Continuous Miner": "FCMS_CM.png",
-    Guideline: "guidelinesDMSInverted.svg",
-    "DMRE MCOP Guideline": "guidelinesDMSInverted.svg",
-    "Industry Document": "guidelinesDMSInverted.svg",
-    MCOP: faHardHat,
-    Policy: "policiesDMSInverted.svg",
-    Procedure: "proceduresDMSInverted.svg",
-    "Risk Assessment": "riskAssessmentDMSInverted.svg",
-    "Special Instruction": "guidelinesDMSInverted.svg",
-    Standard: "standardsDMSInverted.svg",
-    Training: "guidelinesDMSInverted.svg",
-    Permit: "permitsDMSInverted.svg"
-  }
-
-
   const openModal = (fileId, asset) => {
     setSelectedFileId(fileId);
     setSelectedAsset(asset);
@@ -315,26 +317,192 @@ const FlameProofInfoAll = () => {
     return className;
   };
 
-  const filteredFiles = files.filter((file) => {
-    const matchesSearchQuery = (
-      file.siteName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.assetType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.assetNr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.operationalArea.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.assetOwner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      file.departmentHead.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+  // --- Excel Filter Logic ---
+  const BLANK = "(Blanks)";
+  const getFilterValuesForCell = (row, colId) => {
+    let val;
+    if (colId === "site") val = row.siteName;
+    else if (colId === "assetType") val = row.assetType;
+    else if (colId === "assetNr") val = row.assetNr;
+    else if (colId === "area") val = row.operationalArea;
+    else if (colId === "owner") val = row.assetOwner;
+    else if (colId === "deptHead") val = row.departmentHead;
+    else if (colId === "status") val = row.complianceStatus;
+    else val = row[colId];
 
-    const matchesFilters =
-      (selectedArea.length === 0 || selectedArea.includes(file.operationalArea)) &&
-      (selectedAssetType.length === 0 || selectedAssetType.includes(file.assetType)) &&
-      (selectedSite.length === 0 || selectedSite.includes(file.siteName));
+    const s = val == null ? "" : String(val).trim();
+    return s === "" ? [BLANK] : [s];
+  };
 
-    return matchesSearchQuery && matchesFilters;
-  });
+  const toggleSort = (colId, direction) => {
+    setSortConfig(prev => {
+      if (prev?.colId === colId && prev?.direction === direction) {
+        return DEFAULT_SORT;
+      }
+      return { colId, direction };
+    });
+  };
+
+  const openExcelFilterPopup = (colId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = e.target.closest("th");
+    const rect = th.getBoundingClientRect();
+
+    // Build unique values
+    const values = Array.from(
+      new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
+    ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+    const existing = filters?.[colId]?.selected;
+    const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+    setExcelSelected(initialSelected);
+    setExcelSearch("");
+    setExcelFilter({
+      open: true,
+      colId,
+      anchorRect: rect,
+      pos: {
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: Math.max(220, rect.width),
+      },
+    });
+  };
+
+  const handleInnerScrollWheel = (e) => {
+    const el = e.currentTarget;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const delta = e.deltaY;
+    const goingDown = delta > 0;
+    const atTop = scrollTop <= 0;
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+    if ((goingDown && atBottom) || (!goingDown && atTop)) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (goingDown && atBottom) el.scrollTop = scrollHeight - clientHeight;
+      else if (!goingDown && atTop) el.scrollTop = 0;
+      return;
+    }
+  };
+
+  useEffect(() => {
+    if (!excelFilter.open) return;
+    const el = excelPopupRef.current;
+    if (!el) return;
+    const popupRect = el.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const margin = 8;
+    let newTop = excelFilter.pos.top;
+    let newLeft = excelFilter.pos.left;
+
+    if (popupRect.bottom > viewportH - margin) {
+      const anchor = excelFilter.anchorRect;
+      if (anchor) newTop = Math.max(margin, anchor.top - popupRect.height - 4);
+    }
+    if (popupRect.right > viewportW - margin) {
+      const overflow = popupRect.right - (viewportW - margin);
+      newLeft = Math.max(margin, newLeft - overflow);
+    }
+    if (popupRect.left < margin) newLeft = margin;
+
+    if (newTop !== excelFilter.pos.top || newLeft !== excelFilter.pos.left) {
+      setExcelFilter(prev => ({ ...prev, pos: { ...prev.pos, top: newTop, left: newLeft } }));
+    }
+  }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (excelFilter.open && excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
+        setExcelFilter(prev => ({ ...prev, open: false }));
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [excelFilter.open]);
+
+  // --- End Excel Logic ---
+
+  const filteredFiles = useMemo(() => {
+    let current = [...files];
+
+    // 1. Search Query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      current = current.filter(file => (
+        file.siteName.toLowerCase().includes(q) ||
+        file.assetType.toLowerCase().includes(q) ||
+        file.assetNr.toLowerCase().includes(q) ||
+        file.operationalArea.toLowerCase().includes(q) ||
+        file.assetOwner.toLowerCase().includes(q) ||
+        file.departmentHead.toLowerCase().includes(q)
+      ));
+    }
+
+    // 2. Sidebar Filters
+    if (selectedArea.length > 0) current = current.filter(f => selectedArea.includes(f.operationalArea));
+    if (selectedAssetType.length > 0) current = current.filter(f => selectedAssetType.includes(f.assetType));
+    if (selectedSite.length > 0) current = current.filter(f => selectedSite.includes(f.siteName));
+
+    // 3. Excel Column Filters
+    for (const [colId, filterObj] of Object.entries(filters)) {
+      const selected = filterObj?.selected;
+      if (!selected || !Array.isArray(selected)) continue;
+      current = current.filter(row => {
+        const cellValues = getFilterValuesForCell(row, colId);
+        return cellValues.some(v => selected.includes(v));
+      });
+    }
+
+    // 4. Sort
+    if (sortConfig.colId) {
+      const { colId, direction } = sortConfig;
+      const dir = direction === 'desc' ? -1 : 1;
+      current.sort((a, b) => {
+        const av = getFilterValuesForCell(a, colId)[0];
+        const bv = getFilterValuesForCell(b, colId)[0];
+        return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+      });
+    }
+
+    return current;
+  }, [files, searchQuery, selectedArea, selectedAssetType, selectedSite, filters, sortConfig]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  useEffect(() => {
+    if (!isLoadingTable) {
+      if (filteredFiles.length === 0) {
+        const t = setTimeout(() => setShowNoAssets(true), 800);
+        return () => clearTimeout(t);
+      }
+      setShowNoAssets(false);
+    }
+  }, [isLoadingTable, filteredFiles.length]);
+
+  const renderHeader = (colId, title, className) => {
+    const isFiltered = filters[colId]?.selected?.length > 0;
+    const isSorted = sortConfig.colId === colId;
+
+    return (
+      <th className={`${className} cursor-pointer`} onClick={(e) => openExcelFilterPopup(colId, e)}>
+        <div className="fileinfo-container-filter">
+          <span className="fileinfo-title-filter" style={{ cursor: 'pointer' }}>
+            {title}
+            {(isFiltered || isSorted) && (
+              <span style={{ marginLeft: "10px", fontSize: "12px" }}>
+                {(isFiltered || isSorted) && <FontAwesomeIcon icon={faFilter} style={{ marginRight: isSorted ? "4px" : "0", color: "white" }} />}
+              </span>
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
 
   return (
     <div className="file-info-container">
@@ -348,23 +516,6 @@ const FlameProofInfoAll = () => {
             <p className="logo-text-um">EPA Management</p>
           </div>
 
-          <div className="filter-dm-fi">
-            <p className="filter-text-dm-fi">Filter</p>
-            <div className="button-container-dm-fi">
-              <div className="fi-info-popup-page-select-container">
-                <Select options={assetTypes.map(d => ({ value: d, label: d }))} maxMenuHeight={140} isMulti onChange={(selected) => setSelectedAssetType(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Asset Type"
-                  classNamePrefix="sb" />
-              </div>
-              <div className="fi-info-popup-page-select-container">
-                <Select options={sites.map(d => ({ value: d, label: d }))} maxMenuHeight={140} isMulti onChange={(selected) => setSelectedSite(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Site"
-                  classNamePrefix="sb" />
-              </div>
-              <div className="fi-info-popup-page-select-container">
-                <Select options={areas.map(d => ({ value: d, label: formatStatus(d) }))} maxMenuHeight={140} isMulti onChange={(selected) => setSelectedArea(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Area"
-                  classNamePrefix="sb" />
-              </div>
-            </div>
-          </div>
           {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
             <div className="filter-dm-fi-2">
               <div className="button-container-dm-fi">
@@ -434,29 +585,43 @@ const FlameProofInfoAll = () => {
               className="top-right-button-control-att"
               onClick={exportSID}
             />
-            <FontAwesomeIcon
-              icon={faSort}
-              title="Select Columns to Display"
-              className="top-right-button-control-att-2"
-              onClick={openSortModal}
-            />
           </div>
           <div className="table-container-file-flameproof-all-assets">
             <table>
               <thead>
-                <tr >
+                <tr>
                   <th className="flame-all-num col" style={{ fontSize: "14px" }}>Nr</th>
-                  <th className="flame-all-site col">Site</th>
-                  <th className="flame-all-type col">Asset Type</th>
-                  <th className="flame-all-ass-nr col">Asset Nr</th>
-                  <th className="flame-all-area col">Area</th>
-                  <th className="flame-all-owner col">Asset Owner</th>
-                  <th className={`flame-all-head`}>Department Head</th>
-                  <th className={`flame-all-status col`}>Compliance Status</th>
+                  {renderHeader("site", "Site", "flame-all-site col")}
+                  {renderHeader("assetType", "Asset Type", "flame-all-type col")}
+                  {renderHeader("assetNr", "Asset Nr", "flame-all-ass-nr col")}
+                  {renderHeader("area", "Area", "flame-all-area col")}
+                  {renderHeader("owner", "Asset Owner", "flame-all-owner col")}
+                  {renderHeader("deptHead", "Department Head", "flame-all-head")}
+                  {renderHeader("status", "Compliance Status", "flame-all-status col")}
                   {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<th className="flame-all-act col" style={{ fontSize: "14px" }}>Action</th>)}
                 </tr>
               </thead>
               <tbody>
+                {isLoadingTable && (
+                  <tr>
+                    <td colSpan={
+                      9 + (canIn(access, "FCMS", ["systemAdmin", "contributor"]) ? 1 : 0)
+                    } style={{ textAlign: "center", padding: 20 }}>
+                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading assets.
+                    </td>
+                  </tr>
+                )}
+
+                {!isLoadingTable && showNoAssets && (
+                  <tr>
+                    <td colSpan={
+                      9 + (canIn(access, "FCMS", ["systemAdmin", "contributor"]) ? 1 : 0)
+                    } style={{ textAlign: "center", padding: 20 }}>
+                      No Assets Registered.
+                    </td>
+                  </tr>
+                )}
+
                 {filteredFiles.map((asset, index) => (
                   <tr key={index} style={{ fontSize: "14px", textAlign: "center", cursor: "pointer" }} className={`file-info-row-height`}
                     onClick={() => setHoveredFileId(hoveredFileId === asset._id ? null : asset._id)}>
@@ -520,8 +685,42 @@ const FlameProofInfoAll = () => {
         </div>
       </div>
 
+      {/* --- EXCEL FILTER POPUP (From IBRATable) --- */}
+      {excelFilter.open && (
+        <div className="excel-filter-popup" ref={excelPopupRef} style={{ position: "fixed", top: excelFilter.pos.top, left: excelFilter.pos.left, width: excelFilter.pos.width, zIndex: 9999 }} onWheel={handleInnerScrollWheel}>
+          <div className="excel-filter-sortbar">
+            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "asc")}>Sort A to Z</button>
+            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "desc")}>Sort Z to A</button>
+          </div>
+          <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+          {(() => {
+            const colId = excelFilter.colId;
+            const allValues = Array.from(new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))).sort((a, b) => String(a).localeCompare(String(b)));
+            const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+            const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+            const toggleValue = (v) => { setExcelSelected(prev => { const next = new Set(prev); if (next.has(v)) next.delete(v); else next.add(v); return next; }); };
+            const toggleAllVisible = (checked) => { setExcelSelected(prev => { const next = new Set(prev); visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); }); return next; }); };
+            const onOk = () => {
+              const selectedArr = Array.from(excelSelected);
+              const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+              setFilters(prev => { const next = { ...prev }; if (isAllSelected) delete next[colId]; else next[colId] = { selected: selectedArr }; return next; });
+              setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            };
+            const onCancel = () => { setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } }); };
+            return (
+              <>
+                <div className="excel-filter-list">
+                  <label className="excel-filter-item"><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={allVisibleSelected} onChange={(e) => toggleAllVisible(e.target.checked)} /></span><span className="excel-filter-text">(Select All)</span></label>
+                  {visibleValues.map(v => (<label className="excel-filter-item" key={String(v)}><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={excelSelected.has(v)} onChange={() => toggleValue(v)} /></span><span className="excel-filter-text">{v}</span></label>))}
+                </div>
+                <div className="excel-filter-actions"><button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button><button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button></div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {isModalOpen && (<DeleteAsset closeModal={closeModal} deleteAsset={deleteAsset} asset={selectedAsset} />)}
-      {isSortModalOpen && (<SortPopupAsset closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} site={true} />)}
       {upload && (<UploadComponentPopup onClose={closeUpload} refresh={fetchFiles} />)}
       {register && (<RegisterAssetPopup onClose={closeRegister} refresh={fetchFiles} exit={exitRegister} />)}
       {modifyAsset && (<ModifyAssetPopup onClose={closeModify} asset={modifyingAsset} refresh={fetchFiles} />)}
