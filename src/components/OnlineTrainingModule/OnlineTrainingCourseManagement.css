@@ -1,0 +1,533 @@
+/* ===== Course Management Table Header Skeleton ===== */
+
+.course-manage-nr {
+    width: 5%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.course-manage-name {
+    width: 25%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.course-manage-status {
+    width: 20%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.course-manage-score {
+    width: 15%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.course-manage-start {
+    width: 13%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.course-manage-end {
+    width: 14%;
+    text-align: center;
+    font-weight: 600;
+}
+
+.course-manage-act {
+    width: 8%;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* ---- Floating Help Button ---- */
+.help-fab {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    z-index: 9999;
+
+    background: #002060;
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.help-fab:hover {
+    filter: brightness(1.05);
+}
+
+.help-fab:active {
+    transform: translateY(1px);
+}
+
+/* ---- Backdrop (optional, but makes it feel like a real panel) ---- */
+.help-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9997;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+/* ---- Help Panel ---- */
+.help-panel {
+    position: fixed;
+    right: 22px;
+    bottom: 92px;
+    /* sits above the FAB */
+    z-index: 9998;
+
+    width: 20vw;
+    height: 70vh;
+
+    min-width: 300px;
+    /* safety so it stays usable */
+    max-width: 420px;
+    /* optional cap for very large screens */
+
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+
+    display: flex;
+    flex-direction: column;
+
+    /* closed state */
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px) scale(0.98);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.help-panel.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+/* ---- Header ---- */
+.help-header {
+    height: 52px;
+    padding: 0 10px 0 20px;
+    background: #002060;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.help-title {
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.help-close {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.help-close:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+/* ---- Body ---- */
+.help-body {
+    flex: 1;
+    padding: 12px 12px 10px;
+    background: #ffffff;
+
+    /* empty state spacing */
+    overflow: auto;
+}
+
+/* ---- Input Bar ---- */
+.help-inputbar {
+    height: 54px;
+    padding: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fafafa;
+
+    display: grid;
+    grid-template-columns: 1fr 44px;
+    gap: 10px;
+    align-items: center;
+}
+
+.help-input {
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    padding: 0 12px;
+    outline: none;
+    background: #fff;
+    font-size: 14px;
+}
+
+.help-input:focus {
+    border-color: #002060;
+    box-shadow: 0 0 0 3px rgba(11, 47, 107, 0.12);
+}
+
+.help-send {
+    width: 44px;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+
+    background: #002060;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.help-send:hover {
+    filter: brightness(1.05);
+}
+
+.help-send:active {
+    transform: translateY(1px);
+}
+
+/* ---- Mobile responsiveness ---- */
+@media (max-width: 640px) {
+    .help-panel {
+        width: calc(100vw - 24px);
+        right: 12px;
+        left: 12px;
+        height: 70vh;
+        max-width: none;
+        min-width: 0;
+    }
+
+    .help-fab {
+        right: 12px;
+        bottom: 12px;
+    }
+
+    .help-panel {
+        bottom: 80px;
+    }
+}
+
+/* =========================
+   HELP PILL BUTTON
+   ========================= */
+.helpPill__button {
+    position: fixed;
+    right: 32px;
+    bottom: 10px;
+    z-index: 9999;
+
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+
+    border: none;
+    cursor: pointer;
+
+    background: #0b2f6b;
+    color: #fff;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.helpPill__button:hover {
+    filter: brightness(1.05);
+}
+
+.helpPill__button:active {
+    transform: translateY(1px);
+}
+
+.helpPill__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.helpPill__text {
+    line-height: 1;
+}
+
+/* =========================
+   HELP PANEL
+   ========================= */
+.helpPanel__backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9997;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.helpPanel__panel {
+    position: fixed;
+    right: 32px;
+    bottom: 55px;
+    /* sits above the pill */
+    z-index: 9998;
+
+    width: 20vw;
+    height: 70vh;
+
+    min-width: 300px;
+    max-width: 420px;
+
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+
+    display: flex;
+    flex-direction: column;
+
+    /* closed state */
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(10px) scale(0.985);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.helpPanel__panel.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+/* Header */
+.helpPanel__header {
+    height: 52px;
+    padding: 0 10px 0 14px;
+    background: #0b2f6b;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.helpPanel__title {
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+
+.helpPanel__close {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.helpPanel__close:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+/* Body (empty for now) */
+.helpPanel__body {
+    flex: 1;
+    padding: 12px;
+    overflow: auto;
+    background: #ffffff;
+}
+
+/* Input bar */
+.helpPanel__inputbar {
+    height: 54px;
+    padding: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: #fafafa;
+
+    display: grid;
+    grid-template-columns: 1fr 44px;
+    gap: 10px;
+    align-items: center;
+}
+
+.helpPanel__input {
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    padding: 0 12px;
+    outline: none;
+    background: #fff;
+    font-size: 14px;
+}
+
+.helpPanel__input:focus {
+    border-color: #0b2f6b;
+    box-shadow: 0 0 0 3px rgba(11, 47, 107, 0.12);
+}
+
+.helpPanel__send {
+    width: 44px;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+
+    background: #0b2f6b;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.helpPanel__send:hover {
+    filter: brightness(1.05);
+}
+
+.helpPanel__send:active {
+    transform: translateY(1px);
+}
+
+.helpPanel__claim {
+    width: 44px;
+    height: 38px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+
+    background: #7EAC89;
+    color: #ffffff;
+    font-weight: bolder;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.helpPanel__claim:hover {
+    filter: brightness(1.05);
+}
+
+.helpPanel__claim:active {
+    transform: translateY(1px);
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    .helpPill__button {
+        right: 12px;
+        bottom: 12px;
+    }
+
+    .helpPanel__panel {
+        width: calc(100vw - 24px);
+        right: 12px;
+        left: 12px;
+        bottom: 70px;
+        max-width: none;
+        min-width: 0;
+    }
+}
+
+/* =========================
+   HELP PANEL - CHAT MESSAGES
+   ========================= */
+
+.helpPanel__messages {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 100%;
+}
+
+/* Each row can align its bubble */
+.helpPanel__msgRow {
+    display: flex;
+    justify-content: flex-start;
+}
+
+/* All textarea-sent messages go on the right */
+.helpPanel__msgRow.is-user {
+    justify-content: flex-end;
+}
+
+/* Bubble styling */
+/* DEFAULT = NOT THE VIEWER (LEFT, GREY) */
+.helpPanel__bubble {
+    max-width: 85%;
+    background-color: #e0e0e0;
+    /* grey */
+    color: #000000;
+    /* black text */
+    padding: 10px 12px;
+    border-radius: 16px;
+    line-height: 1.25;
+    font-size: 14px;
+
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* VIEWER MESSAGES (RIGHT) */
+.helpPanel__msgRow.is-user {
+    justify-content: flex-end;
+}
+
+.helpPanel__msgRow.is-user .helpPanel__bubble {
+    background-color: #002060;
+    /* blue */
+    color: #ffffff;
+    /* white */
+    border-radius: 12px 12px 4px 12px;
+}
+
+/* Optional: make the scroll feel nicer (works in modern browsers) */
+.helpPanel__body {
+    overflow: auto;
+    /* already present in your file; keep it */
+}
+
+.no-copy-page,
+.no-copy-page * {
+    user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Optional: stop “callout” menu on iOS Safari */
+.no-copy-page,
+.no-copy-page * {
+    -webkit-touch-callout: none;
+}

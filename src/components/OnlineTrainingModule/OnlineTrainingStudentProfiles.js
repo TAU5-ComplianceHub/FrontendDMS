@@ -139,11 +139,11 @@ const OnlineTrainingStudentProfiles = () => {
 
     // --- API Calls ---
     const fetchFiles = async () => {
-        const route = `/api/onlineTrainingStudentManagement/getStudents`;
+        const route = `/api/onlineTrainingStudentManagement/getStudentsWithCourseStats`;
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
                 headers: {
-                    // 'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`
                 }
             });
             if (!response.ok) {
@@ -205,9 +205,26 @@ const OnlineTrainingStudentProfiles = () => {
         { id: "surname", title: "Surname", thClass: "visitor-ind-surname-filter", td: (f) => f.surname },
         { id: "company", title: "Company", thClass: "visitor-ind-company-filter", td: (f) => f.company ?? "-" },
         { id: "createdBy", title: "Profile Created By", thClass: "visitor-ind-profileBy-filter", td: (f) => f.profileCreatedBy?.username ?? "-" },
-        { id: "courses", title: "Enrolled Courses", thClass: "visitor-ind-company-filter", td: (f) => f.courses ?? "-" },
-        { id: "completed", title: "Completed Courses", thClass: "visitor-ind-company-filter", td: (f) => f.completed ?? "-" },
-        { id: "lastDate", title: "Last Completion Date", thClass: "visitor-ind-vers-filter", td: (f) => f.lastCompletion ?? "-" },
+        {
+            id: "courses", title: "Enrolled Courses", thClass: "visitor-ind-company-filter",
+            td: (f) => (
+                <ul style={{ margin: 0, paddingLeft: "18px", textAlign: "left" }}>
+                    {(f.coursesArr || []).map((t) => <li key={t}>{t}</li>)}
+                </ul>
+            )
+        },
+        {
+            id: "completed", title: "Completed Courses", thClass: "visitor-ind-company-filter",
+            td: (f) => (
+                <ul style={{ margin: 0, paddingLeft: "18px", textAlign: "left" }}>
+                    {(f.completedArr || []).map((t) => <li key={t}>{t}</li>)}
+                </ul>
+            )
+        },
+        {
+            id: "lastDate", title: "Last Completion Date", thClass: "visitor-ind-vers-filter",
+            td: (f) => formatDate(f.lastCompletionDate)
+        },
         { id: "email", title: "Email", thClass: "visitor-ind-email-filter", td: (f) => f.email ?? "-" },
         { id: "phone", title: "Contact Number", thClass: "visitor-ind-company-filter", td: (f) => extractNumbers(f.contactNr) ?? "-" },
         { id: "idnum", title: "ID/Passport", thClass: "visitor-ind-company-filter", td: (f) => f.idNumber ?? "-" },
@@ -263,9 +280,18 @@ const OnlineTrainingStudentProfiles = () => {
             case "company": val = file.company; break;
             case "createdBy": val = file.profileCreatedBy?.username; break;
             // Original OT Mappings
-            case "courses": val = file.email; break;
-            case "completed": val = extractNumbers(file.contactNr); break;
-            case "lastDate": val = file.indicationVersion; break;
+            case "courses":
+                return (file.coursesArr && Array.isArray(file.coursesArr))
+                    ? file.coursesArr.map(v => String(v).trim())
+                    : ["-"];
+
+            case "completed":
+                return (file.completedArr && Array.isArray(file.completedArr))
+                    ? file.completedArr.map(v => String(v).trim())
+                    : ["-"];
+
+            case "lastDate":
+                return [String(formatDate(file.lastCompletionDate) ?? "-").trim()];
             // New Visitor Mappings
             case "email": val = file.email; break;
             case "phone": val = extractNumbers(file.contactNr); break;

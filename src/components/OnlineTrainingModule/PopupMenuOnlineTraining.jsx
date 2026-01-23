@@ -15,13 +15,16 @@ const PopupMenuOnlineTraining = ({ isOpen, setHoveredFileId, undoRetakeChoice, o
                         <li onClick={() => openPreview(file._id)}>Preview Course</li>
                     </ul>
                     <ul>
-                        <li onClick={() => navigate(`/onlineReviewCourse/${file._id}`)}>Review</li>
+                        <li onClick={() => navigate(`/FrontendDMS/onlineReviewCourse/${file._id}`)}>Review</li>
                     </ul>
                     {file.undoable && (<ul>
                         <li onClick={() => undoRetakeChoice(file.batchId)}>Undo Require Retake</li>
                     </ul>)}
                     <ul>
-                        <li onClick={() => navigate(`/onlineTrainingHistory/${file._id}`)}>Version History</li>
+                        <li onClick={() => navigate(`/FrontendDMS/onlineTrainingHistory/${file._id}`)}>Version History</li>
+                    </ul>
+                    <ul>
+                        <li onClick={() => navigate(`/FrontendDMS/onlineTrainingCourseManagement/${file._id}`)}>Manage Course</li>
                     </ul>
                 </div>
             )}

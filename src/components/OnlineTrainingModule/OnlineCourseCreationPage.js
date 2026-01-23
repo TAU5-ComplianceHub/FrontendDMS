@@ -830,7 +830,7 @@ const OnlineCourseCreationPage = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/publish-induction`, {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/publish-course`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

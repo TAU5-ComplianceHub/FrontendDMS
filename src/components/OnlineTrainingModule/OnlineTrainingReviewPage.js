@@ -190,7 +190,7 @@ const OnlineTrainingReviewPage = () => {
       const cached = objectUrlCacheRef.current.get(fileId);
       if (cached) return { url: cached, mime: fallbackType || "" };
 
-      const url = `${apiBase}/api/onlineTrainingCourses/mediaLoad/${encodeURIComponent(fileId)}`;
+      const url = `${apiBase}/api/onlineTrainingCourses/loadMedia/${encodeURIComponent(fileId)}`;
       const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error(`media ${fileId} ${res.status}`);
       const blob = await res.blob();

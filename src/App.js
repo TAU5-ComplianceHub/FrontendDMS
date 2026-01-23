@@ -138,6 +138,12 @@ import StudentPasswordSetup from './components/OnlineTrainingModule/UserView/Stu
 import StudentLogin from './components/OnlineTrainingModule/UserView/StudentLogin';
 import ResetStudentPassword from './components/OnlineTrainingModule/UserView/ResetStudentPassword';
 import StudentProfileHomePage from './components/OnlineTrainingModule/UserView/StudentProfileHomePage';
+import StudentCourseViewPage from './components/OnlineTrainingModule/UserView/StudentCourseViewPage';
+import OnlineTrainingCourseManagement from './components/OnlineTrainingModule/OnlineTrainingCourseManagement';
+import OTChatCourses from './components/OnlineTrainingModule/ChatBox/OTChatCourses';
+import OTUnclaimedChats from './components/OnlineTrainingModule/ChatBox/OTUnclaimedChats';
+import OTClaimedChats from './components/OnlineTrainingModule/ChatBox/OTClaimedChats';
+import PreviewCertificateStudentProfile from './components/OnlineTrainingModule/UserView/PreviewCertificateStudentProfile';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -342,6 +348,12 @@ function App() {
         <Route path='FrontendDMS/studentPasswordSetup/:id' element={<StudentPasswordSetup />} />
         <Route path='FrontendDMS/resetStudentPassword' element={<ResetStudentPassword />} />
         <Route path='FrontendDMS/studentHomePage' element={<StudentProfileHomePage />} />
+        <Route path='FrontendDMS/studentCourseView/:id' element={<StudentCourseViewPage />} />
+        <Route path='FrontendDMS/onlineTrainingCourseManagement/:id' element={<OnlineTrainingCourseManagement />} />
+        <Route path='FrontendDMS/chatBoxCourses' element={<OTChatCourses />} />
+        <Route path='FrontendDMS/unclaimedChats/:courseID' element={<OTUnclaimedChats />} />
+        <Route path='FrontendDMS/claimedChats' element={<OTClaimedChats />} />
+        <Route path="FrontendDMS/studentPreview" element={<PreviewCertificateStudentProfile />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

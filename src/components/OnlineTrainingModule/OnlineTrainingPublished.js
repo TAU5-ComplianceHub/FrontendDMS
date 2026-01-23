@@ -9,6 +9,7 @@ import { toast, ToastContainer } from "react-toastify";
 import TopBar from "../Notifications/TopBar";
 import DeletePopup from "../FileInfo/DeletePopup";
 import PopupMenuOnlineTraining from "./PopupMenuOnlineTraining";
+import PublishedOnlineTrainingPreviewPage from "./PublishedOnlineTrainingPreviewPage";
 
 const OnlineTrainingPublished = () => {
     const [files, setFiles] = useState([]); // State to hold the file data
@@ -986,7 +987,7 @@ const OnlineTrainingPublished = () => {
             )}
 
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
-            {/* isPreview && (<PublishedInductionPreviewPage draftID={previewID} closeModal={closePreview} />) */}
+            {isPreview && (<PublishedOnlineTrainingPreviewPage draftID={previewID} closeModal={closePreview} />)}
             <ToastContainer />
         </div>
     );

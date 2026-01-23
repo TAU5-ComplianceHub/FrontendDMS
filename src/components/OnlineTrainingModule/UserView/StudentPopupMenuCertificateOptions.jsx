@@ -1,0 +1,41 @@
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const StudentPopupMenuCertificateOptions = ({ isOpen, file, setHoveredFileId, previewCertificate, downloadCertficate }) => {
+    const navigate = useNavigate();
+
+    return (
+        <div className="popup-menu-container-certificate-files">
+            {isOpen && (
+                <div className="popup-content-certificate-files"
+                    onMouseEnter={() => setHoveredFileId(file._id)}
+                    onMouseLeave={() => setHoveredFileId(null)}
+                >
+                    {file.passed && (
+                        <>
+                            <ul>
+                                <li onClick={() => navigate(`/FrontendDMS/studentCourseView/${file?.onlineTrainingCourse?._id}`)}>View Course</li>
+                            </ul>
+                            <ul>
+                                <li onClick={() => previewCertificate(file)}>View Certificate</li>
+                            </ul>
+                            <ul>
+                                <li onClick={() => downloadCertficate(file)}>Download Certificate</li>
+                            </ul>
+                        </>
+                    )}
+
+                    {!file.passed && (
+                        <>
+                            <ul>
+                                <li onClick={() => navigate(`/FrontendDMS/studentCourseView/${file?.onlineTrainingCourse?._id}`)}>Complete Course</li>
+                            </ul>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default StudentPopupMenuCertificateOptions;

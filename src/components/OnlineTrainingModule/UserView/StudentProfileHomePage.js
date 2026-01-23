@@ -9,6 +9,7 @@ import { saveAs } from "file-saver";
 import PopupMenuCertificateOptions from "../../VisitorsInduction/InductionCreation/PopupMenuCertificateOptions";
 import ProgressNote from "../../TrainingManagement/UserView/ProgressNote";
 import ValidityNote from "../../TrainingManagement/UserView/ValidityNote";
+import StudentPopupMenuCertificateOptions from "./StudentPopupMenuCertificateOptions";
 
 const StudentProfileHomePage = () => {
     const [searchTerm, setSearchTerm] = useState("");
@@ -62,25 +63,31 @@ const StudentProfileHomePage = () => {
     };
 
     const handlePreview = (course) => {
-        navigate("/inductionPreview", {
+        navigate("/FrontendDMS/studentPreview", {
             state: {
-                traineeData: course.trainee,
-                inductionName: course.formData.courseTitle
+                studentName: user?.name + " " + user?.surname,
+                idNumber: user?.idNumber,
+                dateCompleted: course?.completionDate,
+                dateExpiry: course?.expiryDate,
+                inductionName: course.onlineTrainingCourse.formData.courseTitle
             }
         });
     };
 
     const handleGenerateCertificateDocument = async (course) => {
-        const inductionTitle = course?.formData?.courseTitle;
+        const inductionTitle = course?.onlineTrainingCourse?.formData?.courseTitle;
         const dataToStore = {
-            traineeData: course.trainee,
+            studentName: user?.name + " " + user?.surname,
+            idNumber: user?.idNumber,
+            dateCompleted: course?.completionDate,
+            dateExpiry: course?.expiryDate,
             inductionName: inductionTitle
         };
 
-        const documentName = course?.trainee?.user?.name + " " + course?.trainee?.user?.surname + " " + (inductionTitle || "Induction") + " Certificate";
+        const documentName = user?.name + " " + user?.surname + " " + (inductionTitle || "Induction") + " Certificate";
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskGenerate/generate-pdf`, {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/generate-certificate`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -99,10 +106,9 @@ const StudentProfileHomePage = () => {
     };
 
     const fetchCourses = async () => {
-        return;
-        const route = `/api/visitorDrafts/getCourses/`;
+        const route = `/api/onlineTrainingStudentManagement/studentsCourses`;
         try {
-            const token = sessionStorage.getItem("visitorToken");
+            const token = sessionStorage.getItem("studentToken");
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -112,8 +118,7 @@ const StudentProfileHomePage = () => {
                 throw new Error('Failed to fetch files');
             }
             const data = await response.json();
-            setCourses(data);
-            console.log(data);
+            setCourses(data.courses);
         } catch (error) {
             setError(error.message);
         }
@@ -178,7 +183,6 @@ const StudentProfileHomePage = () => {
     const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 
     const renderProgress = (status) => {
-        return;
         const isNum = typeof status === "number";
         const text = String(status ?? "").toLowerCase();
 
@@ -197,8 +201,6 @@ const StudentProfileHomePage = () => {
                 if (m) percent = clamp(parseInt(m[1], 10), 0, 100);
             }
         }
-
-        console.log("renderProgress", status, percent);
 
         // defaults
         let label = `In Progress ${percent}%`;
@@ -351,16 +353,16 @@ const StudentProfileHomePage = () => {
                                             return true; // View / All
                                         })
                                         .map((course, index) => (
-                                            <tr key={`${course.formData.courseTitle}-${index}`} className="course-home-info-tr"
+                                            <tr key={`${course?.onlineTrainingCourse?.formData?.courseTitle ?? "Untitled Course"}-${index}`} className="course-home-info-tr"
                                                 onClick={
                                                     handleCertificateClick(course)
                                                 }>
                                                 <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }}>{index + 1}</td>
                                                 <td style={{ fontSize: "14px", textAlign: "left", fontFamily: "Arial", position: "relative" }}>
-                                                    {course.formData.courseTitle}
+                                                    {course?.onlineTrainingCourse?.formData?.courseTitle ?? "Untitled Course"}
 
                                                     {(hoveredFileId === course._id) && (
-                                                        <PopupMenuCertificateOptions
+                                                        <StudentPopupMenuCertificateOptions
                                                             file={course}
                                                             downloadCertficate={handleGenerateCertificateDocument}
                                                             previewCertificate={handlePreview}
@@ -370,12 +372,12 @@ const StudentProfileHomePage = () => {
                                                         />
                                                     )}
                                                 </td>
-                                                <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }}>{course.version}</td>
+                                                <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }}>{course?.onlineTrainingCourse?.version}</td>
                                                 <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }}>
-                                                    {renderProgress(course.trainee.progress)}
+                                                    {renderProgress(course.progress)}
                                                 </td>
-                                                <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }} className={`${getComplianceColor(course.trainee)}`}>{formatStatus(course.trainee)}</td>
-                                                <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }}>{formatDate(course.trainee.expiryDate) || "N/A"}</td>
+                                                <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }} className={`${getComplianceColor(course)}`}>{formatStatus(course)}</td>
+                                                <td style={{ fontSize: "14px", textAlign: "center", fontFamily: "Arial" }}>{formatDate(course?.expiryDate) || "N/A"}</td>
                                             </tr>
                                         ))}
                                 </tbody>

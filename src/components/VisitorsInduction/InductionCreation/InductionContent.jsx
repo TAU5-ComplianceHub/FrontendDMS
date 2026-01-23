@@ -797,7 +797,7 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                                                     placeholder="Insert content."
                                                                                     rows={8}
                                                                                     value={slide.content}
-                                                                                    readOnly={!readOnly}
+                                                                                    readOnly={readOnly}
                                                                                     onChange={(e) =>
                                                                                         changeSlideField(
                                                                                             mIdx,

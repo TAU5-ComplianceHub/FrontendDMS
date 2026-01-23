@@ -110,7 +110,7 @@ const OnlineTrainingHomePage = () => {
                             <h3 className="document-title-fi-home">Student Profiles</h3>
                         </>
                     </div>)}
-                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`}>
+                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/chatBoxCourses")}>
                         <>
                             <div className="icon-dept">
                                 <FontAwesomeIcon icon={faCircle} style={{ color: "#002060" }} className={"icon-dept"} />

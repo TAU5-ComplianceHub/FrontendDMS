@@ -28,7 +28,7 @@ const VersionHistoryOnlineTraining = () => {
 
     // Fetch files from the API
     const fetchActivity = async () => {
-        const route = `/api/visitorDrafts/getHistory/${id}`;
+        const route = `/api/onlineTrainingCourses/getHistory/${id}`;
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
                 headers: {
