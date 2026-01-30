@@ -9,7 +9,7 @@ import "./VersionHistoryDC.css";
 
 const VersionHistoryProcedure = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [loading, setLoading] = useState(false);
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);

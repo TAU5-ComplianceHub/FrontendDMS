@@ -56,7 +56,7 @@ const TypeSelectorPopup = ({
                                 onClick={() => onSelect?.(id)}
                                 aria-label={label || id}
                             >
-                                <img className="type-selector-img" src={imgSrc} alt={alt || label || id} />
+                                <img className="type-selector-img" src={imgSrc} alt={alt || label || id} style={{ objectFit: "contain" }} />
                                 {label ? <span className="type-selector-label">{label}</span> : null}
                             </button>
                         ))}

@@ -21,7 +21,7 @@ const FlameProofHomeAllSites = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [upload, setUpload] = useState(false);
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [popup, setPopup] = useState(null);
     const [uploadAssetNr, setUploadAssetNr] = useState("");
     const [register, setRegister] = useState(false);

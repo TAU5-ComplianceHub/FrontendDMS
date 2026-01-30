@@ -23,7 +23,7 @@ const OnlineTrainingPublished = () => {
     const [userID, setUserID] = useState("");
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [isPreview, setIsPreview] = useState(false);
     const [previewID, setPreviewID] = useState(false);
 

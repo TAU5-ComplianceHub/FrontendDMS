@@ -31,6 +31,9 @@ import DraftPopup from "../Popups/DraftPopup";
 import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
+import RelevantControlsTable from "../RiskRelated/RelevantControlsTable";
+import ControlPopupNote from "../Popups/ControlPopupNote";
+import UnusedControlsPopup from "../RiskRelated/UnusedControlsPopup";
 
 const RiskManagementPageIBRA = () => {
     const navigate = useNavigate();
@@ -52,7 +55,7 @@ const RiskManagementPageIBRA = () => {
     const [errors, setErrors] = useState([]);
     const loadedIDRef = useRef('');
     const [offlineDraft, setOfflineDraft] = useState(false);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [helpRA, setHelpRA] = useState(false);
     const [helpScope, setHelpScope] = useState(false);
     const [loadingAim, setLoadingAim] = useState(false);
@@ -63,11 +66,13 @@ const RiskManagementPageIBRA = () => {
     const [isSaveMenuOpen, setIsSaveMenuOpen] = useState(false);
     const [controls, setControls] = useState([]);
     const [generatePopup, setGeneratePopup] = useState(false);
+    const [unusedPopup, setUnusedPopup] = useState(false);
     const [draftNote, setDraftNote] = useState(null);
     const [showWorkflow, setShowWorkflow] = useState(null);
     const [readOnly, setReadOnly] = useState(false);
     const [lockUser, setLockUser] = useState(null);
     const scrollableRef = useRef(null);
+    const [allSystemControls, setAllSystemControls] = useState([]);
 
     const openWorkflow = () => {
         setShowWorkflow(true);
@@ -341,6 +346,10 @@ const RiskManagementPageIBRA = () => {
 
         try {
 
+            if (hasUnusedControls()) {
+                setUnusedPopup(true);
+            }
+
             if (!readOnly) {
                 toast.info("Saving draft…", { autoClose: false });
                 await saveDraft();
@@ -366,6 +375,10 @@ const RiskManagementPageIBRA = () => {
 
     const closeGenerate = () => {
         setGeneratePopup(false);
+    }
+
+    const closeUnused = () => {
+        setUnusedPopup(false);
     }
 
     const handlePubClick = () => {
@@ -535,27 +548,18 @@ const RiskManagementPageIBRA = () => {
     function normalizeIbraFormData(formData = {}) {
         if (!Array.isArray(formData.ibra)) return formData;
 
+        // 1. Existing Normalization Logic (Keep this)
         const normalized = {
             ...formData,
             ibra: formData.ibra.map(row => {
+                // ... existing row mapping logic ...
                 const possible = Array.isArray(row.possible) ? row.possible : [];
-
                 return {
                     ...row,
                     mainFlag: row.mainFlag ?? false,
-                    subFlag: row.subFlag ?? false,
-                    ownerFlag: row.ownerFlag ?? false,
-                    oddsFlag: row.oddsFlag ?? false,
-                    riskRankFlag: row.riskRankFlag ?? false,
-                    hazardFlag: row.hazardFlag ?? false,
-                    controlFlag: row.controlFlag ?? false,
-                    ueFlag: row.ueFlag ?? false,
-                    additionalFlag: row.additionalFlag ?? false,
-                    maxConsequenceFlag: row.maxConsequenceFlag ?? false,
-                    sourceFlag: row.sourceFlag ?? false,
-                    materialFlag: row.materialFlag ?? false,
-                    priorityFlag: row.priorityFlag ?? false,
+                    // ... (keep all your existing flags)
                     possible: possible.map(block => {
+                        // ... (keep existing possible logic)
                         const possibleId = block?.id ?? uuidv4();
                         const count = block?.actions?.length;
 
@@ -598,6 +602,50 @@ const RiskManagementPageIBRA = () => {
                 responsible: block.responsible !== undefined ? block.responsible : '',
                 dueDate: block.dueDate !== undefined ? block.dueDate : ''
             }));
+        }
+
+        // ============================================================
+        // 2. NEW: SAFETY MIGRATION FOR OLD DRAFTS
+        // ============================================================
+
+        // Check if relevantControls exists. If not, generate it from the CEA/IBRA data.
+        if (!normalized.relevantControls || normalized.relevantControls.length === 0) {
+
+            // Step A: Collect unique control names from IBRA
+            const ibraControls = new Set();
+            normalized.ibra.forEach(row => {
+                if (Array.isArray(row.controls)) {
+                    row.controls.forEach(c => {
+                        const name = typeof c === 'string' ? c : c.control;
+                        if (name && name.trim()) ibraControls.add(name.trim());
+                    });
+                }
+            });
+
+            // Step B: Collect unique control names from CEA (often more accurate/detailed)
+            const ceaControls = new Set();
+            if (Array.isArray(normalized.cea)) {
+                normalized.cea.forEach(row => {
+                    if (row.control && row.control.trim()) ceaControls.add(row.control.trim());
+                });
+            }
+
+            // Step C: Combine them
+            const allControls = Array.from(new Set([...ibraControls, ...ceaControls]));
+
+            // Step D: Create the relevantControls array
+            normalized.relevantControls = allControls.map(name => {
+                // Try to find description from existing CEA row
+                const ceaRow = normalized.cea?.find(c => c.control === name);
+
+                return {
+                    id: uuidv4(),
+                    control: name,
+                    description: ceaRow ? ceaRow.description : ""
+                };
+            });
+
+            console.log(`[Migration] Auto-generated ${normalized.relevantControls.length} relevant controls for old draft.`);
         }
 
         return normalized;
@@ -768,7 +816,21 @@ const RiskManagementPageIBRA = () => {
         changeTable: [
             { changeVersion: "1", change: "New Document.", changeDate: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) }
         ],
+        relevantControls: [],
     });
+
+    useEffect(() => {
+        const fetchControls = async () => {
+            try {
+                const res = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/getValues`);
+                const data = await res.json();
+                setAllSystemControls(data.controls || []);
+            } catch (err) {
+                console.error("Error fetching controls", err);
+            }
+        };
+        fetchControls();
+    }, []);
 
     const fetchSites = async () => {
         try {
@@ -1361,14 +1423,6 @@ const RiskManagementPageIBRA = () => {
     };
 
     const removeCEARow = (idToRemove) => {
-        // Prevent deleting the very last CEA row
-        if (formData.cea.length === 1) {
-            toast.error("You must keep at least one row.", {
-                position: "top-right",
-                autoClose: 800,
-            });
-            return;
-        }
 
         // Grab the control text we're about to delete
         const removedRow = formData.cea.find(row => row.id === idToRemove);
@@ -1425,15 +1479,35 @@ const RiskManagementPageIBRA = () => {
         });
     };
 
+    const handleGenerateIncomplete = () => {
+        setGeneratePopup(false);
+
+        if (hasUnusedControls()) {
+            setUnusedPopup(true);
+            return;
+        }
+
+        handleGenerateIBRADocument();
+    }
+
+    const handleGenerateUnused = () => {
+        setUnusedPopup(false);
+
+        handleGenerateIBRADocument();
+    }
+
+    const cancelGenerateUnused = () => {
+        setUnusedPopup(false);
+    }
+
     // Send data to backend to generate a Word document
     const handleGenerateIBRADocument = async () => {
+        saveDraft();
+
         const dataToStore = {
             formData,
         };
 
-        if (generatePopup) {
-            setGeneratePopup(false);
-        }
         const documentName = (formData.title) + ' ' + formData.documentType;
         setLoading(true);
 
@@ -1620,101 +1694,8 @@ const RiskManagementPageIBRA = () => {
             : "";
     };
 
-
-    useEffect(() => {
-        // 1. Build a de-duplicated list of controls in the order they first appeared
-        const distinctControls = Array.from(
-            new Set(
-                formData.ibra
-                    .flatMap(item => item.controls || [])
-                    .map(c =>
-                        typeof c === "string"
-                            ? c.trim()
-                            : c && typeof c === "object" && "control" in c
-                                ? String(c.control).trim()
-                                : ""
-                    )
-                    .filter(name => name.length > 0)
-            )
-        );
-
-        // 2. If the list really hasn’t changed, do nothing
-        const prev = prevControlsRef.current;
-        if (
-            distinctControls.length === prev.length &&
-            distinctControls.every((c, i) => c === prev[i])
-        ) {
-            return;
-        }
-        prevControlsRef.current = distinctControls;
-
-        // 3. If no controls at all, clear the CEA table
-        if (distinctControls.length === 0) {
-            updateCeaRows([]);
-            return;
-        }
-
-        // 4. Fetch your metadata for all controls
-        const fetchCEAData = async () => {
-            try {
-                const res = await fetch(
-                    `${process.env.REACT_APP_URL}/api/riskInfo/getControls`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ controls: distinctControls }),
-                    }
-                );
-                const { controls: returnedData } = await res.json();
-
-                // 5. Merge into existing CEA rows:
-                //    • Keep rows the user already has, in their current order
-                //    • Append any brand-new controls at the end
-                const kept = formData.cea.filter(r =>
-                    distinctControls.includes(r.control)
-                );
-                const existingNames = kept.map(r => r.control);
-                const toAdd = distinctControls.filter(
-                    c => !existingNames.includes(c)
-                );
-                const newRows = toAdd.map(ctrl => {
-                    const oldRow = formData.cea.find(r => r.control === ctrl);
-                    const ret = returnedData.find(d => d.control === ctrl) || {};
-                    return {
-                        id: oldRow?.id || uuidv4(),
-                        control: ctrl,
-                        critical: oldRow?.critical ?? ret.critical ?? "",
-                        act: oldRow?.act ?? ret.act ?? "",
-                        activation: oldRow?.activation ?? ret.activation ?? "",
-                        hierarchy: oldRow?.hierarchy ?? ret.hierarchy ?? "",
-                        cons: oldRow?.cons ?? ret.cons ?? "",
-                        quality: oldRow?.quality ?? ret.quality ?? "",
-                        cer: oldRow?.cer ?? ret.cer ?? "",
-                        notes: oldRow?.notes ?? ret.notes ?? "",
-                        description: oldRow?.description ?? ret.description ?? "",
-                        performance: oldRow?.performance ?? ret.performance ?? "",
-                        action: oldRow?.action ?? ret.action ?? "",
-                        dueDate: oldRow?.dueDate ?? ret.dueDate ?? "",
-                        responsible: oldRow?.responsible ?? ret.responsible ?? "",
-                    };
-                });
-
-                // 6. Renumber and push back to state
-                const merged = [...kept, ...newRows].map((r, i) => ({
-                    ...r,
-                    nr: i + 1,
-                }));
-                updateCeaRows(merged);
-            } catch (err) {
-                console.error("Failed to fetch CEA data", err);
-            }
-        };
-
-        fetchCEAData();
-    }, [formData.ibra]);
-
     const handleControlRename = (oldName, newName) => {
-        // 1) Rename in IBRA rows (all duplicates)
+        // 1. Rename in IBRA rows (usage)
         const updatedIBRA = formData.ibra.map(r => ({
             ...r,
             controls: r.controls.map(c =>
@@ -1722,8 +1703,14 @@ const RiskManagementPageIBRA = () => {
             )
         }));
 
-        // 2) Rename in CEA rows so popup/table stay in sync
+        // 2. Rename in CEA rows
         const updatedCEA = formData.cea.map(r => ({
+            ...r,
+            control: r.control.trim() === oldName.trim() ? newName.trim() : r.control
+        }));
+
+        // 3. Rename in Relevant Controls list (Source)
+        const updatedRelevant = formData.relevantControls.map(r => ({
             ...r,
             control: r.control.trim() === oldName.trim() ? newName.trim() : r.control
         }));
@@ -1731,9 +1718,182 @@ const RiskManagementPageIBRA = () => {
         setFormData(prev => ({
             ...prev,
             ibra: updatedIBRA,
-            cea: updatedCEA
+            cea: updatedCEA,
+            relevantControls: updatedRelevant
         }));
     };
+
+    useEffect(() => {
+        const distinctControls = Array.from(
+            new Set(
+                formData.ibra
+                    .flatMap(item => item.controls || [])
+                    .map(c => typeof c === "string" ? c.trim() : c?.control?.trim())
+                    .filter(name => name && name.length > 0)
+            )
+        );
+
+        if (distinctControls.length === 0) return;
+
+        const currentRelevantNames = (formData.relevantControls || []).map(rc => rc.control);
+        const missingInRelevant = distinctControls.filter(c => !currentRelevantNames.includes(c));
+
+        if (missingInRelevant.length > 0) {
+            const newRelevantRows = missingInRelevant.map(name => ({
+                id: uuidv4(),
+                control: name,
+                description: "" // Default empty if added manually
+            }));
+
+            setFormData(prev => ({
+                ...prev,
+                relevantControls: [...(prev.relevantControls || []), ...newRelevantRows]
+            }));
+        }
+    }, [formData.ibra]); // Watch IBRA changes
+
+    // Helper: normalize control name
+    const norm = (s) => (s == null ? "" : String(s).trim());
+
+    // Helper: extract distinct used controls from IBRA
+    const getUsedControlsFromIBRA = (ibraRows = []) => {
+        const used = new Set();
+        (ibraRows || []).forEach(row => {
+            (row.controls || []).forEach(c => {
+                const name = typeof c === "string" ? c : c?.control;
+                const n = norm(name);
+                if (n) used.add(n);
+            });
+        });
+        return Array.from(used);
+    };
+
+    // Helper: merge backend fields ONLY if local field is empty
+    const mergeIfEmpty = (localRow, backendRow) => {
+        const pick = (key, fallback = "") => {
+            const localVal = localRow?.[key];
+            if (localVal != null && String(localVal).trim() !== "") return localVal;
+            const backendVal = backendRow?.[key];
+            if (backendVal != null && String(backendVal).trim() !== "") return backendVal;
+            return fallback;
+        };
+
+        return {
+            ...localRow,
+            description: pick("description"),
+            critical: pick("critical"),
+            act: pick("act"),
+            activation: pick("activation"),
+            hierarchy: pick("hierarchy"),
+            cons: pick("cons"),
+            quality: pick("quality"),
+            cer: pick("cer"),
+            notes: pick("notes"),
+            performance: pick("performance"),
+            dueDate: pick("dueDate"),
+            responsible: pick("responsible"),
+            action: pick("action"),
+        };
+    };
+
+    useEffect(() => {
+        const syncCEAFromIBRA = async () => {
+            const usedControls = getUsedControlsFromIBRA(formData.ibra);
+
+            const currentCEA = formData.cea || [];
+
+            // Keep only CEA rows whose control is still used in IBRA
+            const keep = currentCEA.filter(r => usedControls.includes(norm(r.control)));
+
+            // Which used controls are missing in CEA?
+            const keepNames = new Set(keep.map(r => norm(r.control)));
+            const missingNames = usedControls.filter(n => !keepNames.has(n));
+
+            // (Optional hydration) which kept rows look "empty" and should be hydrated?
+            const needsHydrateNames = keep
+                .filter(r =>
+                    !norm(r.description) ||
+                    !norm(r.critical) ||
+                    !norm(r.act) ||
+                    !norm(r.activation) ||
+                    !norm(r.hierarchy) ||
+                    !norm(r.cons) ||
+                    !norm(r.quality) ||
+                    !norm(r.cer)
+                )
+                .map(r => norm(r.control));
+
+            // Nothing to do?
+            if (missingNames.length === 0 && needsHydrateNames.length === 0 && keep.length === currentCEA.length) {
+                return;
+            }
+
+            // Fetch backend data for missing + hydrate-needed
+            const namesToFetch = Array.from(new Set([...missingNames, ...needsHydrateNames]));
+            let backendMap = new Map();
+
+            if (namesToFetch.length > 0) {
+                try {
+                    const res = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/getControls`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ controls: namesToFetch }),
+                    });
+
+                    const data = await res.json();
+                    const returned = data?.controls || [];
+
+                    returned.forEach(b => backendMap.set(norm(b.control), b));
+                } catch (e) {
+                    console.error("CEA hydrate fetch failed:", e);
+                }
+            }
+
+            // Build rows to add for missing controls
+            const addedRows = missingNames.map(name => {
+                const b = backendMap.get(name) || {};
+                return {
+                    id: uuidv4(),
+                    control: name,
+                    nr: 0, // set later
+                    description: b.description || "",
+                    critical: b.critical || "",
+                    act: b.act || "",
+                    activation: b.activation || "",
+                    hierarchy: b.hierarchy || "",
+                    cons: b.cons || "",
+                    quality: b.quality || "",
+                    cer: b.cer || "",
+                    notes: b.notes || "",
+                    performance: b.performance || "",
+                    dueDate: b.dueDate || "",
+                    responsible: b.responsible || "",
+                    action: b.action || "",
+                };
+            });
+
+            // Hydrate kept rows (only fill blanks)
+            const hydratedKeep = keep.map(row => {
+                const b = backendMap.get(norm(row.control));
+                return b ? mergeIfEmpty(row, b) : row;
+            });
+
+            // Merge in IBRA order (so CEA order matches what’s actually used)
+            const byName = new Map([...hydratedKeep, ...addedRows].map(r => [norm(r.control), r]));
+            const mergedInOrder = usedControls
+                .map(name => byName.get(name))
+                .filter(Boolean)
+                .map((r, i) => ({ ...r, nr: i + 1 }));
+
+            setFormData(prev => ({
+                ...prev,
+                cea: mergedInOrder
+            }));
+        };
+
+        syncCEAFromIBRA();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formData.ibra]);
 
     useEffect(() => {
         if (riskId === "new") {
@@ -1743,6 +1903,29 @@ const RiskManagementPageIBRA = () => {
             loadData(riskId);
         }
     }, [riskId])
+
+    const hasUnusedControls = () => {
+        const relevant = formData.relevantControls || [];
+        // If no relevant controls defined, nothing to check
+        if (relevant.length === 0) return false;
+
+        // 1. Get all control names that MUST be used
+        const definedControlNames = relevant.map(r => r.control.trim());
+
+        // 2. Collect all controls ACTUALLY used in IBRA rows
+        const usedControlNames = new Set();
+        (formData.ibra || []).forEach(row => {
+            if (Array.isArray(row.controls)) {
+                row.controls.forEach(c => {
+                    const name = typeof c === 'string' ? c : c.control;
+                    if (name) usedControlNames.add(name.trim());
+                });
+            }
+        });
+
+        // 3. Return true if any defined control is missing from the used set
+        return definedControlNames.some(name => !usedControlNames.has(name));
+    };
 
     return (
         <div className="risk-create-container">
@@ -2150,11 +2333,19 @@ const RiskManagementPageIBRA = () => {
                         </div>
                     </div>
 
+                    <RelevantControlsTable
+                        relevantControls={formData.relevantControls}
+                        setFormData={setFormData}
+                        readOnly={readOnly}
+                        globalControls={allSystemControls}
+                        onControlRename={handleControlRename}
+                    />
+
                     <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
                     <TermTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
                     <AttendanceTable readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
-                    {formData.documentType === "IBRA" && (<IBRATable readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
-                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} />)}
+                    {formData.documentType === "IBRA" && (<IBRATable relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
+                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
 
                     <ExecutiveSummary readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.execSummary} handleInputChange={handleInputChange} />
                     <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
@@ -2207,7 +2398,8 @@ const RiskManagementPageIBRA = () => {
                     ))}
                 </ul>
             )}
-            {generatePopup && (<GenerateDraftPopup deleteDraft={handleGenerateIBRADocument} closeModal={closeGenerate} cancel={cancelGenerate} />)}
+            {generatePopup && (<GenerateDraftPopup deleteDraft={handleGenerateIncomplete} closeModal={closeGenerate} cancel={cancelGenerate} />)}
+            {unusedPopup && (<UnusedControlsPopup generate={handleGenerateUnused} closeModal={closeUnused} cancel={cancelGenerateUnused} />)}
             {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
             {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
         </div>

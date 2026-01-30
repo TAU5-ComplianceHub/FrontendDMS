@@ -9,7 +9,7 @@ import Select from "react-select";
 const VersionHistoryAssets = () => {
     const [activity, setActivity] = useState([]);          // full history from API
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const { id } = useParams();
     const [users, setUsers] = useState([]);                // unique list of users for filter

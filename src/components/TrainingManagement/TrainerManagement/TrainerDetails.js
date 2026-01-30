@@ -14,7 +14,7 @@ import TopBar from "../../Notifications/TopBar";
 const TrainerDetails = () => {
     const navigate = useNavigate();
     const [userID, setUserID] = useState('');
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
 
     useEffect(() => {
         const storedToken = localStorage.getItem("token");

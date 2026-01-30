@@ -13,7 +13,7 @@ const UserActivity = () => {
     const { id } = useParams(); // Get the user ID from the URL parameters
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
 
     useEffect(() => {
         const storedToken = localStorage.getItem('token');

@@ -13,7 +13,7 @@ const DeletedDocumentsSI = () => {
     const [token, setToken] = useState('');
     const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [fileToDelete, setFileToDelete] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFileName, setSelectedFileName] = useState();

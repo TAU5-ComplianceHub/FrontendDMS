@@ -7,7 +7,7 @@ import ControlEAPopup from "./ControlEAPopup";
 import { saveAs } from "file-saver";
 import DeleteControlPopup from "./RiskComponents/DeleteControlPopup";
 
-const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false }) => {
+const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls }) => {
     const [insertPopup, setInsertPopup] = useState();
     const [selectedRowData, setSelectedRowData] = useState();
     const ceaSavedWidthRef = useRef(null);
@@ -235,19 +235,30 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
     }, []);
 
     useEffect(() => {
-        const wrapper = ceaTableWrapperRef.current;
-        if (!wrapper) return;
+        const adjust = () => {
+            const wrapper = ceaTableWrapperRef.current;
+            const box = caeBoxRef.current;
+            if (!wrapper || !box) return;
 
-        if (!isSidebarVisible) {
-            ceaSavedWidthRef.current = wrapper.offsetWidth;
-        } else if (ceaSavedWidthRef.current != null) {
-            wrapper.style.width = `${ceaSavedWidthRef.current}px`;
-            setWrapperWidth(wrapper.getBoundingClientRect().width); // ← NEW
-            return;
-        }
-        const boxW = caeBoxRef.current.offsetWidth;
-        wrapper.style.width = `${boxW - 30}px`;
-        setWrapperWidth(wrapper.getBoundingClientRect().width); // ← NEW
+            // Reset width to allow container to shrink if needed
+            wrapper.style.width = '10px';
+
+            // Read parent width
+            const boxW = box.clientWidth;
+
+            // Set new width
+            const newWidth = boxW - 30;
+            wrapper.style.width = `${newWidth}px`;
+
+            setWrapperWidth(newWidth);
+        };
+
+        // Adjust immediately
+        adjust();
+
+        // Adjust again after a short delay for sidebar transitions
+        const timer = setTimeout(adjust, 350);
+        return () => clearTimeout(timer);
     }, [isSidebarVisible]);
 
     const [showColumns, setShowColumns] = useState([
@@ -1397,7 +1408,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                 )}
             </div>
             {deletePopupVisible && (<DeleteControlPopup controlName={controlToDelete.controlName} deleteControl={confirmDeleteControl} closeModal={closeDeletePopup} />)}
-            {insertPopup && (<ControlEAPopup data={selectedRowData} onClose={closeInsertPopup} onSave={updateRows} onControlRename={onControlRename} readOnly={readOnly}
+            {insertPopup && (<ControlEAPopup data={selectedRowData} onClose={closeInsertPopup} onSave={updateRows} onControlRename={onControlRename} readOnly={readOnly} relevantControls={relevantControls}
                 existingControlNames={(rows || [])
                     .map(r => String(r.control ?? "").trim())
                     .filter(Boolean)}

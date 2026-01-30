@@ -11,7 +11,7 @@ import ChangePassword from "../UserManagement/ChangePassword";
 
 const UserProfile = () => {
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [profilePic, setProfilePic] = useState(null);
     const [user, setUser] = useState({});
     const [userID, setUserID] = useState("");

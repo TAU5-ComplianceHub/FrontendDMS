@@ -5,14 +5,14 @@ import "./RiskHomePage.css";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCog, faCogs, faHardHat, faListCheck, faNetworkWired, faChevronLeft, faChevronRight, faArrowsRotate, faUserTie, faExclamationTriangle, faTriangleExclamation, faArrowLeft, faCaretLeft, faCaretRight } from '@fortawesome/free-solid-svg-icons';
-import TopBarDD from "../Notifications/TopBarDD";
 import TopBar from "../Notifications/TopBar";
+import TopBarDD from "../Notifications/TopBarDD";
 import { getCurrentUser, canIn } from "../../utils/auth";
 
 const RiskHomePage = () => {
     const navigate = useNavigate();
     const access = getCurrentUser();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     useEffect(() => {
         const storedToken = localStorage.getItem("token");
         if (storedToken) {

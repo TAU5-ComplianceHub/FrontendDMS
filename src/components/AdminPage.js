@@ -39,7 +39,7 @@ import TopBar from "./Notifications/TopBar";
 import { saveAs } from "file-saver";
 
 const AdminPage = () => {
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [count, setCount] = useState([]);
     const access = getCurrentUser();
     const [importSI, setImportSI] = useState(false);

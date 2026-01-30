@@ -25,7 +25,7 @@ const FileInfo = () => {
   const { type } = useParams();
   const [files, setFiles] = useState([]);
   const [disciplines, setDisciplines] = useState([]);
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [docTypes, setDocTypes] = useState([]);
   const [docStatus, setDocStatus] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");

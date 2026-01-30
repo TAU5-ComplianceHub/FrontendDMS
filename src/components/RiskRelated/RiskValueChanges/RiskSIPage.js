@@ -20,7 +20,7 @@ import ApprovalPopupMachine from "../../SuggestionApprovalPopups/ApprovalPopupMa
 const RiskSIPage = () => {
     const [drafts, setDrafts] = useState([]);
     const { id: draftID } = useParams();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [error, setError] = useState(null);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');
@@ -329,7 +329,7 @@ const RiskSIPage = () => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src="CH_Logo.svg" alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">User Suggestions</p>
                     </div>
                 </div>

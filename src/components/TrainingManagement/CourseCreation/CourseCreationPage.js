@@ -27,7 +27,7 @@ import { canIn, getCurrentUser } from "../../../utils/auth";
 
 const CourseCreationPage = () => {
   const navigate = useNavigate();
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [share, setShare] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);

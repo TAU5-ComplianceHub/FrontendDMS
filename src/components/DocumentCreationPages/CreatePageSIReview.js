@@ -28,7 +28,7 @@ const CreatePageSIReview = () => {
   const navigate = useNavigate();
   const access = getCurrentUser();
   const type = useParams().type;
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);
   const [loadedID, setLoadedID] = useState('');

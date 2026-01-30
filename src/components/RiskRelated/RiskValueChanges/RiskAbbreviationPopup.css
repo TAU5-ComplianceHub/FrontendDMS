@@ -23,6 +23,17 @@
     width: 90%;
 }
 
+.control-suggest-popup-content {
+    background: #f2f2f2;
+    padding: 25px;
+    padding-bottom: 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    max-width: 800px;
+    width: 100%;
+}
+
 .abbr-popup-header {
     transform: translateY(-30%);
     display: flex;
@@ -40,6 +51,17 @@
     padding: 20px 0;
     background-color: white;
     border-radius: 5px;
+}
+
+.control-suggestion-popup-group {
+    margin-bottom: 10px;
+    padding: 20px 0;
+    background-color: white;
+    border-radius: 5px;
+}
+
+.control-suggestion-popup-page-table {
+    max-height: 300px;
 }
 
 .abbr-popup-title {
@@ -214,4 +236,37 @@
     border-radius: 6px;
     font-size: 14px;
     transition: border-color 0.3s ease;
+}
+
+/* Make the group a column so the label stays fixed and the list scrolls */
+.control-suggestion-popup-group {
+    margin-bottom: 10px;
+    padding: 20px 0;
+    background-color: white;
+    border-radius: 5px;
+
+    /* key part */
+    min-height: 420px;
+    max-height: 420px;
+    /* your current cap */
+    display: flex;
+    flex-direction: column;
+}
+
+/* This is the scrolling container */
+.control-suggestion-table-scroll {
+    /* take the remaining height inside the group */
+    flex: 1;
+    min-height: 0;
+    /* IMPORTANT: allows flex child to actually shrink */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 10px;
+    /* optional: nicer spacing */
+}
+
+/* Table can be normal width; don't try to max-height the table itself */
+.control-suggestion-popup-page-table {
+    width: 100%;
+    border-collapse: collapse;
 }

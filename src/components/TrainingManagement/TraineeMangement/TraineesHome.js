@@ -10,7 +10,7 @@ import TraineesDetailTable from "./TraineesDetailTable";
 
 const TraineesHome = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [loggedInUserId, setloggedInUserId] = useState('');
     const [searchQuery, setSearchQuery] = useState("");
     const navigate = useNavigate();

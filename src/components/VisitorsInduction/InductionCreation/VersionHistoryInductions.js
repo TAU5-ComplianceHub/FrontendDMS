@@ -8,7 +8,7 @@ import { jwtDecode } from 'jwt-decode';
 
 const VersionHistoryInductions = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const { id } = useParams();
     const [isMenuOpen, setIsMenuOpen] = useState(false);

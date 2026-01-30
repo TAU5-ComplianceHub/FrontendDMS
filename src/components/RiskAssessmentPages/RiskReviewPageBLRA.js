@@ -48,7 +48,7 @@ const RiskReviewPageBLRA = () => {
     const [errors, setErrors] = useState([]);
     const loadedIDRef = useRef('');
     const [offlineDraft, setOfflineDraft] = useState(false);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [helpRA, setHelpRA] = useState(false);
     const [helpScope, setHelpScope] = useState(false);
     const [loadingAim, setLoadingAim] = useState(false);

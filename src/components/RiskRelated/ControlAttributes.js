@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../Notifications/TopBar";
@@ -17,7 +17,7 @@ const ControlAttributes = () => {
     const [token, setToken] = useState('');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     // Removed manual filteredControls state in favor of useMemo
     const [searchPopupVisible, setSearchPopupVisible] = useState(false);
     const [searchInput, setSearchInput] = useState("");
@@ -687,12 +687,20 @@ const ControlAttributes = () => {
                     <div className="button-container-create">
 
                         {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
-                            <button className="but-um" onClick={openAddControl}>
-                                <div className="button-content">
-                                    <FontAwesomeIcon icon={faCirclePlus} className="button-logo-custom" />
-                                    <span className="button-text">Add Control</span>
-                                </div>
-                            </button>
+                            <>
+                                <button className="but-um" onClick={openAddControl}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faCirclePlus} className="button-logo-custom" />
+                                        <span className="button-text">Add Control</span>
+                                    </div>
+                                </button>
+                                <button className="but-um" onClick={() => navigate("/FrontendDMS/suggestedControls/new")}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faFile} className="button-logo-custom" />
+                                        <span className="button-text">Suggestions</span>
+                                    </div>
+                                </button>
+                            </>
                         )}
                     </div>
                     <div className="sidebar-logo-dm-fi">

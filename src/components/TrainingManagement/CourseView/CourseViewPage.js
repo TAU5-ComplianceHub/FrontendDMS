@@ -9,7 +9,7 @@ import "./CourseViewPage.css";
 import TopBar from "../../Notifications/TopBar";
 
 const CourseViewPage = () => {
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');
     const navigate = useNavigate();

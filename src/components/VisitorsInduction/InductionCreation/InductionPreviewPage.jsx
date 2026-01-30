@@ -35,7 +35,7 @@ const InductionPreviewPage = ({ draftID, closeModal }) => {
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitResult, setSubmitResult] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');
     const [viewMode, setViewMode] = useState('outline');
@@ -723,7 +723,7 @@ const InductionPreviewPage = ({ draftID, closeModal }) => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src="/CH_Logo.svg" alt="Logo" className="logo-img-um" title="Home" />
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
 
@@ -761,7 +761,7 @@ const InductionPreviewPage = ({ draftID, closeModal }) => {
                     </div>
 
                     <div className="sidebar-logo-dm-fi">
-                        <img src={"/visitorInductionMainIcon2.svg"} alt="Control Attributes" className="icon-risk-rm" />
+                        <img src={`${process.env.PUBLIC_URL}/visitorInductionMainIcon2.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">Visitor Induction</p>
                     </div>
                 </div>

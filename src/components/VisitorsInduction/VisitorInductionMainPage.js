@@ -10,7 +10,7 @@ import { getCurrentUser, canIn } from "../../utils/auth";
 
 const VisitorInductionMainPage = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [count, setCount] = useState([]);
     const [loggedInUserId, setloggedInUserId] = useState('');
@@ -111,6 +111,14 @@ const VisitorInductionMainPage = () => {
                             <h3 className="document-title-fi-home">Visitor Profiles</h3>
                         </>
                     </div>)}
+                    <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/visitorManagementPage")}>
+                        <>
+                            <div className="icon-dept">
+                                <img src={`${process.env.PUBLIC_URL}/visitorManagement.svg`} className={"icon-dept"} />
+                            </div>
+                            <h3 className="document-title-fi-home">Visitor Management</h3>
+                        </>
+                    </div>
                 </div>
             </div>
             <ToastContainer />

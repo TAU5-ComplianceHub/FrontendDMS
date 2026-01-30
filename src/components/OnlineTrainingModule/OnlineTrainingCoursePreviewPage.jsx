@@ -4,7 +4,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faArrowLeft, faCaretLeft, faCaretRight, faChevronLeft, faChevronRight,
     faClipboardList, faInfoCircle, faBookOpen, faClipboard,
-    faX
+    faX,
+    faFolderOpen,
+    faDownload,
+    faSpinner,
+    faCircleNotch
 } from '@fortawesome/free-solid-svg-icons';
 import { jwtDecode } from 'jwt-decode';
 import { toast, ToastContainer } from "react-toastify";
@@ -31,7 +35,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
     const navigate = useNavigate();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitResult, setSubmitResult] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');
     const [viewMode, setViewMode] = useState('outline');
@@ -44,6 +48,56 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const objectUrlCacheRef = useRef(new Map());
     const mediaTypeCacheRef = useRef(new Map());
+
+    // --- Lazy media loader state ---
+    const mediaStatusRef = useRef(new Map()); // fid -> "idle" | "loading" | "ready" | "error"
+    const inFlightRef = useRef(new Map());    // fid -> Promise<void>
+    const [mediaTick, setMediaTick] = useState(0); // forces re-render when status changes
+
+    const bumpMediaTick = () => setMediaTick(t => t + 1);
+
+    const getMediaStatus = (fid) => mediaStatusRef.current.get(fid) || "idle";
+
+    const setMediaStatus = (fid, status) => {
+        const prev = mediaStatusRef.current.get(fid) || "idle";
+        if (prev === status) return;              // ✅ prevent useless re-renders
+        mediaStatusRef.current.set(fid, status);
+        bumpMediaTick();
+    };
+
+    const fetchMediaById = (fid) => {
+        if (!fid) return Promise.resolve();
+        if (objectUrlCacheRef.current.has(fid)) {
+            setMediaStatus(fid, "ready");
+            return Promise.resolve();
+        }
+        const existing = inFlightRef.current.get(fid);
+        if (existing) return existing;
+
+        setMediaStatus(fid, "loading");
+
+        const url = `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/loadMedia/${encodeURIComponent(fid)}`;
+
+        const p = fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+            .then(async (res) => {
+                if (!res.ok) throw new Error(`media ${fid} ${res.status}`);
+                const blob = await res.blob();
+                const objUrl = URL.createObjectURL(blob);
+                objectUrlCacheRef.current.set(fid, objUrl);
+                mediaTypeCacheRef.current.set(fid, blob.type || "");
+                setMediaStatus(fid, "ready");
+            })
+            .catch((e) => {
+                console.warn("Lazy media load failed:", fid, e?.message || e);
+                setMediaStatus(fid, "error");
+            })
+            .finally(() => {
+                inFlightRef.current.delete(fid);
+            });
+
+        inFlightRef.current.set(fid, p);
+        return p;
+    };
 
     useEffect(() => {
         const storedToken = localStorage.getItem('token');
@@ -131,6 +185,31 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         return introSlide ? [introSlide, ...slides] : slides;
     }, [topicGroups, introSlide]);
 
+    const orderedMediaIds = useMemo(() => {
+        const seen = new Set();
+        const out = [];
+
+        const pushFid = (fid) => {
+            if (!fid || seen.has(fid)) return;
+            seen.add(fid);
+            out.push(fid);
+        };
+
+        for (const s of allSlides) {
+            if (!s) continue;
+
+            // legacy
+            pushFid(s?.media?.fileId);
+
+            // multi
+            if (Array.isArray(s?.mediaItems)) {
+                for (const it of s.mediaItems) pushFid(it?.media?.fileId);
+            }
+        }
+
+        return out;
+    }, [allSlides]);
+
     const hasAssessment = useMemo(() => {
         return Array.isArray(course?.formData?.assessment) && course.formData.assessment.length > 0;
     }, [course?.formData?.assessment]);
@@ -167,6 +246,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         return Array.from(out);
     }, [viewModules]);
 
+    /*
     useEffect(() => {
         let cancelled = false;
 
@@ -199,6 +279,21 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         if (mediaIds.length) hydrate();
         return () => { cancelled = true; };
     }, [mediaIds.join(','), token]);
+    */
+
+    useEffect(() => {
+        if (!orderedMediaIds.length) return;
+
+        const first3 = orderedMediaIds.slice(0, 3);
+        first3.forEach(fetchMediaById);
+        // no await needed; we just kick them off
+    }, [orderedMediaIds.join(","), token]);
+
+    useEffect(() => {
+        if (viewMode !== "material") return;
+        if (!allSlides.length) return;
+        preloadForIndex(currentIndex, 2);
+    }, [viewMode, currentIndex, allSlides.length]);
 
     useEffect(() => {
         return () => {
@@ -291,6 +386,20 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
     const isLastContentSlide = currentIndex === total - 1;     // last in allSlides
     const hasNextOrRecap = !isLastContentSlide || viewMode !== 'material';
 
+    useEffect(() => {
+        if (viewMode !== "material") return;
+        if (!currentSlide) return;
+
+        // ensure current slide media starts loading (if not ready)
+        const fids = getSlideFileIds(currentSlide);
+        fids.forEach((fid) => {
+            if (!fid) return;
+            if (!objectUrlCacheRef.current.has(fid) && getMediaStatus(fid) === "idle") {
+                fetchMediaById(fid);
+            }
+        });
+    }, [viewMode, currentIndex, currentSlide]);
+
     // expects objectUrlCacheRef + mediaTypeCacheRef in scope
     const renderMedia = (slide, index = 0, aspectRatio = null) => {
         // pick the specific item by index
@@ -302,7 +411,12 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         if (!fid) return null;
 
         const src = objectUrlCacheRef.current.get(fid);
-        if (!src) return null;
+        const status = getMediaStatus(fid);
+
+        // If not loaded yet, show spinner (and ensure we started loading)
+        if (!src) {
+            return <MediaSpinner label="Loading slide…" />;
+        }
 
         // pick a mime
         let type = (item.media?.contentType || mediaTypeCacheRef.current.get(fid) || "").toLowerCase();
@@ -454,11 +568,15 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
     };
 
     const getAnsweredCount = () => {
-        // Count keys that have a number (0-based option index) selected
         return (course?.formData?.assessment || []).reduce((acc, q, i) => {
             const key = q.id || `idx_${i}`;
             const v = assessmentAnswers[key];
-            return acc + (typeof v === 'number' ? 1 : 0);
+
+            // MCQ answered if number
+            if (q.type !== "TEXT") return acc + (typeof v === "number" ? 1 : 0);
+
+            // TEXT answered if non-empty string
+            return acc + (typeof v === "string" && v.trim().length > 0 ? 1 : 0);
         }, 0);
     };
 
@@ -616,6 +734,11 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         setAssessmentAnswers(prev => ({ ...prev, [key]: optIndex }));
     };
 
+    const onTypeAnswer = (qid, qIndex, text) => {
+        const key = qid || `idx_${qIndex}`;
+        setAssessmentAnswers(prev => ({ ...prev, [key]: text }));
+    };
+
     const prevLabel =
         viewMode === 'material' && currentIndex === 0
             ? 'Course Outline'
@@ -710,6 +833,109 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         return t.startsWith("audio/");
     };
 
+    const downloadResourceFile = async (fileId, fallbackName = "resource") => {
+        try {
+            if (!fileId) return;
+
+            const base = (process.env.REACT_APP_URL || "").replace(/\/+$/, "");
+            const url = `${base}/api/onlineTrainingCourses/downloadResource/${encodeURIComponent(fileId)}`;
+
+            const studentToken = localStorage.getItem("token") || "";
+
+            const res = await fetch(url, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${studentToken}`,
+                },
+            });
+
+            if (!res.ok) return;
+
+            // Prefer filename from Content-Disposition (if backend exposes it)
+            const cd = res.headers.get("content-disposition") || "";
+            const m = cd.match(/filename="([^"]+)"/i);
+            const filename = m?.[1] || fallbackName;
+
+            const blob = await res.blob();
+            const objUrl = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = objUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            URL.revokeObjectURL(objUrl);
+        } catch (err) {
+            console.error("downloadResourceFile error:", err);
+        }
+    };
+
+    const getSlideFileIds = (slide) => {
+        const fids = [];
+        if (!slide) return fids;
+
+        const add = (fid) => { if (fid) fids.push(fid); };
+
+        add(slide?.media?.fileId);
+        if (Array.isArray(slide?.mediaItems)) {
+            for (const it of slide.mediaItems) add(it?.media?.fileId);
+        }
+        return fids;
+    };
+
+    const preloadForIndex = async (index, lookaheadSlides = 2) => {
+        const indices = [];
+        for (let i = index; i <= index + lookaheadSlides; i++) {
+            if (i >= 0 && i < allSlides.length) indices.push(i);
+        }
+
+        const fids = [];
+        for (const i of indices) fids.push(...getSlideFileIds(allSlides[i]));
+
+        // de-dupe while keeping order
+        const seen = new Set();
+        const unique = [];
+        for (const fid of fids) {
+            if (!fid || seen.has(fid)) continue;
+            seen.add(fid);
+            unique.push(fid);
+        }
+
+        // fire them (parallel)
+        await Promise.all(unique.map(fetchMediaById));
+    };
+
+    const MediaSpinner = ({ label = "Loading…" }) => (
+        <div className="media-loading-overlay" aria-live="polite" aria-busy="true">
+            <style>{`
+      @keyframes mediaSpin { to { transform: rotate(360deg); } }
+      .media-loading-overlay{
+        width:100%;
+        height:100%;
+        min-height:220px;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+      }
+      .media-loading-spinner{
+        width:42px;
+        height:42px;
+        border-radius:50%;
+        border:4px solid rgba(0,0,0,0.15);
+        border-top-color: rgba(0,0,0,0.55);
+        will-change: transform;
+      }
+      .media-loading-label{ font-size:14px; opacity:0.8; }
+    `}</style>
+
+            <FontAwesomeIcon icon={faCircleNotch} className="spin-animation" />
+            <div className="media-loading-label">{label}</div>
+        </div>
+    );
 
     return (
         <div className="risk-admin-draft-info-container-popup">
@@ -719,7 +945,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src="/CH_Logo.svg" alt="Logo" className="logo-img-um" title="Home" />
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
 
@@ -754,10 +980,16 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                             onClick={() => guardNavigation(() => setViewMode('assessment'))}
                             active={viewMode === 'assessment'}
                         />
+                        <SidebarButton
+                            icon={faFolderOpen}
+                            text="Resources"
+                            onClick={() => guardNavigation(() => setViewMode('resources'))}
+                            active={viewMode === 'resources'}
+                        />
                     </div>
 
                     <div className="sidebar-logo-dm-fi">
-                        <img src={"/visitorInductionMainIcon2.svg"} alt="Control Attributes" className="icon-risk-rm" />
+                        <img src={`${process.env.PUBLIC_URL}/visitorInductionMainIcon2.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">Online Training Course</p>
                     </div>
                 </div>
@@ -774,12 +1006,14 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
             <div className="main-box-gen-info">
                 <div className="top-section-um">
                     <div className="burger-menu-icon-um">
-                        {false && (<FontAwesomeIcon
-                            onClick={handleTopBack}
-                            icon={faArrowLeft}
-                            title="Back"
-                            style={{ cursor: "pointer" }}
-                        />)}
+                        {viewMode !== "resources" && (
+                            <FontAwesomeIcon
+                                onClick={handleTopBack}
+                                icon={faArrowLeft}
+                                title="Back"
+                                style={{ cursor: "pointer" }}
+                            />
+                        )}
                     </div>
                     <div className="spacer"></div>
                     <div className="icons-container">
@@ -846,7 +1080,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                                     if (row.kind === "module") {
                                                         return (
                                                             <tr key={`m-${i}`}>
-                                                                <td colSpan={4} style={{ textAlign: "center", fontWeight: 700, backgroundColor: "lightgray" }}>
+                                                                <td colSpan={4} style={{ textAlign: "left", fontWeight: 700, backgroundColor: "lightgray" }}>
                                                                     {row.text}
                                                                 </td>
                                                             </tr>
@@ -1040,13 +1274,13 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                                     </div>
                                                     <div style={{ height: 4, background: "#0b2f6b", borderRadius: 2, marginTop: 8, marginBottom: 10 }} />
                                                     <div className="inductionView-intro-center">
-                                                        <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.45, marginBottom: 12, textAlign: "left", color: "black" }}>
+                                                        <div style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.45, marginBottom: 12, textAlign: "left", color: "black" }}>
                                                             {currentSlide.content}
                                                         </div>
-                                                        <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6, textAlign: "left", color: "black" }}>
+                                                        <div style={{ fontWeight: 700, fontSize: 24, marginBottom: 6, textAlign: "left", color: "black" }}>
                                                             Course Objectives:
                                                         </div>
-                                                        <ul style={{ marginTop: 0, fontSize: 14, color: "black", textAlign: "left" }}>
+                                                        <ul style={{ marginTop: 0, fontSize: 22, color: "black", textAlign: "left" }}>
                                                             {currentSlide.objectives
                                                                 .split(/\r?\n/)
                                                                 .filter(Boolean)
@@ -1072,7 +1306,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                                         <div className="inductionView-slide-content">
                                                             {(currentSlide.type === SLIDE_TYPES.TEXT) && (
                                                                 <div style={{ height: "100%" }}>
-                                                                    <div className="inductionView-text-box-text" style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.45, textAlign: "left" }}>
+                                                                    <div className="inductionView-text-box-text" style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.45, textAlign: "left" }}>
                                                                         <div style={{ margin: "auto 0" }}>
                                                                             {currentSlide.content || ""}
                                                                         </div>
@@ -1082,13 +1316,13 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
 
                                                             {(currentSlide.type === SLIDE_TYPES.TEXT_MEDIA_2X2) && (
                                                                 <div className={`limitHeightInductionView`} style={{ display: "grid", gridTemplateColumns: "2fr 2fr", gap: 16 }}>
-                                                                    <div className="inductionView-text-box" style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.45, textAlign: "left", paddingTop: "10px" }}>
+                                                                    <div className="inductionView-text-box" style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.45, textAlign: "left", paddingTop: "10px" }}>
                                                                         <div style={{ margin: "auto 0" }}>
                                                                             {currentSlide.contentLeft || ""}
                                                                         </div>
                                                                     </div>
                                                                     <div className={isAudioAt(currentSlide, 0) ? `inductionView-media-box-2` : "inductionView-media-box"}>{renderMedia(currentSlide, 0, "16/9")}</div>
-                                                                    <div className="inductionView-text-box" style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.45, textAlign: "left", paddingTop: "10px" }}>
+                                                                    <div className="inductionView-text-box" style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.45, textAlign: "left", paddingTop: "10px" }}>
                                                                         <div style={{ margin: "auto 0" }}>
                                                                             {currentSlide.contentRight || ""}
                                                                         </div>
@@ -1099,7 +1333,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
 
                                                             {(currentSlide.type === SLIDE_TYPES.TEXT_MEDIA) && (
                                                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, height: "100%" }}>
-                                                                    <div className="inductionView-text-box" style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.45, textAlign: "left", paddingTop: "10px" }}>
+                                                                    <div className="inductionView-text-box" style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.45, textAlign: "left", paddingTop: "10px" }}>
                                                                         <div style={{ margin: "auto 0" }}>
                                                                             {currentSlide.content || ""}
                                                                         </div>
@@ -1125,7 +1359,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                                                         className="inductionView-text-box"
                                                                         style={{
                                                                             whiteSpace: "pre-wrap",
-                                                                            fontSize: 14,
+                                                                            fontSize: 22,
                                                                             lineHeight: 1.45,
                                                                             textAlign: "left",
                                                                             paddingTop: "10px",
@@ -1204,7 +1438,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                         </div>
                                         <div style={{ height: 4, background: "#0b2f6b", borderRadius: 2, marginTop: 8, marginBottom: 10 }} />
 
-                                        <div className="recap-content">
+                                        <div className="recap-content" style={{ fontSize: "22px" }}>
 
                                             {course?.formData?.summary || "No summary provided."}
                                         </div>
@@ -1273,24 +1507,37 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
 
                                                 {/* ONE question only */}
                                                 <div className="assessment-q" key={key}>
-                                                    <div className="assessment-q-title" style={{ marginTop: 10 }}>
+                                                    <div className="assessment-q-title" style={{ marginTop: 10, fontSize: 24 }}>
                                                         {qIndex + 1}. {q.question}
                                                     </div>
 
-                                                    <div className="assessment-options">
-                                                        {(q.options || []).map((opt, oi) => (
-                                                            <label className="assessment-option" key={oi}>
-                                                                <input
-                                                                    type="radio"
-                                                                    name={`q_${key}`}
-                                                                    value={oi}
-                                                                    checked={assessmentAnswers[key] === oi}
-                                                                    onChange={() => onSelectAnswer(q.id, qIndex, oi)}
-                                                                />
-                                                                <span>{opt}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
+                                                    {q.type === "TEXT" ? (
+                                                        <div className="assessment-text-answer" style={{ marginTop: 0, width: "calc(100% - 25px)" }}>
+                                                            <textarea
+                                                                className="assessment-textarea"
+                                                                placeholder="Type your answer here..."
+                                                                value={typeof assessmentAnswers[key] === "string" ? assessmentAnswers[key] : ""}
+                                                                onChange={(e) => onTypeAnswer(q.id, qIndex, e.target.value)}
+                                                                rows={6}
+                                                                style={{ width: "100%", resize: "none" }}
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="assessment-options">
+                                                            {(q.options || []).map((opt, oi) => (
+                                                                <label className="assessment-option" key={oi} style={{ fontSize: 22 }}>
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`q_${key}`}
+                                                                        value={oi}
+                                                                        checked={assessmentAnswers[key] === oi}
+                                                                        onChange={() => onSelectAnswer(q.id, qIndex, oi)}
+                                                                    />
+                                                                    <span>{opt}</span>
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Footer nav bar with prev/next labels */}
@@ -1342,6 +1589,85 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                     );
                                 })()}
                             </div>
+                        )}
+
+                        {viewMode === 'resources' && (
+                            <>
+                                <div className="course-content-body">
+                                    <div className="inductionView-module-course-content" style={{ marginTop: "0px" }}>
+                                        <div className="slide-title-row">
+                                            <div className="slide-title-left">
+                                                {`RESOURCES`}
+                                            </div>
+                                        </div>
+
+                                        <div style={{ height: 4, background: "#0b2f6b", borderRadius: 2, marginTop: 8, marginBottom: 10 }} />
+
+                                        <div className="course-resources-scroll">
+                                            <table className="course-resources-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ width: "10%", textAlign: "center" }}>Nr</th>
+                                                        <th style={{ width: "80%", textAlign: "left" }}>File Name</th>
+                                                        <th style={{ width: "10%", textAlign: "center" }}>Action</th>
+                                                    </tr>
+                                                </thead>
+
+                                                <tbody>
+                                                    {(() => {
+                                                        const resources = Array.isArray(course?.formData?.resources)
+                                                            ? course.formData.resources
+                                                            : [];
+
+                                                        const removeExt = (name = "") => name.replace(/\.[^/.]+$/, "");
+
+                                                        // ✅ no resources row
+                                                        if (resources.length === 0) {
+                                                            return (
+                                                                <tr>
+                                                                    <td colSpan={3} style={{ textAlign: "center", fontWeight: "normal" }}>
+                                                                        This course does not have any resources
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        }
+
+                                                        return resources.map((r, idx) => {
+                                                            const fileId = r?.media?.fileId;
+                                                            const displayName = removeExt(r?.name || r?.media?.filename || `Resource ${idx + 1}`);
+
+                                                            return (
+                                                                <tr key={fileId || idx} style={{ fontWeight: "normal", color: "black" }}>
+                                                                    <td style={{ textAlign: "center" }}>{idx + 1}</td>
+
+                                                                    <td style={{ textAlign: "left" }}>{displayName}</td>
+
+                                                                    <td style={{ textAlign: "center" }}>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="course-resource-download-btn"
+                                                                            title="Download"
+                                                                            disabled={!fileId}
+                                                                            onClick={() =>
+                                                                                downloadResourceFile(
+                                                                                    fileId,
+                                                                                    r?.name || r?.media?.filename || "resource"
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faDownload} />
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        });
+                                                    })()}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
                         )}
                     </div>
                 </div>

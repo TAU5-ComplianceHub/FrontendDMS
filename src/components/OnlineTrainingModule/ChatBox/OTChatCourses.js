@@ -10,7 +10,7 @@ import TopBarDD from "../../Notifications/TopBarDD";
 
 const OTChatCourses = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const { id } = useParams();
     const navigate = useNavigate();
@@ -323,7 +323,7 @@ const OTChatCourses = () => {
                         </div>
                     </div>
                     <div className="sidebar-logo-dm-fi">
-                        <img src={`${process.env.PUBLIC_URL}/tmsCreateCourse2.svg`} alt="Control Attributes" className="icon-risk-rm" />
+                        <img src={`${process.env.PUBLIC_URL}/chatBox1.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"Chat Box"}</p>
                     </div>
                 </div>
@@ -405,6 +405,14 @@ const OTChatCourses = () => {
                                         <td style={{ textAlign: "center" }}>{c.chatCount}</td>
                                     </tr>
                                 ))}
+
+                                {filteredCourses.length === 0 && (
+                                    <tr>
+                                        <td colSpan={3} style={{ textAlign: "center", padding: 12 }}>
+                                            No courses found with unclaimed chats.
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

@@ -8,7 +8,7 @@ import OTChatPanelLecturer from "./OTChatPanelLecturer";
 
 const OTUnclaimedChats = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const { courseID } = useParams();
     const navigate = useNavigate();
     const [chatOpen, setChatOpen] = useState(false);
@@ -321,7 +321,7 @@ const OTUnclaimedChats = () => {
                         </div>
                     </div>
                     <div className="sidebar-logo-dm-fi">
-                        <img src={`${process.env.PUBLIC_URL}/tmsCreateCourse2.svg`} alt="Control Attributes" className="icon-risk-rm" />
+                        <img src={`${process.env.PUBLIC_URL}/chatBox1.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"Chat Box"}</p>
                     </div>
                 </div>

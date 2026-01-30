@@ -21,7 +21,7 @@ const ManageComponentDates = () => {
     const [selectedStatus, setSelectedStatus] = useState([]);
     const [rows, setRows] = useState([]);
     const todayStr = new Date().toISOString().split("T")[0];
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [modify, setModify] = useState(false);
     const [index, setIndex] = useState("");
     const [component, setComponent] = useState("");

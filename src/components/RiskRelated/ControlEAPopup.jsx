@@ -13,8 +13,9 @@ import ControlEffectiveness from './RiskInfo/ControlEffectiveness';
 import axios from 'axios';
 import DatePicker from 'react-multi-date-picker';
 import { toast } from "react-toastify";
+import ControlSuggestionPopup from './ControlManagement/ControlSuggestionPopup';
 
-const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, existingControlNames = [] }) => {
+const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, existingControlNames = [], relevantControls }) => {
     const [initialControlName] = useState(data.control);
     const [controlName, setControlName] = useState("");
     const [criticalControl, setCriticalControl] = useState("");
@@ -37,6 +38,39 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
     const [helpHier, setHelpHier] = useState(false);
     const [helpCritical, setHelpCritical] = useState(false);
     const [helpCER, setHelpCER] = useState(false);
+    const [systemControlSet, setSystemControlSet] = useState(new Set());
+    const [isSystemControlName, setIsSystemControlName] = useState(false);
+
+    useEffect(() => {
+        const fetchSystemControls = async () => {
+            try {
+                const res = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/controls`);
+                if (!res.ok) throw new Error(`Failed: ${res.status}`);
+                const data = await res.json();
+                const list = data?.controls || [];
+
+                const set = new Set(
+                    list.map(c => norm(c?.control)).filter(Boolean)
+                );
+
+                setSystemControlSet(set);
+            } catch (e) {
+                console.error("Failed to fetch system controls:", e);
+                setSystemControlSet(new Set());
+            }
+        };
+
+        fetchSystemControls();
+    }, []);
+
+    useEffect(() => {
+        const clean = norm(controlName);
+        setIsSystemControlName(clean ? systemControlSet.has(clean) : false);
+    }, [controlName, systemControlSet]);
+
+
+    const [showSuggestionPopup, setShowSuggestionPopup] = useState(false);
+
     const [controlTypeOptions] = useState(['Act', 'Object', 'System']);
     const [activationOptions] = useState(['Prevention Control', 'Consequence Minimizing Control', 'Both']);
     const [hierarchyOptions] = useState(['1. Elimination', '2. Substitution', '3. Engineering', '4. Separation', '5. Administration', '6. PPE']);
@@ -294,6 +328,19 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
         }
     }, [data]);
 
+    const norm = (s) =>
+        (s ?? "")
+            .toString()
+            .trim()
+            .replace(/\s*\*\s*$/, "")   // remove trailing star marker for comparisons
+            .replace(/\s+/g, " ")
+            .toLowerCase();
+
+    const ensureStar = (s) => {
+        const v = (s ?? "").toString().trim();
+        if (!v) return v;
+        return /\s*\*\s*$/.test(v) ? v : `${v} *`;
+    };
 
     const handleSubmit = async (e) => {
         if (readOnly) {
@@ -301,34 +348,58 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
             return;
         }
 
-        const oldName = String(initialControlName ?? "").trim();
-        const newName = String(controlName ?? "").trim();
+        const oldName = (data?.control ?? "").toString();
+        const newNameRaw = (controlName ?? "").toString().trim();
 
-        if (!newName) {
-            toast.warn("Control name cannot be empty.", { autoClose: 1200 });
+        const oldNorm = norm(oldName);
+        const newNorm = norm(newNameRaw);
+
+        // Relevant controls names (ignore star)
+        const relevantNormSet = new Set(
+            (relevantControls || [])
+                .map(rc => norm(rc?.control))
+                .filter(Boolean)
+        );
+
+        // System controls names (you already loaded into systemControlSet as normalized)
+        const systemNormSet = systemControlSet; // assumed already normalized via norm()
+
+        // Existing CEA names (if you have them) — normalize too
+        const ceaNormSet = new Set(
+            (existingControlNames || [])
+                .map(n => norm(n))
+                .filter(Boolean)
+        );
+
+        if (!newNameRaw) {
+            toast.warn("Please enter a Control Name.", { closeButton: false, autoClose: 2000 });
             return;
         }
 
-        if (newName.toLowerCase() !== oldName.toLowerCase()) {
-            console.log("Checking for existing control names...");
-            const exists = existingControlNames.some(n => {
-                const norm = String(n ?? "").trim().toLowerCase();
-                console.log(`Comparing existing control "${norm}" with new name "${newName.toLowerCase()}"`);
-                return norm && norm === newName.toLowerCase();
-            });
+        const nameChanged = newNorm !== oldNorm;
 
-            console.log("Exists:", exists);
+        if (nameChanged) {
+            const isDuplicate =
+                relevantNormSet.has(newNorm) ||
+                systemNormSet.has(newNorm) ||
+                ceaNormSet.has(newNorm);
 
-            if (exists) {
-                toast.error(`A control named "${newName}" already exists. Please choose a unique name.`, {
-                    autoClose: 3000,
-                });
+            if (isDuplicate) {
+                toast.error(
+                    "That control name already exists (in Relevant Controls or System Controls). Please choose a unique name.",
+                    { autoClose: 3000, closeButton: false }
+                );
                 return;
             }
         }
 
+        const isSystem = systemNormSet.has(newNorm);
+
+        const finalControlName =
+            nameChanged && !isSystem ? ensureStar(newNameRaw) : newNameRaw;
+
         const updatedData = {
-            control: controlName,
+            control: finalControlName,
             critical: criticalControl,
             act: controlType,
             activation: controlActivation,
@@ -347,12 +418,43 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
         console.log(updatedData);
 
         if (controlName.trim() !== initialControlName.trim()) {
-            onControlRename(initialControlName.trim(), controlName.trim());
+            onControlRename(initialControlName.trim(), finalControlName.trim());
         }
 
         // Call the onSave function with updated data
         onSave(data.id, updatedData);
         onClose();
+    };
+
+    const getControlDataForSuggestion = () => {
+        return {
+            controlName: controlName,
+            criticalControl: criticalControl,
+            controlType: controlType,
+            controlActivation: controlActivation,
+            hierarchy: hierarchy,
+            controlAim: controlAim,
+            quality: quality,
+            description: description,
+            performance: performance
+        };
+    };
+
+    const handleSuggestClick = () => {
+        if (!controlName.trim()) {
+            toast.warn("Please enter a Control Name before suggesting.");
+            return;
+        }
+
+        if (isSystemControlName) {
+            toast.warn("This control already exists in the system and cannot be suggested.", {
+                autoClose: 2000,
+                closeButton: false,
+            });
+            return;
+        }
+
+        setShowSuggestionPopup(true);
     };
 
     return (
@@ -690,10 +792,30 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                             >
                                 {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (readOnly ? `Close Popup` : `Submit`)}
                             </button>
+
+                            {!readOnly && (
+                                <button
+                                    className="ibra-popup-page-upload-button"
+                                    onClick={handleSuggestClick}
+                                    style={{ marginLeft: 20 }}
+                                    title={isSystemControlName ? "This control already exists in the system" : "Suggest this control to the system"}
+                                    disabled={isSystemControlName || !controlName.trim()}
+                                >
+                                    {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Suggest Control`)}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
             </div>
+
+            {showSuggestionPopup && (
+                <ControlSuggestionPopup
+                    isOpen={showSuggestionPopup}
+                    onClose={() => setShowSuggestionPopup(false)}
+                    controlData={getControlDataForSuggestion()}
+                />
+            )}
 
             {showResponsibleDropdown && filteredResponsible.length > 0 && (
                 <ul

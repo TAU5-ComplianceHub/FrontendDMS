@@ -1,0 +1,157 @@
+.grading-card {
+    height: calc(100% - 50px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.grading-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    /* space between questions */
+}
+
+.grading-footer {
+    flex: 0 0 auto;
+    padding: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+.grading-qcard {
+    width: calc(100% - 25px);
+    background: white;
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid #d0d0d0;
+}
+
+.grading-qtitle {
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #002060;
+}
+
+.grading-answer {
+    width: 100%;
+    min-height: 90px;
+    resize: none;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    font-family: Arial;
+    background: #fff;
+    margin-bottom: 10px;
+    field-sizing: content;
+}
+
+.grading-checks {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    justify-content: center;
+}
+
+.grading-check {
+    appearance: none;
+    /* Remove default styling */
+    width: 20px;
+    height: 20px;
+    margin: 5px;
+    vertical-align: middle;
+    border-radius: 20%;
+    /* Fully rounded corners */
+    border: 2px solid #ccc;
+    /* Lighter border color */
+    background-color: white;
+    /* White background for unselected state */
+    position: relative;
+    /* Required for pseudo-elements */
+}
+
+/* When the checkbox is checked */
+.grading-check:checked {
+    background-color: #002060;
+    /* Green background for checked state */
+    border-color: #002060;
+    /* Border color matches the background */
+}
+
+/* Custom checkmark with ::after for the checked state */
+.grading-check:checked::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: 5px;
+    width: 3px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+    /* Rotate to form a checkmark */
+}
+
+.grading-check-label {
+    display: inline-flex;
+    /* ✅ keeps text beside checkbox */
+    align-items: center;
+    gap: 10px;
+    font-family: Arial;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Correct stays blue (your existing checked rule already does this) */
+.grading-check-correct:checked {
+    background-color: #7EAC89;
+    border-color: #7EAC89;
+}
+
+/* Incorrect becomes red when checked */
+.grading-check-incorrect:checked {
+    background-color: #CB6F6F;
+    /* red */
+    border-color: #CB6F6F;
+}
+
+/* checkmark stays white (works for both) */
+.grading-check:checked::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    left: 5px;
+    width: 3px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg);
+}
+
+.grading-percent-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+
+.grading-percent-label {
+    font-family: Arial;
+    font-weight: 600;
+    color: #002060;
+}
+
+.grading-percent-input {
+    width: 110px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    font-family: Arial;
+    text-align: center;
+}

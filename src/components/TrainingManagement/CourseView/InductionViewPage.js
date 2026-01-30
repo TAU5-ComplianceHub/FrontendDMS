@@ -42,7 +42,7 @@ const InductionViewPage = () => {
     const [submitResult, setSubmitResult] = useState(null);
     // shape: { total, correctCount, scorePercent, passed, passMark, trainee }
 
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');
 

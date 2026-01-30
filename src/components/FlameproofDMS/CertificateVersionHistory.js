@@ -11,7 +11,7 @@ import "./CertificateVersionHistory.css";
 const CertificateVersionHistory = () => {
     const [activity, setActivity] = useState([]); // State to hold the file data
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [loading, setLoading] = useState(false);
     const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);

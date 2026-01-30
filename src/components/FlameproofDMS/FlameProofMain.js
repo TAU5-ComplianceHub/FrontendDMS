@@ -27,7 +27,7 @@ import { saveAs } from "file-saver";
 const FlameProofMain = () => {
   const { type, site } = useParams();
   const [files, setFiles] = useState([]);
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState(null);
   const [token, setToken] = useState('');

@@ -14,15 +14,16 @@ import AbbreviationTable from "../CreatePage/AbbreviationTable";
 import TermTable from "../CreatePage/TermTable";
 import InductionContent from "../VisitorsInduction/InductionCreation/InductionContent";
 import InductionOutline from "../VisitorsInduction/InductionCreation/InductionOutline";
-import InductionAssessment from "../VisitorsInduction/InductionCreation/InductionAssessment";
 import PublishedInductionPreviewPage from "../VisitorsInduction/InductionCreation/PublishedInductionPreviewPage";
 import RepublishTraining from "./RepublishTraining";
 import RepublishTrainingConfirmation from "./RepublishTrainingConfirmation";
 import SaveAsOnlineTrainingPopup from "./SaveAsOnlineTrainingPopup";
+import OTCourseAssessment from "./OTCourseAssessment";
+import CourseResourceTable from "./CourseResourceTable";
 
 const OnlineTrainingReviewPage = () => {
   const navigate = useNavigate();
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);
   const access = getCurrentUser();
@@ -333,6 +334,24 @@ const OnlineTrainingReviewPage = () => {
       }
     }
 
+    // ✅ NEW: attach course resources
+    wire.resources = (wire.resources || []).map((r, idx) => {
+      const f = r?.file;
+      if (f instanceof File) {
+        const fileId = r.media?.fileId || crypto.randomUUID();
+        fd.append(`files[${fileId}]`, f, f.name);
+
+        return {
+          ...r,
+          nr: idx + 1,
+          name: r.name || f.name,
+          media: { fileId, filename: f.name, contentType: f.type, size: f.size },
+          file: undefined
+        };
+      }
+      return { ...r, nr: idx + 1, file: undefined };
+    });
+
     // You already send other wrapper data; mirror your current payload shape
     const payload = {
       usedAbbrCodes: usedAbbrCodesRef.current,
@@ -426,6 +445,24 @@ const OnlineTrainingReviewPage = () => {
         }
       }
     }
+
+    // ✅ NEW: attach course resources
+    wire.resources = (wire.resources || []).map((r, idx) => {
+      const f = r?.file;
+      if (f instanceof File) {
+        const fileId = r.media?.fileId || crypto.randomUUID();
+        fd.append(`files[${fileId}]`, f, f.name);
+
+        return {
+          ...r,
+          nr: idx + 1,
+          name: r.name || f.name,
+          media: { fileId, filename: f.name, contentType: f.type, size: f.size },
+          file: undefined
+        };
+      }
+      return { ...r, nr: idx + 1, file: undefined };
+    });
 
     fd.append("draft", JSON.stringify(payload));
 
@@ -541,7 +578,8 @@ const OnlineTrainingReviewPage = () => {
       const rawForm = storedData.formData || {};
       const normalizedForm = {
         ...rawForm,
-        supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : []
+        supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : [],
+        resources: Array.isArray(rawForm.resources) ? rawForm.resources : [] // ✅ ADD
       };
 
       // IMPORTANT: hydrate media previews for any saved files
@@ -574,6 +612,7 @@ const OnlineTrainingReviewPage = () => {
     additionalResources: [],
     chapters: [],
     summary: "",
+    resources: [],
     courseOutline: {
       department: "",
       duration: "",
@@ -581,7 +620,7 @@ const OnlineTrainingReviewPage = () => {
       table: []
     },
     assessment: [
-      { id: uuidv4(), question: "", answer: "", options: ["", "", ""] }
+      { id: uuidv4(), type: "MCQ", question: "", answer: "", options: ["", "", ""] }
     ]
   });
 
@@ -1068,7 +1107,8 @@ const OnlineTrainingReviewPage = () => {
               <InductionContent formData={formData} setFormData={setFormData} readOnly={readOnly} />
               <InductionOutline formData={formData} setFormData={setFormData} readOnly={readOnly} />
               <OnlineTrainingSummary formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <InductionAssessment formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <OTCourseAssessment formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <CourseResourceTable formData={formData} setFormData={setFormData} readOnly={readOnly} userID={userID} />
             </>
           )}
         </div>

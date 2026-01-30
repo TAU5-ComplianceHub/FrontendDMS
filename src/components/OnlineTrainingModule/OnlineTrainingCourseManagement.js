@@ -1,33 +1,52 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faDownload, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faCirclePlus, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faCaretLeft, faCaretRight, faCirclePlus, faTrash, faFilter } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import TopBarDD from "../Notifications/TopBarDD";
 import "./OnlineTrainingCourseManagement.css";
 import AddStudentPopupOT from "./AddStudentPopupOT";
 import { toast, ToastContainer } from "react-toastify";
 import RemoveStudentEnrollment from "./RemoveStudentEnrollment";
+import PopupMenuOnlineTrainingGrading from "./PopupMenuOnlineTrainingGrading";
 
 const OnlineTrainingCourseManagement = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const { id } = useParams();
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const navigate = useNavigate();
-    const [versions, setVersions] = useState([]);
     const [courseTitle, setCourseTitle] = useState("");
     const [students, setStudents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [removePopupVisible, setRemovePopupVisible] = useState(false);
     const [studentToRemove, setStudentToRemove] = useState(null);
+    const [hoveredStudentId, setHoveredStudentId] = useState(null);
+    const [selectedForMenu, setSelectedForMenu] = useState(null);
+    const [popupVisible, setPopupVisible] = useState(false);
+    const [userIDs, setUserIDs] = useState([]);
+
+    // --- Excel Filter State & Refs ---
+    const excelPopupRef = useRef(null);
+    const [filters, setFilters] = useState({});
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+    const initialOrderRef = useRef(new Map());
 
     useEffect(() => {
         const storedToken = localStorage.getItem('token');
         if (storedToken) {
             setToken(storedToken);
-            const decodedToken = jwtDecode(storedToken);
+            jwtDecode(storedToken); // verify decode
         }
     }, [navigate]);
 
@@ -35,10 +54,7 @@ const OnlineTrainingCourseManagement = () => {
         try {
             setLoading(true);
             setError("");
-
-            // Use whichever token your admin/manager side stores
-            const token =
-                localStorage.getItem("token");
+            const token = localStorage.getItem("token");
 
             const res = await fetch(
                 `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/published/enrollments/${id}`,
@@ -51,7 +67,6 @@ const OnlineTrainingCourseManagement = () => {
                 }
             );
 
-            // safer parsing (avoids the "<!DOCTYPE" JSON error)
             const contentType = res.headers.get("content-type") || "";
             const raw = await res.text();
             const data = contentType.includes("application/json") ? JSON.parse(raw) : null;
@@ -61,10 +76,9 @@ const OnlineTrainingCourseManagement = () => {
             }
             if (!data) throw new Error("Server did not return JSON");
 
-            console.log("Enrolled students data:", data);
-
             setCourseTitle(data.course?.courseTitle || "");
-            setStudents(Array.isArray(data.students) ? data.students : []);
+            const loadedStudents = Array.isArray(data.students) ? data.students : [];
+            setStudents(loadedStudents);
         } catch (e) {
             console.error("Error loading enrollments:", e);
             setError(e.message || "Failed to load enrollments");
@@ -77,30 +91,307 @@ const OnlineTrainingCourseManagement = () => {
         if (id) loadEnrolledStudents();
     }, [id]);
 
-    const rows = students.length
-        ? students.map((s) => ({ ...s, isPlaceholder: false }))
-        : [{ isPlaceholder: true }];
-
-    const [popupVisible, setPopupVisible] = useState(false);
-    const [userIDs, setUserIDs] = useState([]); // this is what popup expects
-
-    // IDs of students already enrolled (from the route)
-    const existingUserIDs = (students || [])
-        .map((s) => s?._id)
-        .filter(Boolean);
-
+    // Capture initial order for sort reset
     useEffect(() => {
+        if (!students || students.length === 0) return;
+        const map = initialOrderRef.current;
+        const hasAll = students.every(s => map.has(s._id));
+        if (hasAll) return;
+        students.forEach((s, idx) => {
+            if (!map.has(s._id)) map.set(s._id, map.size + idx);
+        });
+    }, [students]);
+
+    // Sync IDs for popup
+    useEffect(() => {
+        const existingUserIDs = (students || []).map((s) => s?._id).filter(Boolean);
         setUserIDs(existingUserIDs);
     }, [students]);
 
-    const saveData = async (selectedIds) => {
-        if (!Array.isArray(selectedIds)) {
-            setError("Invalid selection received (expected an array of ids).");
-            return;
+    // --- Helper Functions ---
+    const formatDate = (dateString) => {
+        if (!dateString) return "-";
+        const date = new Date(dateString);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+    const getProgressText = (status) => {
+        const isNum = typeof status === "number";
+        const text = String(status ?? "").toLowerCase();
+        let percent = 0;
+
+        if (isNum && Number.isFinite(status)) {
+            percent = clamp(status, 0, 100);
+        } else {
+            let m = text.match(/(\d+(?:\.\d+)?)\s*%/);
+            if (m) {
+                percent = clamp(parseFloat(m[1]), 0, 100);
+            } else {
+                m = text.match(/\b(\d{1,3})\b/);
+                if (m) percent = clamp(parseInt(m[1], 10), 0, 100);
+            }
         }
 
-        const token = localStorage.getItem("token");
+        if (text.includes("completed") || percent === 100) return "Completed 100%";
+        if (text.includes("overdue")) return "Overdue";
+        if (text.includes("not passed")) return "Not Passed";
+        if (text.includes("in progress") || percent > 0) return `In Progress ${percent}%`;
+        return `In Progress 0%`;
+    };
 
+    const BLANK = "(Blanks)";
+
+    const getFilterValuesForCell = (row, colId) => {
+        if (row.isPlaceholder) return []; // Ignore placeholder row for filtering logic
+
+        let val;
+        const enrollment = row.enrollment || {};
+
+        if (colId === "studentName") val = `${row.name} ${row.surname}`;
+        if (colId === "progress") val = getProgressText(enrollment.progress);
+        if (colId === "mark") val = enrollment.mark ?? "-";
+        if (colId === "dateAdded") val = enrollment.dateAdded ? formatDate(enrollment.dateAdded) : "-";
+        if (colId === "completionDate") val = enrollment.completionDate ? formatDate(enrollment.completionDate) : "-";
+
+        const s = val == null ? "" : String(val).trim();
+        return s === "" ? [BLANK] : [s];
+    };
+
+    const toggleSort = (colId, direction) => {
+        setSortConfig(prev => {
+            if (prev?.colId === colId && prev?.direction === direction) {
+                return DEFAULT_SORT;
+            }
+            return { colId, direction };
+        });
+    };
+
+    const handleInnerScrollWheel = (e) => {
+        const el = e.currentTarget;
+        const { scrollTop, scrollHeight, clientHeight } = el;
+        const delta = e.deltaY;
+        const goingDown = delta > 0;
+        const atTop = scrollTop <= 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+        if ((goingDown && atBottom) || (!goingDown && atTop)) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
+    // --- Filtering & Sorting Logic ---
+    const filteredRows = useMemo(() => {
+        // Start with real students, exclude placeholder logic from filtering/sorting base
+        let current = [...students];
+
+        // 1) Filtering
+        current = current.filter(row => {
+            for (const [colId, filterObj] of Object.entries(filters)) {
+                const selected = filterObj?.selected;
+                if (!selected || !Array.isArray(selected)) continue;
+                const cellValues = getFilterValuesForCell(row, colId);
+                const match = cellValues.some(v => selected.includes(v));
+                if (!match) return false;
+            }
+            return true;
+        });
+
+        // 2) Sorting
+        const colId = sortConfig?.colId || "nr";
+
+        if (colId === "nr") {
+            const order = initialOrderRef.current;
+            current.sort((a, b) => (order.get(a._id) ?? 0) - (order.get(b._id) ?? 0));
+        } else {
+            const dir = sortConfig?.direction === "desc" ? -1 : 1;
+            const normalize = (v) => {
+                const s = v == null ? "" : String(v).trim();
+                return s === "" ? BLANK : s;
+            };
+
+            const tryNumber = (v) => {
+                const s = String(v).replace(/,/g, "").trim();
+                if (!/^[-+]?\d*(?:\.\d+)?$/.test(s) || s === "" || s === "." || s === "+" || s === "-") return null;
+                const n = Number(s);
+                return Number.isFinite(n) ? n : null;
+            };
+
+            current.sort((a, b) => {
+                let av, bv;
+                const ea = a.enrollment || {};
+                const eb = b.enrollment || {};
+
+                if (colId === "studentName") {
+                    av = `${a.name} ${a.surname}`;
+                    bv = `${b.name} ${b.surname}`;
+                } else if (colId === "progress") {
+                    av = getProgressText(ea.progress);
+                    bv = getProgressText(eb.progress);
+                } else if (colId === "mark") {
+                    av = ea.mark;
+                    bv = eb.mark;
+                } else if (colId === "dateAdded") {
+                    const da = ea.dateAdded ? new Date(ea.dateAdded).getTime() : 0;
+                    const db = eb.dateAdded ? new Date(eb.dateAdded).getTime() : 0;
+                    return (da - db) * dir;
+                } else if (colId === "completionDate") {
+                    const da = ea.completionDate ? new Date(ea.completionDate).getTime() : 0;
+                    const db = eb.completionDate ? new Date(eb.completionDate).getTime() : 0;
+                    return (da - db) * dir;
+                }
+
+                av = normalize(av);
+                bv = normalize(bv);
+
+                const aBlank = av === BLANK;
+                const bBlank = bv === BLANK;
+                if (aBlank && !bBlank) return 1;
+                if (!aBlank && bBlank) return -1;
+
+                const an = tryNumber(av);
+                const bn = tryNumber(bv);
+                if (an != null && bn != null) return (an - bn) * dir;
+
+                return String(av).localeCompare(String(bv), undefined, { sensitivity: "base", numeric: true }) * dir;
+            });
+        }
+
+        // If filtering/sorting leaves no rows, or originally empty, we might want to show placeholder
+        // But original logic showed placeholder only if initial load was empty.
+        // We will mimic: if filtered results > 0, show them. If 0, show empty state or placeholder?
+        // To match exact structure: map them.
+
+        if (current.length === 0 && students.length === 0) {
+            return [{ isPlaceholder: true }];
+        }
+
+        return current.map(s => ({ ...s, isPlaceholder: false }));
+    }, [students, filters, sortConfig]);
+
+    const renderProgress = (status) => {
+        const text = getProgressText(status);
+
+        // Extract percent for width
+        let percent = 0;
+        let m = text.match(/(\d+)%/);
+        if (m) percent = parseInt(m[1], 10);
+
+        let fill = "#FFFF89";
+        let cls = "course-home-info-progress-badge";
+
+        if (text.includes("Completed")) {
+            cls += " is-complete";
+            fill = "#7EAC89";
+        } else if (text.includes("Overdue")) {
+            cls += " is-overdue";
+            fill = "#CB6F6F";
+            percent = 100;
+        } else if (text.includes("Not Passed")) {
+            fill = "#FFC000";
+            percent = 100;
+        }
+
+        return (
+            <div className="course-home-info-progress-wrap">
+                <div className={cls} style={{ "--p": `${percent}%`, "--fill": fill }}>
+                    <span className="label-course-info" style={{ zIndex: "1" }}>{text}</span>
+                </div>
+            </div>
+        );
+    };
+
+    // --- Popup Logic ---
+    function openExcelFilterPopup(colId, e) {
+        if (colId === "nr" || colId === "act") return;
+
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Build unique values from ALL rows (not just filtered)
+        const values = Array.from(
+            new Set(
+                (students || []).flatMap(r => getFilterValuesForCell(r, colId))
+            )
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        const existing = filters?.[colId]?.selected;
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+
+        setExcelSelected(initialSelected);
+        setExcelSearch("");
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    }
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (!e.target.closest('.excel-filter-popup') && excelFilter.open) {
+                setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            }
+        };
+        const handleScroll = (e) => {
+            if (!e.target.closest('.excel-filter-popup') && excelFilter.open) {
+                setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, [excelFilter.open]);
+
+    // Position adjustment
+    useEffect(() => {
+        if (!excelFilter.open) return;
+        const el = excelPopupRef.current;
+        if (!el) return;
+
+        const popupRect = el.getBoundingClientRect();
+        const viewportH = window.innerHeight;
+        const viewportW = window.innerWidth;
+        const margin = 8;
+
+        let { top, left } = excelFilter.pos;
+
+        if (popupRect.bottom > viewportH - margin) {
+            const anchor = excelFilter.anchorRect;
+            if (anchor) top = Math.max(margin, anchor.top - popupRect.height - 4);
+        }
+        if (popupRect.right > viewportW - margin) {
+            left = Math.max(margin, left - (popupRect.right - (viewportW - margin)));
+        }
+        if (popupRect.left < margin) left = margin;
+
+        if (top !== excelFilter.pos.top || left !== excelFilter.pos.left) {
+            setExcelFilter(prev => ({ ...prev, pos: { ...prev.pos, top, left } }));
+        }
+    }, [excelFilter.open, excelSearch, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect]);
+
+    const saveData = async (selectedIds) => {
+        if (!Array.isArray(selectedIds)) {
+            setError("Invalid selection received.");
+            return;
+        }
+        const token = localStorage.getItem("token");
         await fetch(
             `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/published/enrollments/${id}`,
             {
@@ -112,145 +403,43 @@ const OnlineTrainingCourseManagement = () => {
                 body: JSON.stringify({ userIDs: selectedIds }),
             }
         );
-
-        toast.success("Students enrolled successfully.", {
-            closeButton: false,
-            autoClose: 2000,
-            pauseOnHover: false,
-            draggable: false,
-        });
-
+        toast.success("Students enrolled successfully.", { autoClose: 2000, closeButton: false });
         await loadEnrolledStudents();
     };
 
-    const formatDate = (dateString) => {
-        if (dateString === "" || dateString === null) return "N/A"
-        const date = new Date(dateString);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }; const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-
-    const renderProgress = (status) => {
-        const isNum = typeof status === "number";
-        const text = String(status ?? "").toLowerCase();
-
-        // derive percent
-        let percent = 0;
-        if (isNum && Number.isFinite(status)) {
-            percent = clamp(status, 0, 100);
-        } else {
-            // prefer an explicit % if present
-            let m = text.match(/(\d+(?:\.\d+)?)\s*%/);
-            if (m) {
-                percent = clamp(parseFloat(m[1]), 0, 100);
-            } else {
-                // fallback: first 1–3 digit number (to catch "50" or "50 of 100")
-                m = text.match(/\b(\d{1,3})\b/);
-                if (m) percent = clamp(parseInt(m[1], 10), 0, 100);
-            }
-        }
-
-        console.log("renderProgress", status, percent);
-
-        // defaults
-        let label = `In Progress ${percent}%`;
-        let fill = "#FFFF89";  // yellow-ish (progress)
-        let cls = "course-home-info-progress-badge";
-
-        if (text.includes("completed") || percent === 100) {
-            label = "Completed 100%";
-            cls += " is-complete";
-            return (
-                <div className="course-home-info-progress-wrap">
-                    <div className={cls} style={{ "--p": "100%", "--fill": "#7EAC89" }}>
-                        <span className="label-course-info">{label}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        if (text.includes("overdue")) {
-            label = "Overdue";
-            cls += " is-overdue";
-            return (
-                <div className="course-home-info-progress-wrap">
-                    <div className={cls} style={{ "--p": "100%", "--fill": "#CB6F6F" }}>
-                        <span className="label-course-info">{label}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        if (text.includes("not passed")) {
-            label = "Not Passed";
-            return (
-                <div className="course-home-info-progress-wrap">
-                    <div className={cls} style={{ "--p": "100%", "--fill": "#FFC000" }}>
-                        <span className="label-course-info">{label}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        // Treat any numeric percent as in-progress even if "in progress" text is missing
-        if (text.includes("in progress") || percent > 0) {
-            return (
-                <div className="course-home-info-progress-wrap">
-                    <div className={cls} style={{ "--p": `${percent}%`, "--fill": fill }}>
-                        <span className="label-course-info">{label}</span>
-                    </div>
-                </div>
-            );
-        }
-
-        // Fallback: treat as 0% in-progress
-        return (
-            <div className="course-home-info-progress-wrap">
-                <div className={cls} style={{ "--p": "0%", "--fill": fill }}>
-                    In Progress 0%
-                </div>
-            </div>
-        );
-    };
-
-    const removeStudentEnrollment = async (studentId) => {
+    const removeStudentEnrollmentFn = async (studentId) => {
         try {
-            if (!studentId) {
-                console.warn("removeStudentEnrollment called without studentId");
-                return;
-            }
-
+            if (!studentId) return;
             const token = localStorage.getItem("token");
-
             const res = await fetch(
                 `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/published/enrollments/${id}/student/${studentId}`,
                 {
                     method: "DELETE",
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
+                    headers: { Authorization: `Bearer ${token}` },
                 }
             );
-
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(text || "Failed to remove student enrollment");
-            }
-
-            toast.success("Student enrollment removed successfully.", {
-                closeButton: false,
-                autoClose: 2000,
-                pauseOnHover: false,
-                draggable: false,
-            });
-
+            if (!res.ok) throw new Error("Failed to remove student enrollment");
+            toast.success("Student enrollment removed successfully.", { autoClose: 2000, closeButton: false });
             await loadEnrolledStudents();
         } catch (err) {
-            console.error("Error removing student enrollment:", err);
-            setError(err.message || "Failed to remove student enrollment");
+            console.error("Error removing student:", err);
+            setError(err.message);
         }
+    };
+
+    const handleStudentClick = (student) => (e) => {
+        e.stopPropagation();
+        const studentId = student?._id;
+        if (!studentId) return;
+        const enrollment = student?.enrollment || {};
+        if (enrollment?.assessmentStatus !== "PENDING_REVIEW") return;
+
+        setHoveredStudentId(prev => (prev === studentId ? null : studentId));
+        setSelectedForMenu({
+            courseId: enrollment?.onlineTrainingCourse,
+            studentId: studentId,
+            studentName: `${student.name} ${student.surname}`.trim()
+        });
     };
 
     return (
@@ -294,19 +483,36 @@ const OnlineTrainingCourseManagement = () => {
                     </div>
                     <div className="table-container-file">
                         <table className="dc-version-history-file-info-table" style={{ tableLayout: "fixed", width: "100%" }}>
-                            <thead className="dc-version-history-file-info-head">
+                            <thead className="dc-version-history-file-info-head" style={{ zIndex: "10" }}>
                                 <tr>
-                                    <th className="course-manage-nr">Nr</th>
-                                    <th className="course-manage-name">Student Name</th>
-                                    <th className="course-manage-status">Completion Status</th>
-                                    <th className="course-manage-score">Score</th>
-                                    <th className="course-manage-start">Enrollment Date</th>
-                                    <th className="course-manage-end">Completion Date</th>
+                                    <th className="course-manage-nr" onClick={() => toggleSort("nr", "asc")} style={{ cursor: "pointer" }}>
+                                        Nr
+                                    </th>
+                                    <th className="course-manage-name" onClick={(e) => openExcelFilterPopup("studentName", e)} style={{ cursor: "pointer" }}>
+                                        Student Name
+                                        {(filters["studentName"] || sortConfig.colId === "studentName") && <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "6px", color: filters["studentName"] ? "white" : "inherit" }} />}
+                                    </th>
+                                    <th className="course-manage-status" onClick={(e) => openExcelFilterPopup("progress", e)} style={{ cursor: "pointer" }}>
+                                        Completion Status
+                                        {(filters["progress"] || sortConfig.colId === "progress") && <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "6px", color: filters["progress"] ? "white" : "inherit" }} />}
+                                    </th>
+                                    <th className="course-manage-score" onClick={(e) => openExcelFilterPopup("mark", e)} style={{ cursor: "pointer" }}>
+                                        Score
+                                        {(filters["mark"] || sortConfig.colId === "mark") && <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "6px", color: filters["mark"] ? "white" : "inherit" }} />}
+                                    </th>
+                                    <th className="course-manage-start" onClick={(e) => openExcelFilterPopup("dateAdded", e)} style={{ cursor: "pointer" }}>
+                                        Enrollment Date
+                                        {(filters["dateAdded"] || sortConfig.colId === "dateAdded") && <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "6px", color: filters["dateAdded"] ? "white" : "inherit" }} />}
+                                    </th>
+                                    <th className="course-manage-end" onClick={(e) => openExcelFilterPopup("completionDate", e)} style={{ cursor: "pointer" }}>
+                                        Completion Date
+                                        {(filters["completionDate"] || sortConfig.colId === "completionDate") && <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "6px", color: filters["completionDate"] ? "white" : "inherit" }} />}
+                                    </th>
                                     <th className="course-manage-act">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {rows.map((student, index) => {
+                                {filteredRows.map((student, index) => {
                                     const isPlaceholder = student.isPlaceholder;
                                     const enrollment = student.enrollment || {};
 
@@ -317,8 +523,24 @@ const OnlineTrainingCourseManagement = () => {
                                         >
                                             <td style={{ textAlign: "center" }}>{index + 1}</td>
 
-                                            <td>
+                                            <td
+                                                style={{ position: "relative", cursor: "pointer" }}
+                                                onClick={isPlaceholder ? undefined : handleStudentClick(student)}
+                                            >
                                                 {isPlaceholder ? "" : `${student.name} ${student.surname}`}
+
+                                                {!isPlaceholder &&
+                                                    hoveredStudentId === student._id &&
+                                                    selectedForMenu &&
+                                                    enrollment?.assessmentStatus === "PENDING_REVIEW" && (
+                                                        <PopupMenuOnlineTrainingGrading
+                                                            isOpen
+                                                            setHoveredStudentId={setHoveredStudentId}
+                                                            courseId={selectedForMenu.courseId}
+                                                            studentId={selectedForMenu.studentId}
+                                                            studentName={selectedForMenu.studentName}
+                                                        />
+                                                    )}
                                             </td>
 
                                             <td style={{ textAlign: "center" }}>
@@ -330,24 +552,15 @@ const OnlineTrainingCourseManagement = () => {
                                             </td>
 
                                             <td style={{ textAlign: "center" }}>
-                                                {isPlaceholder
-                                                    ? ""
-                                                    : (enrollment.dateAdded
-                                                        ? formatDate(enrollment.dateAdded)
-                                                        : "-")}
+                                                {isPlaceholder ? "" : (enrollment.dateAdded ? formatDate(enrollment.dateAdded) : "-")}
                                             </td>
 
                                             <td style={{ textAlign: "center" }}>
-                                                {isPlaceholder
-                                                    ? ""
-                                                    : (enrollment.completionDate
-                                                        ? formatDate(enrollment.completionDate)
-                                                        : "-")}
+                                                {isPlaceholder ? "" : (enrollment.completionDate ? formatDate(enrollment.completionDate) : "-")}
                                             </td>
 
                                             <td style={{ textAlign: "center" }}>
                                                 {isPlaceholder ? (
-                                                    // Placeholder: only PLUS
                                                     <button
                                                         className="flame-delete-button-fi col-but-res"
                                                         style={{ width: "33%" }}
@@ -357,21 +570,23 @@ const OnlineTrainingCourseManagement = () => {
                                                         <FontAwesomeIcon icon={faCirclePlus} />
                                                     </button>
                                                 ) : (
-                                                    // Real row: PLUS + TRASH
                                                     <div style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
                                                         <button
                                                             className="flame-delete-button-fi col-but-res"
                                                             style={{ width: "33%" }}
-                                                            onClick={() => setPopupVisible(true)}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setPopupVisible(true);
+                                                            }}
                                                             title="Add students"
                                                         >
                                                             <FontAwesomeIcon icon={faCirclePlus} />
                                                         </button>
-
                                                         <button
                                                             className="flame-delete-button-fi col-but"
                                                             style={{ width: "33%" }}
-                                                            onClick={() => {
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
                                                                 setStudentToRemove(student);
                                                                 setRemovePopupVisible(true);
                                                             }}
@@ -385,6 +600,9 @@ const OnlineTrainingCourseManagement = () => {
                                         </tr>
                                     );
                                 })}
+                                {filteredRows.length === 0 && students.length > 0 && (
+                                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "12px" }}>No students match filters</td></tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -393,12 +611,12 @@ const OnlineTrainingCourseManagement = () => {
 
             {popupVisible && (
                 <AddStudentPopupOT
-                    userIDs={userIDs}                 // ✅ already enrolled IDs
+                    userIDs={userIDs}
                     popupVisible={popupVisible}
                     closePopup={() => setPopupVisible(false)}
                     setUserIDs={setUserIDs}
-                    saveData={saveData}               // ✅ receives selected array of ids
-                    userID={jwtDecode(token)?.userId} // ✅ exclude logged in user (popup does this) :contentReference[oaicite:4]{index=4}
+                    saveData={saveData}
+                    userID={jwtDecode(token)?.userId}
                 />
             )}
 
@@ -410,7 +628,7 @@ const OnlineTrainingCourseManagement = () => {
                         setStudentToRemove(null);
                     }}
                     removeEnrollement={async () => {
-                        await removeStudentEnrollment(studentToRemove._id);
+                        await removeStudentEnrollmentFn(studentToRemove._id);
                         setRemovePopupVisible(false);
                         setStudentToRemove(null);
                     }}
@@ -418,6 +636,127 @@ const OnlineTrainingCourseManagement = () => {
             )}
 
             <ToastContainer />
+
+            {/* Excel Filter Popup */}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onWheel={handleInnerScrollWheel}
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`}
+                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                        >
+                            Sort A to Z
+                        </button>
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`}
+                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        const colId = excelFilter.colId;
+                        const allValues = Array.from(
+                            new Set((students || []).flatMap(r => getFilterValuesForCell(r, colId)))
+                        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v);
+                                    else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const onOk = () => {
+                            const selectedArr = Array.from(excelSelected);
+                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            setFilters(prev => {
+                                const next = { ...prev };
+                                if (isAllSelected) delete next[colId];
+                                else next[colId] = { selected: selectedArr };
+                                return next;
+                            });
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={() => setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } })}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
+            )}
         </div >
     );
 };

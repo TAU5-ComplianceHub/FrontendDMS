@@ -51,7 +51,7 @@ const ReviewPage = () => {
     const [azureFN, setAzureFN] = useState("");
     const fileID = useParams().fileId;
     const type = useParams().type;
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
     const [draftNote, setDraftNote] = useState(null);
     const procedureTableRef = useRef(null);

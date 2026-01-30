@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlusCircle, faCopy, faChevronDown } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlusCircle, faCopy, faChevronDown, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import AssessmentNote from "../../OnlineTrainingModule/AssessmentNote";
 
 const InductionAssessment = ({ formData, setFormData, readOnly = false }) => {
+    const [help, setHelp] = useState(false);
+
     const addQuestion = () => {
         setFormData(prev => ({
             ...prev,
@@ -83,9 +86,23 @@ const InductionAssessment = ({ formData, setFormData, readOnly = false }) => {
 
     const onlyOneQuestionLeft = (formData.assessment?.length || 0) <= 1;
 
+    const openHelp = () => {
+        setHelp(true);
+    }
+
+    const closeHelp = () => {
+        setHelp(false)
+    }
+
     return (
         <div className="input-row">
             <div className={`input-box-ref`}>
+                <button
+                    className="top-left-button-refs"
+                    title="Information"
+                >
+                    <FontAwesomeIcon icon={faInfoCircle} onClick={openHelp} style={{ cursor: 'pointer' }} className="icon-um-search" />
+                </button>
                 <h3 className="font-fam-labels">Assessment</h3>
 
                 {formData.assessment.map((question, index) => (
@@ -222,6 +239,8 @@ const InductionAssessment = ({ formData, setFormData, readOnly = false }) => {
                         </div>
                     </div>
                 ))}
+
+                {help && (<AssessmentNote setClose={closeHelp} />)}
             </div>
         </div>
     );

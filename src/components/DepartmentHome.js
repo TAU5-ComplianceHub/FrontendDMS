@@ -39,7 +39,7 @@ import TopBar from "./Notifications/TopBar";
 const DepartmentHome = () => {
     const [error, setError] = useState(null);
     const [deletePopup, setDeletePopup] = useState(false);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [departments, setDepartments] = useState([]);
     const [loggedInUserId, setloggedInUserId] = useState('');

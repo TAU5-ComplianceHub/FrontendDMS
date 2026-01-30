@@ -31,7 +31,7 @@ import ApproversPopup from "./ApproversPopup";
 const InductionCreationPage = () => {
   const id = useParams().id || '';
   const navigate = useNavigate();
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [share, setShare] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);

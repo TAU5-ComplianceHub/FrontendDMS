@@ -23,7 +23,7 @@ import RepublishInductionConfirmation from "./RepublishInductionConfirmation";
 
 const InductionReviewPage = () => {
   const navigate = useNavigate();
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);
   const access = getCurrentUser();

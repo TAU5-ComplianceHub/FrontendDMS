@@ -27,7 +27,7 @@ const VisitorManagementDevices = () => {
     });
     const [isDraggingX, setIsDraggingX] = useState(false);
 
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [token, setToken] = useState('');
     const access = getCurrentUser();

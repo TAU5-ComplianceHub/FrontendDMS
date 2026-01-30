@@ -13,7 +13,7 @@ import CourseTrainerTable from "./CourseTrainerTable";
 const CourseDetails = () => {
     const navigate = useNavigate();
     const [userID, setUserID] = useState('');
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {

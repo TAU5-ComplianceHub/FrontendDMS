@@ -8,7 +8,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faArrowLeft, faShareNodes, faUpload, faRotateRight, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faInfo, faL, faMagicWandSparkles, faEye, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons";
 import { v4 as uuidv4 } from "uuid";
-import InductionAssessment from "../VisitorsInduction/InductionCreation/InductionAssessment";
 import InductionContent from "../VisitorsInduction/InductionCreation/InductionContent";
 import InductionOutline from "../VisitorsInduction/InductionCreation/InductionOutline";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
@@ -22,11 +21,13 @@ import DraftPopup from "../Popups/DraftPopup";
 import OnlineTrainingSummary from "./OnlineTrainingSummary";
 import OnlineTrainingCoursePreviewPage from "./OnlineTrainingCoursePreviewPage";
 import SaveAsOnlineTrainingPopup from "./SaveAsOnlineTrainingPopup";
+import OTCourseAssessment from "./OTCourseAssessment";
+import CourseResourceTable from "./CourseResourceTable";
 
 const OnlineCourseCreationPage = () => {
   const id = useParams().id || '';
   const navigate = useNavigate();
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [share, setShare] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);
@@ -315,6 +316,24 @@ const OnlineCourseCreationPage = () => {
       }
     }
 
+    wire.resources = (wire.resources || []).map((r, idx) => {
+      const f = r?.file;
+      if (f instanceof File) {
+        const fileId = r.media?.fileId || crypto.randomUUID();
+        fd.append(`files[${fileId}]`, f, f.name);
+
+        return {
+          ...r,
+          nr: idx + 1,
+          name: r.name || f.name,
+          media: { fileId, filename: f.name, contentType: f.type, size: f.size },
+          file: undefined
+        };
+      }
+
+      return { ...r, nr: idx + 1, file: undefined };
+    });
+
     const payload = {
       usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
@@ -439,6 +458,23 @@ const OnlineCourseCreationPage = () => {
         }
       }
     }
+
+    wire.resources = (wire.resources || []).map((r, idx) => {
+      const f = r?.file;
+      if (f instanceof File) {
+        const fileId = r.media?.fileId || crypto.randomUUID();
+        fd.append(`files[${fileId}]`, f, f.name);
+
+        return {
+          ...r,
+          nr: idx + 1,
+          name: r.name || f.name,
+          media: { fileId, filename: f.name, contentType: f.type, size: f.size },
+          file: undefined
+        };
+      }
+      return { ...r, nr: idx + 1, file: undefined };
+    });
 
     fd.append("draft", JSON.stringify(payload));
 
@@ -570,7 +606,8 @@ const OnlineCourseCreationPage = () => {
       const rawForm = storedData.formData || {};
       const normalizedForm = {
         ...rawForm,
-        supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : []
+        supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : [],
+        resources: Array.isArray(rawForm.resources) ? rawForm.resources : [] // ✅ ADD
       };
 
       // IMPORTANT: hydrate media previews for any saved files
@@ -605,6 +642,7 @@ const OnlineCourseCreationPage = () => {
     additionalResources: [],
     chapters: [],
     summary: "",
+    resources: [],
     courseOutline: {
       department: "",
       duration: "",
@@ -612,7 +650,7 @@ const OnlineCourseCreationPage = () => {
       table: []
     },
     assessment: [
-      { id: uuidv4(), question: "", answer: "", options: ["", "", ""] }
+      { id: uuidv4(), type: "MCQ", question: "", answer: "", options: ["", "", ""] }
     ]
   });
 
@@ -852,7 +890,7 @@ const OnlineCourseCreationPage = () => {
       setLoading(false);
 
       setTimeout(() => {
-        navigate('/FrontendDMS/generatedInductionInfo');
+        navigate('/FrontendDMS/onlinePublishedCourses');
       }, 1000);
     } catch (error) {
       console.error("Error generating document:", error);
@@ -1157,7 +1195,8 @@ const OnlineCourseCreationPage = () => {
               <InductionContent formData={formData} setFormData={setFormData} readOnly={readOnly} />
               <InductionOutline formData={formData} setFormData={setFormData} readOnly={readOnly} />
               <OnlineTrainingSummary formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <InductionAssessment formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <OTCourseAssessment formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <CourseResourceTable formData={formData} setFormData={setFormData} readOnly={readOnly} userID={userID} />
             </>
           )}
         </div>

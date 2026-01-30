@@ -18,7 +18,7 @@ const OnlineTrainingDrafts = () => {
     const [sortBy, setSortBy] = useState(null);
     const [sortDir, setSortDir] = useState(null);
     const [isLoadingDraft, setIsLoadingDraft] = useState(false);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [userID, setUserID] = useState('');
     const navigate = useNavigate();
 

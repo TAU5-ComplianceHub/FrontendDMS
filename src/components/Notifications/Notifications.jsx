@@ -138,6 +138,10 @@ const Notifications = ({ setClose, getCount }) => {
                         targetPath = `/FrontendDMS/riskApprover/${note.actionId}`;
                     }
 
+                    if (note.actionType === "suggestionControl") {
+                        targetPath = `/FrontendDMS/suggestedControls/${note.actionId}`;
+                    }
+
                     if (note.actionType === "draftShared") {
                         if (note.draftType === "IBRA") {
                             targetPath = `/FrontendDMS/riskIBRA/IBRA/${note.actionId}`

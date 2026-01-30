@@ -13,7 +13,7 @@ const PreviewPage = () => {
     const { fileId } = useParams();
     const [fileUrl, setFileUrl] = useState("");
     const [iframeHeight, setIframeHeight] = useState("100%");
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
 
     const navigate = useNavigate();
 

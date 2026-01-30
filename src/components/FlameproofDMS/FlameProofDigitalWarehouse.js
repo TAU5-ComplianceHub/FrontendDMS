@@ -22,7 +22,7 @@ const FlameProofDigitalWarehouse = () => {
   const [files, setFiles] = useState([]);
   const scrollerRef = React.useRef(null);
   const dragRef = React.useRef({ active: false, startX: 0, startScrollLeft: 0, hasDragged: false });
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState(null);
   const [token, setToken] = useState('');

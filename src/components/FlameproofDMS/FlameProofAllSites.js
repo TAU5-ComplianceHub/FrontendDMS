@@ -23,7 +23,7 @@ const FlameProofAllSites = () => {
     const [upload, setUpload] = useState(false);
     const [register, setRegister] = useState(false);
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [popup, setPopup] = useState(null);
     const [uploadAssetNr, setUploadAssetNr] = useState("");
     const [isLoading, setIsLoading] = useState(true);

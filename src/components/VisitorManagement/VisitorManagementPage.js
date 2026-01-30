@@ -13,7 +13,7 @@ import SortPopupVisitorManagementPage from "./SortPopupVisitorManagementPage";
 
 const VisitorManagementPage = () => {
     const [expandedRow, setExpandedRow] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const access = getCurrentUser();
     const [hoveredFileId, setHoveredFileId] = useState(null);
@@ -619,6 +619,8 @@ const VisitorManagementPage = () => {
                                                     );
                                                 }
 
+                                                // If sorted, index might change order. For "Nr", we typically want the row number in the visual list (1, 2, 3...)
+                                                // So we use 'index' from the map here.
                                                 const value = col.id === "nr" ? (index + 1) : (col.td ? col.td(file, index) : "-");
                                                 return (
                                                     <td key={`${file._id ?? index}-${col.id}`} className="col" style={{ textAlign: "center" }}>

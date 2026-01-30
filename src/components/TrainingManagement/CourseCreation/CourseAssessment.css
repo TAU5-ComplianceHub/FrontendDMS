@@ -54,6 +54,19 @@
     font-family: Arial;
 }
 
+.assessment-textarea {
+    width: 100%;
+    min-height: 70px;
+    resize: none;
+    border-radius: 6px;
+    border: 1px solid #d0d0d0;
+    padding: 10px 12px;
+    background: white;
+    margin-bottom: 12px;
+    field-sizing: content;
+    font-family: Arial;
+}
+
 /* Options block */
 .course-ass-file-options {
     display: flex;

@@ -18,7 +18,7 @@ import ApprovalPopupMachine from "../SuggestionApprovalPopups/ApprovalPopupMachi
 const AdminApprovalPage = () => {
     const [drafts, setDrafts] = useState([]);
     const { id: draftID } = useParams();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [error, setError] = useState(null);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');

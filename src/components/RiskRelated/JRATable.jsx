@@ -695,19 +695,30 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
     }, []);
 
     useEffect(() => {
-        const wrapper = tableWrapperRef.current;
-        if (!wrapper) return;
+        const adjust = () => {
+            const wrapper = tableWrapperRef.current;
+            const box = ibraBoxRef.current;
+            if (!wrapper || !box) return;
 
-        if (!isSidebarVisible) {
-            savedWidthRef.current = wrapper.offsetWidth;
-        } else if (savedWidthRef.current != null) {
-            wrapper.style.width = `${savedWidthRef.current}px`;
-            setWrapperWidth(wrapper.getBoundingClientRect().width);
-            return;
-        }
-        const boxW = ibraBoxRef.current.offsetWidth;
-        wrapper.style.width = `${boxW - 30}px`;
-        setWrapperWidth(wrapper.getBoundingClientRect().width);
+            // Reset width to allow container to shrink if needed
+            wrapper.style.width = '10px';
+
+            // Read parent width
+            const boxW = box.clientWidth;
+
+            // Set new width
+            const newWidth = boxW - 30;
+            wrapper.style.width = `${newWidth}px`;
+
+            setWrapperWidth(newWidth);
+        };
+
+        // Adjust immediately
+        adjust();
+
+        // Adjust again after a short delay for sidebar transitions
+        const timer = setTimeout(adjust, 350);
+        return () => clearTimeout(timer);
     }, [isSidebarVisible]);
 
     const [showColumns, setShowColumns] = useState([

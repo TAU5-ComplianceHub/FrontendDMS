@@ -10,7 +10,7 @@ import DMSTemplatesPopup from "../FileInfo/DMSTemplatesPopup";
 
 const DMSAdminPage = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [count, setCount] = useState([]);
     const [loggedInUserId, setloggedInUserId] = useState('');

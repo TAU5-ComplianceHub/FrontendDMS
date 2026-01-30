@@ -30,7 +30,7 @@ const CreatePageSI = () => {
   const access = getCurrentUser();
   const type = useParams().type;
   const draftId = useParams().id;
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [share, setShare] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);

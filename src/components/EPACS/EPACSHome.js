@@ -10,7 +10,7 @@ import { hasRole } from "../../utils/auth";
 
 const EPACSHome = () => {
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const access = getCurrentUser();
 
     useEffect(() => {

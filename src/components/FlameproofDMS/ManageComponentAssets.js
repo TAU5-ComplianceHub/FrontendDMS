@@ -18,7 +18,7 @@ const ManageComponentAssets = () => {
     const [updateType, setUpdateType] = useState("");
     const [update, setUpdate] = useState(false);
     const [updateBase, setUpdateBase] = useState(false);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [originalComponents, setOriginalComponents] = useState([]);
     const [isLoadingTable, setIsLoadingTable] = useState(true);
     const [showNoAssets, setShowNoAssets] = useState(false);

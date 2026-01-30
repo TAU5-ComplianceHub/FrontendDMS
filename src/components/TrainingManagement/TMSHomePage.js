@@ -9,7 +9,7 @@ import CreateProfilePopup from "../VisitorsInduction/Popups/CreateProfilePopup";
 
 const TMSHomePage = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [count, setCount] = useState([]);
     const [loggedInUserId, setloggedInUserId] = useState('');
@@ -92,18 +92,10 @@ const TMSHomePage = () => {
                             <h3 className="document-title-fi-home">Visitor Induction</h3>
                         </>
                     </div>
-                    <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/visitorManagementPage")}>
-                        <>
-                            <div className="icon-dept">
-                                <img src={`${process.env.PUBLIC_URL}/visitorManagement.svg`} className={"icon-dept"} />
-                            </div>
-                            <h3 className="document-title-fi-home">Visitor Management</h3>
-                        </>
-                    </div>
                     {true && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/onlineTrainingHome")}>
                         <>
                             <div className="icon-dept">
-                                <FontAwesomeIcon icon={faCircle} style={{ color: "#002060" }} className={"icon-dept"} />
+                                <img src={`${process.env.PUBLIC_URL}/otm2.svg`} className={"icon-dept"} />
                             </div>
                             <h3 className="document-title-fi-home">Online Training</h3>
                         </>

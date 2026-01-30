@@ -9,7 +9,7 @@ import OTChatPanelLecturerClaimed from "./OTChatPanelLecturerClaimed";
 
 const OTClaimedChats = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const { courseID } = useParams();
     const navigate = useNavigate();
     const [chatOpen, setChatOpen] = useState(false);
@@ -314,7 +314,7 @@ const OTClaimedChats = () => {
                         <p className="logo-text-um">Training Management</p>
                     </div>
                     <div className="sidebar-logo-dm-fi">
-                        <img src={`${process.env.PUBLIC_URL}/tmsCreateCourse2.svg`} alt="Control Attributes" className="icon-risk-rm" />
+                        <img src={`${process.env.PUBLIC_URL}/chatBox1.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"Chat Box"}</p>
                     </div>
                 </div>

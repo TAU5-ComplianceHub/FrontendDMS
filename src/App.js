@@ -144,6 +144,8 @@ import OTChatCourses from './components/OnlineTrainingModule/ChatBox/OTChatCours
 import OTUnclaimedChats from './components/OnlineTrainingModule/ChatBox/OTUnclaimedChats';
 import OTClaimedChats from './components/OnlineTrainingModule/ChatBox/OTClaimedChats';
 import PreviewCertificateStudentProfile from './components/OnlineTrainingModule/UserView/PreviewCertificateStudentProfile';
+import OnlineTrainingCourseGrading from './components/OnlineTrainingModule/OnlineTrainingCourseGrading';
+import SuggestedControls from './components/RiskRelated/ControlManagement/SuggestedControls';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -354,6 +356,8 @@ function App() {
         <Route path='FrontendDMS/unclaimedChats/:courseID' element={<OTUnclaimedChats />} />
         <Route path='FrontendDMS/claimedChats' element={<OTClaimedChats />} />
         <Route path="FrontendDMS/studentPreview" element={<PreviewCertificateStudentProfile />} />
+        <Route path="FrontendDMS/gradeSubmission/:studentID/:courseID" element={<OnlineTrainingCourseGrading />} />
+        <Route path="FrontendDMS/suggestedControls/:id" element={<SuggestedControls />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

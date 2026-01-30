@@ -39,7 +39,7 @@ const VisitorRegisteredDevices = () => {
         document.body.removeChild(link);
     };
 
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [userID, setUserID] = useState('');
 

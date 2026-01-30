@@ -1,0 +1,291 @@
+import React, { useState } from "react";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faTrash, faPlusCircle, faCopy, faChevronDown, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import TypeSelectorPopup from "../VisitorsInduction/InductionCreation/TypeSelectorPopup";
+import AssessmentNote from "./AssessmentNote";
+
+const OTCourseAssessment = ({ formData, setFormData, readOnly = false }) => {
+    const QUESTION_TYPES = {
+        MCQ: "MCQ",
+        TEXT: "TEXT",
+    };
+    const [help, setHelp] = useState(false);
+
+    const emptyQuestion = (type) => {
+        const base = { id: crypto.randomUUID(), type, question: "", collapsed: false };
+
+        if (type === QUESTION_TYPES.TEXT) {
+            return { ...base, answer: "" };
+        }
+
+        return { ...base, answer: "", options: ["", "", ""] };
+    };
+
+    const addQuestion = () => {
+        setFormData(prev => ({
+            ...prev,
+            assessment: [
+                ...prev.assessment,
+                { id: crypto.randomUUID(), question: "", answer: "", options: ["", "", ""], collapsed: false }
+            ]
+        }));
+    };
+
+    // ✅ Prevent removing the last remaining question
+    const removeQuestion = (qid) => {
+        setFormData(prev => {
+            const list = prev.assessment || [];
+            if (list.length <= 1) return prev; // keep at least one question
+            return {
+                ...prev,
+                assessment: list.filter(q => q.id !== qid)
+            };
+        });
+    };
+
+    const updateQuestionText = (qid, text) => {
+        setFormData(prev => ({
+            ...prev,
+            assessment: prev.assessment.map(q =>
+                q.id === qid ? { ...q, question: text } : q
+            )
+        }));
+    };
+
+    const setCorrectAnswer = (qid, optIndex) => {
+        setFormData(prev => ({
+            ...prev,
+            assessment: prev.assessment.map(q =>
+                q.id === qid ? { ...q, answer: String(optIndex) } : q
+            )
+        }));
+    };
+
+    const updateOptionText = (qid, optIndex, text) => {
+        setFormData(prev => ({
+            ...prev,
+            assessment: prev.assessment.map(q => {
+                if (q.id !== qid) return q;
+                const opts = [...(q.options || [])];
+                opts[optIndex] = text;
+                return { ...q, options: opts };
+            })
+        }));
+    };
+
+    const addOption = (qid, afterIndex) => {
+        setFormData(prev => ({
+            ...prev,
+            assessment: prev.assessment.map(q => {
+                if (q.id !== qid) return q;
+                const opts = [...(q.options || [])];
+                opts.splice(afterIndex + 1, 0, "");
+                return { ...q, options: opts };
+            })
+        }));
+    };
+
+    const removeOption = (qid, optIndex) => {
+        setFormData(prev => ({
+            ...prev,
+            assessment: prev.assessment.map(q => {
+                if (q.id !== qid) return q;
+                const opts = [...(q.options || [])];
+                if (opts.length <= 1) return q; // keep at least one option
+                opts.splice(optIndex, 1);
+                const newAnswer = q.answer === String(optIndex) ? "" : q.answer;
+                return { ...q, options: opts, answer: newAnswer };
+            })
+        }));
+    };
+
+    const onlyOneQuestionLeft = (formData.assessment?.length || 0) <= 1;
+    const [questionPickerOpen, setQuestionPickerOpen] = useState(false);
+
+    const openHelp = () => {
+        setHelp(true);
+    }
+
+    const closeHelp = () => {
+        setHelp(false)
+    }
+
+    return (
+        <div className="input-row">
+            <div className={`input-box-ref`}>
+                <button
+                    className="top-left-button-refs"
+                    title="Information"
+                >
+                    <FontAwesomeIcon icon={faInfoCircle} onClick={openHelp} style={{ cursor: 'pointer' }} className="icon-um-search" />
+                </button>
+                <h3 className="font-fam-labels">Assessment</h3>
+
+                {formData.assessment.map((question, index) => (
+                    <div
+                        className={`course-ass-file-card ${question.collapsed ? "course-ass-file-is-collapsed" : ""}`}
+                        key={question.id}
+                    >
+                        <div className="course-ass-file-card-header">
+                            <div className="course-ass-file-header-left">
+                                <button
+                                    type="button"
+                                    className="course-ass-file-collapse-btn"
+                                    aria-label={question.collapsed ? "Expand options" : "Collapse options"}
+                                    onClick={() =>
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            assessment: prev.assessment.map(q =>
+                                                q.id === question.id ? { ...q, collapsed: !q.collapsed } : q
+                                            )
+                                        }))
+                                    }
+                                >
+                                    <FontAwesomeIcon icon={faChevronDown} />
+                                </button>
+                                <div className="course-ass-file-qtitle">Question {index + 1}</div>
+                            </div>
+
+                            {!readOnly && (
+                                <div className="course-ass-file-qactions">
+                                    <button
+                                        className="course-ass-file-icon-btn"
+                                        aria-label="Duplicate question"
+                                        type="button"
+                                        title="Duplicate Question"
+                                        onClick={() =>
+                                            setFormData(prev => {
+                                                const list = [...prev.assessment];
+                                                const idx = list.findIndex(q => q.id === question.id);
+                                                const copy = {
+                                                    id: crypto.randomUUID(),
+                                                    type: question.type || "MCQ",
+                                                    question: question.question,
+                                                    answer: question.answer,
+                                                    options: question.type === "TEXT" ? [] : [...(question.options || [])],
+                                                    collapsed: false
+                                                };
+                                                list.splice(idx + 1, 0, copy);
+                                                return { ...prev, assessment: list };
+                                            })
+                                        }
+                                    >
+                                        <FontAwesomeIcon icon={faCopy} />
+                                    </button>
+
+                                    <button
+                                        className="course-ass-file-icon-btn"
+                                        aria-label="Remove question"
+                                        title={onlyOneQuestionLeft ? "At least one question is required" : "Remove question"}
+                                        onClick={() => removeQuestion(question.id)}
+                                        type="button"
+                                        disabled={onlyOneQuestionLeft}
+                                    >
+                                        <FontAwesomeIcon icon={faTrash} />
+                                    </button>
+
+                                    <button
+                                        className="course-ass-file-icon-btn"
+                                        aria-label="Add question"
+                                        onClick={() => setQuestionPickerOpen(true)}
+                                        title="Add Question"
+                                        type="button"
+                                    >
+                                        <FontAwesomeIcon icon={faPlusCircle} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="course-ass-file-qbody">
+                            <textarea
+                                className="course-ass-file-question-input"
+                                placeholder="Insert Question"
+                                value={question.question}
+                                readOnly={readOnly}
+                                onChange={(e) => updateQuestionText(question.id, e.target.value)}
+                            />
+
+                            {question.type !== "TEXT" && (
+                                <div className="course-ass-file-options">
+                                    {(question.options || []).map((opt, optIndex) => (
+                                        <div className="course-ass-file-option-row" key={`${question.id}-${optIndex}`}>
+                                            <div className="course-ass-file-radio-wrap">
+                                                <input
+                                                    type="radio"
+                                                    name={`q-${question.id}`}
+                                                    disabled={readOnly}
+                                                    checked={String(optIndex) === String(question.answer)}
+                                                    onChange={() => setCorrectAnswer(question.id, optIndex)}
+                                                />
+                                            </div>
+
+                                            <input
+                                                type="text"
+                                                className="course-ass-file-option-input"
+                                                placeholder={`Insert Option ${optIndex + 1}`}
+                                                value={opt}
+                                                readOnly={readOnly}
+                                                onChange={(e) => updateOptionText(question.id, optIndex, e.target.value)}
+                                            />
+
+                                            {!readOnly && (
+                                                <div className="course-ass-file-option-actions">
+                                                    <button
+                                                        className="course-ass-file-icon-btn"
+                                                        aria-label="Remove option"
+                                                        title="Remove option"
+                                                        onClick={() => removeOption(question.id, optIndex)}
+                                                        type="button"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                    <button
+                                                        className="course-ass-file-icon-btn"
+                                                        aria-label="Add option"
+                                                        title="Add option"
+                                                        onClick={() => addOption(question.id, optIndex)}
+                                                        type="button"
+                                                    >
+                                                        <FontAwesomeIcon icon={faPlusCircle} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {question.type === "TEXT" && (
+                                <div className="course-ass-file-text-placeholder">
+                                    <em>No options for this question. Student will type an answer.</em>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {questionPickerOpen && (<TypeSelectorPopup
+                isOpen={questionPickerOpen}
+                title="Select Question Type"
+                onClose={() => setQuestionPickerOpen(false)}
+                onSelect={(typeId) => {
+                    setFormData(prev => ({
+                        ...prev,
+                        assessment: [...(prev.assessment || []), emptyQuestion(typeId)]
+                    }));
+                    setQuestionPickerOpen(false);
+                }}
+                options={[
+                    { id: QUESTION_TYPES.MCQ, label: "Multiple Choice", imgSrc: "/mqc.png", alt: "Multiple choice" },
+                    { id: QUESTION_TYPES.TEXT, label: "Typed Answer", imgSrc: "/text.png", alt: "Typed answer" },
+                ]}
+            />)}
+
+            {help && (<AssessmentNote setClose={closeHelp} />)}
+        </div>
+    );
+};
+
+export default OTCourseAssessment;

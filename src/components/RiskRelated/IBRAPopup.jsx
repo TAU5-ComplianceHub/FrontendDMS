@@ -20,7 +20,7 @@ import ControlDesc from './RiskInfo/ControlDesc';
 import { v4 as uuidv4 } from 'uuid';
 import MaterialUE from './RiskInfo/MaterialUE';
 
-const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
+const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, availableControls }) => {
     const [mainFlag, setMainFlag] = useState("");
     const [subFlag, setSubFlag] = useState("");
     const [ownerFlag, setOwnerFlag] = useState("");
@@ -339,7 +339,6 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
                 setGroupedAreas(lookup);
                 setMainAreas(Object.keys(lookup));
                 setRiskSources(risks);
-                setControls(controls);
                 setFunctionalOwners(owners);
             } catch (err) {
                 console.error("Error fetching areas:", err);
@@ -347,6 +346,14 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
         }
         fetchValues();
     }, []);
+
+    useEffect(() => {
+        if (availableControls && availableControls.length > 0) {
+            setControls(availableControls);
+        } else {
+            setControls([]);
+        }
+    }, [availableControls]);
 
     useEffect(() => {
         // 1️⃣ don’t run until both the API list and the rowsData are in place
@@ -854,7 +861,6 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
             .filter(c => c.control.toLowerCase().includes(value.toLowerCase()));
         setFilteredControls(prev => ({ ...prev, [id]: matches }));
 
-
         setShowDropdown(id);
         const el = inputRefs.current[`control-${id}`];
         if (el) {
@@ -955,6 +961,17 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
     const setFlagPriority = () => {
         setPriorityFlag(!priorityFlag);
     }
+
+    const norm = (s) => (s ?? "").toString().trim().toLowerCase();
+
+    const getUsedControlsExcludingRow = (excludeId) => {
+        return new Set(
+            controlRows
+                .filter(r => r.id !== excludeId)
+                .map(r => norm(r.value))
+                .filter(Boolean)
+        );
+    };
 
     return (
         <div className="ibra-popup-page-container">
@@ -1352,28 +1369,45 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true }) => {
                     </div>
                 </div>
             </div>
-            {showDropdown !== null && filteredControls[showDropdown]?.length > 0 && (
-                filteredControls[showDropdown]?.filter(
-                    c => c.control?.trim()
-                ).length > 0 && (
-                    <ul
-                        className="floating-dropdown"
-                        style={{
-                            position: "fixed",
-                            top: dropdownPosition.top,
-                            left: dropdownPosition.left,
-                            width: dropdownPosition.width,
-                            zIndex: 1000
-                        }}
-                    >
-                        {filteredControls[showDropdown].map(ctrl => (
-                            <li key={ctrl.id}
-                                onMouseDown={() => selectControlSuggestion(showDropdown, ctrl.control)}>
-                                {ctrl.control}
-                            </li>
-                        ))}
-                    </ul>
-                )
+            {showDropdown !== null && (
+                (() => {
+                    const used = getUsedControlsExcludingRow(showDropdown);
+
+                    const options = (filteredControls[showDropdown] || [])
+                        .filter(c => c.control?.trim())
+                        .filter(c => {
+                            const name = norm(c.control);
+                            return !used.has(name); // hide if already used in another control row
+                        })
+                        .slice() // safe copy
+                        .sort((a, b) =>
+                            (a.control || "").localeCompare((b.control || ""), undefined, { sensitivity: "base" })
+                        );
+
+                    if (options.length === 0) return null;
+
+                    return (
+                        <ul
+                            className="floating-dropdown"
+                            style={{
+                                position: "fixed",
+                                top: dropdownPosition.top,
+                                left: dropdownPosition.left,
+                                width: dropdownPosition.width,
+                                zIndex: 1000
+                            }}
+                        >
+                            {options.map(ctrl => (
+                                <li
+                                    key={ctrl._id ?? ctrl.id ?? ctrl.control}
+                                    onMouseDown={() => selectControlSuggestion(showDropdown, ctrl.control)}
+                                >
+                                    {ctrl.control}
+                                </li>
+                            ))}
+                        </ul>
+                    );
+                })()
             )}
 
             {showMainAreasDropdown && filteredMainAreas.length > 0 && (

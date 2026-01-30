@@ -11,8 +11,8 @@ import TopBar from "./Notifications/TopBar";
 
 const DCHomePage = () => {
     const navigate = useNavigate();
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const access = getCurrentUser();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
 
     useEffect(() => {
         const storedToken = localStorage.getItem("token");
@@ -51,7 +51,7 @@ const DCHomePage = () => {
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
 
-                    <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
+                    <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} />
                 </div>
 
                 <div className="scrollable-box-dc-home">

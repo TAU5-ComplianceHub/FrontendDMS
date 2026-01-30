@@ -10,7 +10,7 @@ const PreviewCertificate = () => {
     const { fileId } = useParams();
     const [fileUrl, setFileUrl] = useState("");
     const [iframeHeight, setIframeHeight] = useState("100%");
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
 
     // NEW: loading state + delayed overlay
     const [isLoading, setIsLoading] = useState(true);

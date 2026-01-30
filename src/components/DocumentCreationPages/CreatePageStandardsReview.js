@@ -29,7 +29,7 @@ import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 const CreatePageStandardsReview = () => {
   const navigate = useNavigate();
   const type = useParams().type;
-  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(false);
   const [usedAbbrCodes, setUsedAbbrCodes] = useState([]);
   const [usedTermCodes, setUsedTermCodes] = useState([]);
   const access = getCurrentUser();

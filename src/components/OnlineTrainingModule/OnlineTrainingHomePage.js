@@ -9,7 +9,7 @@ import { getCurrentUser, canIn } from "../../utils/auth";
 
 const OnlineTrainingHomePage = () => {
     const [error, setError] = useState(null);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
     const [count, setCount] = useState([]);
     const [loggedInUserId, setloggedInUserId] = useState('');
@@ -113,7 +113,7 @@ const OnlineTrainingHomePage = () => {
                     {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/chatBoxCourses")}>
                         <>
                             <div className="icon-dept">
-                                <FontAwesomeIcon icon={faCircle} style={{ color: "#002060" }} className={"icon-dept"} />
+                                <img src={`${process.env.PUBLIC_URL}/chatBox2.svg`} className={"icon-dept"} />
                             </div>
                             <h3 className="document-title-fi-home">Chat Box</h3>
                         </>

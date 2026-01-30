@@ -38,7 +38,7 @@ const DepartmentView = () => {
     const { deptId } = useParams();
     const [error, setError] = useState(null);
     const [users, setUsers] = useState([]);
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [loggedInUserId, setloggedInUserId] = useState('');
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedRole, setSelectedRole] = useState("");

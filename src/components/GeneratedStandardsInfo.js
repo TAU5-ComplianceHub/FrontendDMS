@@ -20,7 +20,7 @@ const GeneratedStandardsInfo = () => {
     const [selectedFileName, setSelectedFileName] = useState();
     const [userID, setUserID] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
 
     const navigate = useNavigate();
     const DEFAULT_SORT = { colId: "nr", direction: "asc" };

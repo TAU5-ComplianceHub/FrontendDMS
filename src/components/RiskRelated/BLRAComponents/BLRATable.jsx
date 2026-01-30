@@ -39,7 +39,6 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     const [showFlagged, setShowFlagged] = useState(false);
 
     const excludedColumns = ["UE", "S", "H", "E", "C", "LR", "M", "R", "actions", "responsible", "dueDate"];
-    const initialOrderRef = useRef(new Map());
 
     const BLANK = "(Blanks)";
 
@@ -210,36 +209,20 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         action: { min: 50, max: 50 },
     };
 
-    useEffect(() => {
-        // Only set once (or reset when rows are replaced with a different dataset)
-        if (!rows || rows.length === 0) return;
-
-        // If already captured for these rows, do nothing
-        const map = initialOrderRef.current;
-        const hasAll = rows.every(r => map.has(r.id));
-        if (hasAll) return;
-
-        // Capture order for any new rows
-        rows.forEach((r, idx) => {
-            if (!map.has(r.id)) map.set(r.id, map.size + idx);
-        });
-    }, [rows]);
-
     const filteredRows = useMemo(() => {
         let current = [...rows];
 
-        // 1) Apply filtering (supports array columns via getFilterValuesForCell)
+        // 1) Apply filtering
         current = current.filter(row => {
             for (const [colId, filterObj] of Object.entries(filters)) {
                 const selected = filterObj?.selected;
                 if (!selected || !Array.isArray(selected)) continue;
 
-                const cellValues = getFilterValuesForCell(row, colId); // array
+                const cellValues = getFilterValuesForCell(row, colId);
                 const match = cellValues.some(v => selected.includes(v));
                 if (!match) return false;
             }
 
-            // 2) flagged-only filter (unchanged)
             if (showFlagged) {
                 const isFlagged =
                     !!row.mainFlag ||
@@ -260,18 +243,18 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
             return true;
         });
 
-        // 3) Sorting
+        // 2) Sorting
         const colId = sortConfig?.colId || "nr";
 
-        // ✅ When sorting is "reset" back to nr, restore original load order
+        // FIX: If sorting by 'nr' (default), rely on the array order provided by parent.
+        // Do NOT use an artificial map.
         if (colId === "nr") {
-            const order = initialOrderRef.current; // Map<rowId, originalIndex>
-            current.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+            // Re-number visible rows sequentially
             current.forEach((r, i) => (r.nr = i + 1));
-            return current; // <-- DO NOT renumber here, to preserve original order
+            return current;
         }
 
-        // Otherwise, apply active sort direction
+        // Otherwise, apply active sort direction for other columns
         const dir = sortConfig?.direction === "desc" ? -1 : 1;
 
         const normalize = (v) => {
@@ -287,7 +270,6 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         };
 
         const tryDate = (v) => {
-            // keep your dueDate sorting logic
             if (colId !== "dueDate") return null;
             const t = Date.parse(String(v));
             return Number.isFinite(t) ? t : null;
@@ -297,30 +279,25 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
             const av = normalize(a?.[colId]);
             const bv = normalize(b?.[colId]);
 
-            // blanks last
             const aBlank = av === BLANK;
             const bBlank = bv === BLANK;
             if (aBlank && !bBlank) return 1;
             if (!aBlank && bBlank) return -1;
 
-            // numeric if both numeric
             const an = tryNumber(av);
             const bn = tryNumber(bv);
             if (an != null && bn != null) return (an - bn) * dir;
 
-            // date sort for dueDate
             const ad = tryDate(av);
             const bd = tryDate(bv);
             if (ad != null && bd != null) return (ad - bd) * dir;
 
-            // string sort
             return String(av).localeCompare(String(bv), undefined, {
                 sensitivity: "base",
                 numeric: true,
             }) * dir;
         });
 
-        // Optional: only renumber when sorting by a column other than "nr"
         current.forEach((r, i) => (r.nr = i + 1));
 
         return current;
@@ -718,19 +695,30 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     }, []);
 
     useEffect(() => {
-        const wrapper = tableWrapperRef.current;
-        if (!wrapper) return;
+        const adjust = () => {
+            const wrapper = tableWrapperRef.current;
+            const box = ibraBoxRef.current;
+            if (!wrapper || !box) return;
 
-        if (!isSidebarVisible) {
-            savedWidthRef.current = wrapper.offsetWidth;
-        } else if (savedWidthRef.current != null) {
-            wrapper.style.width = `${savedWidthRef.current}px`;
-            setWrapperWidth(wrapper.getBoundingClientRect().width);
-            return;
-        }
-        const boxW = ibraBoxRef.current.offsetWidth;
-        wrapper.style.width = `${boxW - 30}px`;
-        setWrapperWidth(wrapper.getBoundingClientRect().width);
+            // Reset width to allow container to shrink if needed
+            wrapper.style.width = '10px';
+
+            // Read parent width
+            const boxW = box.clientWidth;
+
+            // Set new width
+            const newWidth = boxW - 30;
+            wrapper.style.width = `${newWidth}px`;
+
+            setWrapperWidth(newWidth);
+        };
+
+        // Adjust immediately
+        adjust();
+
+        // Adjust again after a short delay for sidebar transitions
+        const timer = setTimeout(adjust, 350);
+        return () => clearTimeout(timer);
     }, [isSidebarVisible]);
 
     const [showColumns, setShowColumns] = useState([

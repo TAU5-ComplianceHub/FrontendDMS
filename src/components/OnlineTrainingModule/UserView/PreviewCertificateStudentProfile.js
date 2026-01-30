@@ -13,7 +13,7 @@ const PreviewCertificateStudentProfile = () => {
     const { fileId } = useParams();
     const [fileUrl, setFileUrl] = useState("");
     const [iframeHeight, setIframeHeight] = useState("100%");
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [iframeSrc, setIframeSrc] = useState("");
     const location = useLocation();
     const { studentName, idNumber, dateCompleted, dateExpiry, inductionName } = location.state || {};
@@ -82,7 +82,7 @@ const PreviewCertificateStudentProfile = () => {
             <div className="main-box-preview-pdf">
                 <div className="top-section-um">
                     <div className="burger-menu-icon-um">
-                        <FontAwesomeIcon onClick={() => navigate("/studentHomePage")} icon={faArrowLeft} title="Back" />
+                        <FontAwesomeIcon onClick={() => navigate("/FrontendDMS/studentHomePage")} icon={faArrowLeft} title="Back" />
                     </div>
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>

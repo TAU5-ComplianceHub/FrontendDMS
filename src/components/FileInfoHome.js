@@ -22,7 +22,7 @@ const FileInfoHome = () => {
     const [batch, setBatch] = useState(false);
     const [reset, setReset] = useState(false);
     const navigate = useNavigate();
-    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [showDelayedLoading, setShowDelayedLoading] = useState(false);
 
