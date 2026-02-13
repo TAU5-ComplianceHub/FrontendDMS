@@ -7,13 +7,14 @@ const ControlSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) => 
     const [approver, setApprover] = useState("");
     const [loading, setLoading] = useState(false);
     const [usersList, setUsersList] = useState([]);
+    const [message, setMessage] = useState("");
 
     useEffect(() => {
         const fetchUsers = async () => {
             try {
                 // Fetching system admins/DDS as potential approvers
                 const response = await fetch(
-                    `${process.env.REACT_APP_URL}/api/user/getSystemAdmins/DDS`,
+                    `${process.env.REACT_APP_URL}/api/user/getSystemAdmins/RMS`,
                     {
                         headers: {
                             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -49,7 +50,8 @@ const ControlSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) => 
             // Combine selected approver with the control data passed from parent
             const payload = {
                 ...controlData,
-                approver: approver
+                approver: approver,
+                controlMessage: message
             };
 
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/suggest-control`, {
@@ -82,31 +84,36 @@ const ControlSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) => 
 
     return (
         <div className="abbr-popup-overlay">
-            <div className="abbr-popup-content">
+            <div className="abbr-popup-content" style={{width: "600px", maxWidth: "600px"}}>
                 <div className="abbr-popup-header">
                     <h2 className="abbr-popup-title">Suggest New Control</h2>
                     <button className="abbr-popup-close" onClick={onClose} title="Close Popup">×</button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="abbr-popup-group">
-                        <label className="abbr-popup-label">Select Approver:</label>
-                        <div className="abbr-popup-page-select-container">
-                            <select
-                                value={approver}
-                                onChange={(e) => setApprover(e.target.value)}
-                                className="abbr-popup-select"
-                                required
-                            >
-                                <option value="">Select Approver</option>
-                                {usersList.map((user, index) => (
-                                    <option key={index} value={user.id || user._id}>
-                                        {user.username || user.label}
-                                    </option>
-                                ))}
-                            </select>
+                    <div className="term-popup-scrollable" style={{marginBottom: "5px"}}>
+                        <div className="abbr-popup-group">
+                            <label className="abbr-popup-label">Select Approver:</label>
+                            <div className="abbr-popup-page-select-container">
+                                <select
+                                    value={approver}
+                                    onChange={(e) => setApprover(e.target.value)}
+                                    className="abbr-popup-select"
+                                    required
+                                >
+                                    <option value="">Select Approver</option>
+                                    {usersList.map((user, index) => (
+                                        <option key={index} value={user.id || user._id}>
+                                                {user.username || user.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="manDefs-popup-group">
+                            <label className="manDefs-popup-label">Control Message</label>
+                            <textarea rows={4} style={{ resize: "none" }} spellcheck="true" className="manDefs-input-text-area" placeholder="Insert a message regarding the control being suggested." type="text" value={message} onChange={(e) => setMessage(e.target.value)} />
                         </div>
                     </div>
-
                     <div className="abbr-popup-buttons">
                         <button type="submit" className="abbr-popup-button" disabled={loading} style={{ width: "40%" }}>
                             {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : 'Submit Suggestion'}

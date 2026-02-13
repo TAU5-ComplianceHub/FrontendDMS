@@ -4,7 +4,7 @@ import { faTrash, faPlusCircle, faInfoCircle } from '@fortawesome/free-solid-svg
 import { v4 as uuidv4 } from "uuid";
 import RelevantControlsSelectionPopup from "./RelevantControlsSelectionPopup";
 
-const RelevantControlsTable = ({ relevantControls, setFormData, readOnly, globalControls = [] }) => {
+const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false, globalControls = [] }) => {
     const [isPopupOpen, setIsPopupOpen] = useState(false);
 
     // Toggle the popup visibility

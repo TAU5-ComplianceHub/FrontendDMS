@@ -164,7 +164,7 @@ const SuggestedControls = () => {
 
             // Initial sort by control name
             const sortedControls = mappedControls.sort((a, b) =>
-                (a.control || "").localeCompare((b.control || ""), undefined, { sensitivity: 'base' })
+                (b.status || "").localeCompare((a.status || ""), undefined, { sensitivity: 'base' })
             );
             setControls(sortedControls);
         } catch (error) {
@@ -321,6 +321,7 @@ const SuggestedControls = () => {
         { id: "dateReviewed", title: "Date Reviewed" },
         { id: "suggestedBy", title: "Suggested By" },
         { id: "status", title: "Status" },
+        { id: "suggestionMessage", title: "User Message" }
     ];
 
     const [showColumns, setShowColumns] = useState([
@@ -332,6 +333,7 @@ const SuggestedControls = () => {
         "control",
         "description",
         "critical",
+        "suggestionMessage"
     ]);
 
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -365,7 +367,7 @@ const SuggestedControls = () => {
     const identificationColumns = ["control", "description", "performance", "critical"];
     const cerColumns = ["act", "activation", "hierarchy", "quality", "cons"];
     // Identify columns that span 2 rows (Standalone)
-    const standaloneColumns = ["nr", "dateSuggested", "dateReviewed", "suggestedBy", "status"];
+    const standaloneColumns = ["nr", "dateSuggested", "dateReviewed", "suggestedBy", "status", "suggestionMessage"];
 
     const visibleIdentificationColumns = identificationColumns.filter(id => showColumns.includes(id));
     const visibleCerColumns = cerColumns.filter(id => showColumns.includes(id));
@@ -406,6 +408,7 @@ const SuggestedControls = () => {
         hierarchy: 220,
         quality: 120,
         cons: 150,
+        suggestionMessage: 250
     });
 
     const [initialColumnWidths] = useState({
@@ -423,6 +426,7 @@ const SuggestedControls = () => {
         hierarchy: 220,
         quality: 120,
         cons: 150,
+        suggestionMessage: 250
     });
 
     const columnSizeLimits = {
@@ -440,6 +444,7 @@ const SuggestedControls = () => {
         hierarchy: { min: 150, max: 400 },
         quality: { min: 100, max: 250 },
         cons: { min: 120, max: 300 },
+        suggestionMessage: { min: 200, max: 650 }
     };
 
     const [tableWidth, setTableWidth] = useState(null);
@@ -1075,6 +1080,14 @@ const SuggestedControls = () => {
                                                 style={{ fontSize: "14px", fontWeight: "bold" }}
                                             >
                                                 {row.status}
+                                            </td>
+                                        )}
+
+                                        {showColumns.includes("suggestionMessage") && (
+                                            <td
+                                                style={{ fontSize: "14px", fontWeight: "normal" }}
+                                            >
+                                                {row.suggestionMessage ? row.suggestionMessage : "-"}
                                             </td>
                                         )}
                                     </tr>

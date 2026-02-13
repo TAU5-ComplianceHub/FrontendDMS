@@ -82,6 +82,7 @@ const StudentCourseViewPage = () => {
         bumpMediaTick();
     };
 
+    /*
     const fetchMediaById = (fid) => {
         if (!fid) return Promise.resolve();
         if (objectUrlCacheRef.current.has(fid)) {
@@ -111,6 +112,40 @@ const StudentCourseViewPage = () => {
             .finally(() => {
                 inFlightRef.current.delete(fid);
             });
+
+        inFlightRef.current.set(fid, p);
+        return p;
+    };
+    */
+
+    const fetchMediaById = (fid) => {
+        if (!fid) return Promise.resolve();
+        if (objectUrlCacheRef.current.has(fid)) {
+            setMediaStatus(fid, "ready");
+            return Promise.resolve();
+        }
+        const existing = inFlightRef.current.get(fid);
+        if (existing) return existing;
+
+        setMediaStatus(fid, "loading");
+
+        const url = `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/loadMediaOptimized/${encodeURIComponent(fid)}`;
+
+        const p = fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+            .then(async (res) => {
+                if (!res.ok) throw new Error(`media ${fid} ${res.status}`);
+                const data = await res.json();
+
+                // Store SAS URL directly instead of object URL
+                objectUrlCacheRef.current.set(fid, data.url);
+                mediaTypeCacheRef.current.set(fid, data.contentType || "");
+                setMediaStatus(fid, "ready");
+            })
+            .catch((e) => {
+                console.warn("Lazy media load failed:", fid, e?.message || e);
+                setMediaStatus(fid, "error");
+            })
+            .finally(() => inFlightRef.current.delete(fid));
 
         inFlightRef.current.set(fid, p);
         return p;
@@ -523,7 +558,7 @@ const StudentCourseViewPage = () => {
         }
 
         if (type.startsWith("image/")) return <img src={src} alt={item.media?.filename || "image"} style={mediaTagStyle} />;
-        if (type.startsWith("video/")) return <video src={src} controls style={{ width: "100%", height: "100%" }} />;
+        if (type.startsWith("video/")) return <video src={src} controls style={{ width: "100%", height: "100%" }} controlsList="nodownload" disablePictureInPicture />;
         if (type.startsWith("audio/")) return (<AudioPlayer
             className="popup-audio"
             src={src}
@@ -548,6 +583,7 @@ const StudentCourseViewPage = () => {
                     src={src}
                     title="PDF preview"
                     className="courseCont-pdfFrame-view"
+                    onContextMenu={(e) => e.preventDefault()}
                 />
             );
         }
@@ -1586,7 +1622,8 @@ const StudentCourseViewPage = () => {
                                                     <div className="inductionView-module-course-content">
                                                         <div className="slide-title-row">
                                                             <div className="slide-title-left">
-                                                                {`${currentSlide._moduleIndex + 1}.${currentSlide._topicIndex + 1} ${currentSlide._topicTitle}`}
+                                                                {`${currentSlide._moduleIndex + 1}.${currentSlide._slideIndex + 1} ${currentSlide.title || currentSlide._topicTitle || "Untitled Slide"
+                                                                    }`}
                                                             </div>
                                                             <div className="slide-title-right">
                                                                 {(() => {

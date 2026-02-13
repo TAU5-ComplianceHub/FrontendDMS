@@ -145,6 +145,7 @@ const OnlineCourseCreationPage = () => {
     objectUrlCacheRef.current.clear();
   }
 
+  /*
   async function hydrateDraftMediaPreviews(draft) {
     const apiBase = process.env.REACT_APP_URL;
     const token = localStorage.getItem("token") || "";
@@ -199,6 +200,90 @@ const OnlineCourseCreationPage = () => {
                   next.mediaType = mime;
                 } catch (err) {
                   console.warn("Hydrate media failed:", m.fileId, err.message);
+                  next.mediaPreview = null;
+                  next.mediaType = "";
+                }
+              })()
+            );
+
+            return next;
+          });
+        }
+      }
+    }
+
+    await Promise.all(jobs);
+    return draft;
+  }
+  */
+
+  async function hydrateDraftMediaPreviews(draft) {
+    const apiBase = process.env.REACT_APP_URL;
+    const token = localStorage.getItem("token") || "";
+
+    // helper: fetch SAS url once per fileId and cache it
+    const fetchPreview = async (fileId, fallbackType = "") => {
+      const cached = objectUrlCacheRef.current.get(fileId);
+      if (cached) return { url: cached, mime: fallbackType || "" };
+
+      const endpoint = `${apiBase}/api/onlineTrainingCourses/loadMediaOptimized/${encodeURIComponent(fileId)}`;
+      const res = await fetch(endpoint, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+
+      if (!res.ok) throw new Error(`media ${fileId} ${res.status}`);
+
+      // NEW: backend returns JSON with a SAS url
+      const data = await res.json();
+
+      const sasUrl = data?.url;
+      if (!sasUrl) throw new Error(`media ${fileId} missing url`);
+
+      objectUrlCacheRef.current.set(fileId, sasUrl);
+
+      return {
+        url: sasUrl,
+        mime: data?.contentType || fallbackType || ""
+      };
+    };
+
+    const jobs = [];
+
+    for (const mod of draft.courseModules || []) {
+      for (const topic of mod.topics || []) {
+        for (const slide of topic.slides || []) {
+          // --- MIGRATE legacy single-media -> array (keep your current behavior) ---
+          if (!Array.isArray(slide.mediaItems)) {
+            if (slide.media?.fileId) {
+              slide.mediaItems = [{ media: { ...slide.media } }];
+            } else {
+              slide.mediaItems = [];
+            }
+            slide.media = undefined;
+          }
+
+          // hydrate each media item slot
+          slide.mediaItems = (slide.mediaItems || []).map((it) => {
+            const m = it?.media;
+
+            // normalize structure so callers don't crash
+            const next = {
+              media: m || null,
+              mediaFile: null,
+              mediaPreview: null,
+              mediaType: ""
+            };
+
+            if (!m?.fileId) return next;
+
+            jobs.push(
+              (async () => {
+                try {
+                  const { url, mime } = await fetchPreview(m.fileId, m.contentType || "");
+                  next.mediaPreview = url;   // <- SAS url
+                  next.mediaType = mime;
+                } catch (err) {
+                  console.warn("Hydrate media failed:", m.fileId, err?.message || err);
                   next.mediaPreview = null;
                   next.mediaType = "";
                 }
@@ -1158,7 +1243,7 @@ const OnlineCourseCreationPage = () => {
                     readOnly={readOnly}
                     onChange={handleInputChange}
                     rows="5"
-                    placeholder="The objective of the course is to: "
+                    placeholder="By the end of this course, participants will be able to:"
                   />
 
                   {!readOnly && (

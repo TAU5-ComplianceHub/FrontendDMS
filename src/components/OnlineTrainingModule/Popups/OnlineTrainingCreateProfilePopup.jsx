@@ -74,18 +74,18 @@ const OnlineTrainingCreateProfilePopup = ({ onClose, refresh, openUserLinkShare 
 
             const { message, user } = res.data;
 
-            toast.success(message || 'Visitor Profile Created', { autoClose: 800, closeButton: false });
+            toast.success(message || 'Student Profile Created', { autoClose: 800, closeButton: false });
 
-            console.log("New visitor created:", user);
+            console.log("New student created:", user);
 
             refresh();
             openUserLinkShare(user);
             onClose?.();
         } catch (err) {
             const status = err?.response?.status;
-            const msg = err?.response?.data?.error || 'Failed to create visitor profile.';
-            if (status === 409 || err?.response?.data?.code === 'duplicate') {
-                toast.error('A visitor with that ID number already exists.', { autoClose: 800, closeButton: false });
+            const msg = err?.response?.data?.error || 'Failed to create student profile.';
+            if (status === 409) {
+                toast.error('A student with that ID number already exists.', { autoClose: 800, closeButton: false });
             } else {
                 toast.error(msg, { autoClose: 800, closeButton: false });
             }

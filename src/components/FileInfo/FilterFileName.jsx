@@ -77,8 +77,8 @@ const FilterFileName = ({ access, canIn, onHeaderClick, sortConfig, excelFilters
                 className={`col-own-filter col cursor-pointer`}
                 onClick={(e) => onHeaderClick("owner", e)}
             >
-                <div className="fileinfo-container-filter col">
-                    <span className="fileinfo-title-filter">
+                <div className="fileinfo-container-filter">
+                    <span className="fileinfo-title-filter-1">
                         Owner {getIcon("owner")}
                     </span>
                 </div>
@@ -90,7 +90,7 @@ const FilterFileName = ({ access, canIn, onHeaderClick, sortConfig, excelFilters
                 onClick={(e) => onHeaderClick("departmentHead", e)}
             >
                 <div className="fileinfo-container-filter">
-                    <span className="fileinfo-title-filter">
+                    <span className="fileinfo-title-filter-1">
                         Department Head {getIcon("departmentHead")}
                     </span>
                 </div>
@@ -124,8 +124,8 @@ const FilterFileName = ({ access, canIn, onHeaderClick, sortConfig, excelFilters
                 className={`col-own-filter col cursor-pointer`}
                 onClick={(e) => onHeaderClick("uploader", e)}
             >
-                <div className="fileinfo-container-filter col">
-                    <span className="fileinfo-title-filter">
+                <div className="fileinfo-container-filter">
+                    <span className="fileinfo-title-filter-1">
                         Uploaded By {getIcon("uploader")}
                     </span>
                 </div>

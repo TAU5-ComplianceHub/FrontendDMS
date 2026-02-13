@@ -123,13 +123,15 @@ const OnlineTrainingPublished = () => {
         if (!fileToDelete) return;
         try {
             setLoading(true);
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/standard/trashFile/${fileToDelete}`, {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/deletePublish/${fileToDelete}`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                 },
-                method: 'POST',
+                method: 'DELETE',
             });
             if (!response.ok) throw new Error('Failed to delete the file');
+
+            toast.success("Course successfully deleted.", { autoClose: "2000", closeButton: false })
 
             setFileToDelete("");
             setSelectedFileName("");

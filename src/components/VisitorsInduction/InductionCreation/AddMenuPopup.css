@@ -1,0 +1,41 @@
+.popup-menu-container-add-options {
+    position: fixed;
+    /* Fixed to handle scrolling logic better */
+    z-index: 10000;
+}
+
+.popup-content-add-options {
+    position: relative;
+    background: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    width: 150px;
+    text-align: center;
+}
+
+.popup-content-add-options ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.popup-content-add-options li {
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    color: black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    height: 20px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.popup-content-add-options li:last-child {
+    border-bottom: none;
+}
+
+.popup-content-add-options li:hover {
+    background: #cfcece;
+}

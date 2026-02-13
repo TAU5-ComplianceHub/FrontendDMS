@@ -7,7 +7,7 @@ import ControlEAPopup from "./ControlEAPopup";
 import { saveAs } from "file-saver";
 import DeleteControlPopup from "./RiskComponents/DeleteControlPopup";
 
-const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls }) => {
+const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls, highlightedRows = [] }) => {
     const [insertPopup, setInsertPopup] = useState();
     const [selectedRowData, setSelectedRowData] = useState();
     const ceaSavedWidthRef = useRef(null);
@@ -1157,6 +1157,9 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                     onDragLeave={handleDragLeave}
                                     onDrop={(e) => handleDrop(e, rowIndex)}
                                     onDragEnd={armedDragRow === rowIndex ? handleDragEnd : undefined}
+                                    style={{
+                                        backgroundColor: highlightedRows.includes(row.id) ? '#fff9c4' : undefined // Apply yellow if ID is in list
+                                    }}
                                 >
                                     {displayColumns.map((columnId, colIndex) => {
                                         // Find the column meta

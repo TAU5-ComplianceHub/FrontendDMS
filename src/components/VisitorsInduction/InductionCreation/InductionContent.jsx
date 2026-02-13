@@ -9,12 +9,14 @@ import {
     faRotateLeft,
     faSpinner,
     faMusic,
+    faCopy //
 } from "@fortawesome/free-solid-svg-icons";
 import "./CourseCreationPage.css";
 import TypeSelectorPopup from "./TypeSelectorPopup";
 import AudioPicker from "./AudioPicker";
 import PopupAudioPlayer from "./PopupAudioPlayer";
 import ImageCropPopup from "./ImageCropPopup";
+import AddMenuPopup from "./AddMenuPopup";
 
 /** Slide content types */
 const SLIDE_TYPES = {
@@ -101,6 +103,13 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
     const [slideID, setSlideID] = useState("");
     const [audioFile, setAudioFile] = useState("");
     const [ratio, setRatio] = useState([]);
+    // --- NEW: Add Menu Logic ---
+    const [addMenu, setAddMenu] = useState({
+        isOpen: false,
+        type: null, // 'MODULE' | 'TOPIC' | 'SLIDE'
+        indices: {}, // { mIdx, tIdx, sIdx }
+        anchorRect: null
+    });
 
     const openMediaPicker = (module, topic, slide) => {
         setModuleIndex(module);
@@ -251,6 +260,52 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
 
     const updateModules = (next) =>
         setFormData((prev) => ({ ...(prev || {}), courseModules: next }));
+
+    const deepDuplicate = (item, type) => {
+        const clone = structuredClone(item);
+
+        if (type === 'module') {
+            clone.id = newId();
+            clone.title = `${clone.title}`;
+            clone.collapsed = false;
+            clone.topics = clone.topics.map(t => deepDuplicate(t, 'topic'));
+        } else if (type === 'topic') {
+            clone.id = newId();
+            clone.title = `${clone.title}`;
+            clone.collapsed = false;
+            clone.slides = clone.slides.map(s => deepDuplicate(s, 'slide'));
+        } else if (type === 'slide') {
+            clone.id = newId();
+            clone.title = `${clone.title}`;
+            clone.collapsed = false;
+        }
+        return clone;
+    };
+
+    const duplicateModule = (mIdx) => {
+        const next = [...safeModules];
+        const clone = deepDuplicate(next[mIdx], 'module');
+        next.splice(mIdx + 1, 0, clone);
+        updateModules(next);
+    };
+
+    const duplicateTopic = (mIdx, tIdx) => {
+        const next = [...safeModules];
+        const topics = [...next[mIdx].topics];
+        const clone = deepDuplicate(topics[tIdx], 'topic');
+        topics.splice(tIdx + 1, 0, clone);
+        next[mIdx] = { ...next[mIdx], topics };
+        updateModules(next);
+    };
+
+    const duplicateSlide = (mIdx, tIdx, sIdx) => {
+        const next = [...safeModules];
+        const slides = [...next[mIdx].topics[tIdx].slides];
+        const clone = deepDuplicate(slides[sIdx], 'slide');
+        slides.splice(sIdx + 1, 0, clone);
+        next[mIdx].topics[tIdx] = { ...next[mIdx].topics[tIdx], slides };
+        updateModules(next);
+    };
 
     // ----- Module ops -----
     const addModule = () => updateModules([...safeModules, emptyModule("")]);
@@ -503,6 +558,63 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
         e.target.value = "";
     };
 
+    const openAddMenu = (e, type, indices) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setAddMenu({
+            isOpen: true,
+            type,
+            indices,
+            anchorRect: rect
+        });
+    };
+
+    const closeAddMenu = () => {
+        setAddMenu(prev => ({ ...prev, isOpen: false }));
+    };
+
+    const handleAddOptionSelect = (position) => {
+        const { type, indices } = addMenu;
+        closeAddMenu();
+
+        if (type === 'MODULE') {
+            if (position === 'BEFORE') addModuleBefore(indices.mIdx);
+            else addModuleAfter(indices.mIdx);
+        } else if (type === 'TOPIC') {
+            if (position === 'BEFORE') addTopicBefore(indices.mIdx, indices.tIdx);
+            else addTopicAfter(indices.mIdx, indices.tIdx);
+        } else if (type === 'SLIDE') {
+            setInlineSlidePicker({
+                moduleIndex: indices.mIdx,
+                topicIndex: indices.tIdx,
+                slideIndex: indices.sIdx,
+                insertPosition: position
+            });
+        }
+    };
+
+    const addModuleBefore = (mIdx) => {
+        const next = [...safeModules];
+        next.splice(mIdx, 0, emptyModule(""));
+        updateModules(next);
+    };
+
+    const addTopicBefore = (mIdx, tIdx) => {
+        const next = [...safeModules];
+        const topics = [...next[mIdx].topics];
+        topics.splice(tIdx, 0, emptyTopic(""));
+        next[mIdx] = { ...next[mIdx], topics };
+        updateModules(next);
+    };
+
+    const addSlideBefore = (mIdx, tIdx, sIdx, type) => {
+        const next = [...safeModules];
+        const slides = [...next[mIdx].topics[tIdx].slides];
+        slides.splice(sIdx, 0, emptySlide(type));
+        next[mIdx].topics[tIdx] = { ...next[mIdx].topics[tIdx], slides };
+        updateModules(next);
+        setInlineSlidePicker(null);
+    };
+
     return (
         <div className="input-row">
             <div className="modern-chapter-table">
@@ -552,6 +664,15 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                         <button
                                             type="button"
                                             className="courseCont-iconBtn"
+                                            title="Duplicate Module"
+                                            onClick={() => duplicateModule(mIdx)} //
+                                            aria-label={`Duplicate module ${mIdx + 1}`}
+                                        >
+                                            <FontAwesomeIcon icon={faCopy} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="courseCont-iconBtn"
                                             title="Remove module"
                                             onClick={() => removeModule(mod.id)}
                                             aria-label={`Remove module ${mIdx + 1}`}
@@ -561,9 +682,9 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                         <button
                                             type="button"
                                             className="courseCont-iconBtn"
-                                            title="Add module after"
-                                            onClick={() => addModuleAfter(mIdx)}
-                                            aria-label={`Add module after ${mIdx + 1}`}
+                                            title="Add module"
+                                            onClick={(e) => openAddMenu(e, 'MODULE', { mIdx })} // CHANGED
+                                            aria-label={`Add module options for ${mIdx + 1}`}
                                         >
                                             <FontAwesomeIcon icon={faCirclePlus} />
                                         </button>
@@ -583,7 +704,7 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                 key={topic.id}
                                                 className={`courseCont-card${topic.collapsed ? " courseCont-card--collapsed" : ""
                                                     }`}
-                                                style={{ marginTop: 12 }}
+                                                style={{ marginTop: 12, width: "calc(100% - 20px)" }}
                                             >
                                                 {/* Topic header */}
                                                 <div className="courseCont-cardHeader">
@@ -625,6 +746,15 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                         <button
                                                             type="button"
                                                             className="courseCont-iconBtn"
+                                                            title="Duplicate Topic"
+                                                            onClick={() => duplicateTopic(mIdx, tIdx)} //
+                                                            aria-label={`Duplicate topic ${mIdx + 1}.${tIdx + 1}`}
+                                                        >
+                                                            <FontAwesomeIcon icon={faCopy} />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="courseCont-iconBtn"
                                                             title="Remove topic"
                                                             onClick={() => removeTopic(mIdx, topic.id)}
                                                             aria-label={`Remove topic ${mIdx + 1}.${tIdx + 1}`}
@@ -634,9 +764,9 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                         <button
                                                             type="button"
                                                             className="courseCont-iconBtn"
-                                                            title="Add topic after"
-                                                            onClick={() => addTopicAfter(mIdx, tIdx)}
-                                                            aria-label={`Add topic after ${mIdx + 1}.${tIdx + 1}`}
+                                                            title="Add topic"
+                                                            onClick={(e) => openAddMenu(e, 'TOPIC', { mIdx, tIdx })} // CHANGED
+                                                            aria-label={`Add topic options for ${mIdx + 1}.${tIdx + 1}`}
                                                         >
                                                             <FontAwesomeIcon icon={faCirclePlus} />
                                                         </button>
@@ -702,6 +832,16 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                                             <button
                                                                                 type="button"
                                                                                 className="courseCont-iconBtn"
+                                                                                title="Duplicate Slide"
+                                                                                onClick={() => duplicateSlide(mIdx, tIdx, sIdx)} //
+                                                                                aria-label={`Duplicate slide`}
+                                                                            >
+                                                                                <FontAwesomeIcon icon={faCopy} />
+                                                                            </button>
+
+                                                                            <button
+                                                                                type="button"
+                                                                                className="courseCont-iconBtn"
                                                                                 title="Remove slide"
                                                                                 onClick={() =>
                                                                                     removeSlide(mIdx, tIdx, slide.id)
@@ -757,29 +897,10 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                                             <button
                                                                                 type="button"
                                                                                 className="courseCont-iconBtn"
-                                                                                title="Add slide after"
+                                                                                title="Add slide"
                                                                                 aria-haspopup="menu"
-                                                                                aria-expanded={
-                                                                                    !!(
-                                                                                        inlineSlidePicker &&
-                                                                                        inlineSlidePicker.moduleIndex === mIdx &&
-                                                                                        inlineSlidePicker.topicIndex === tIdx &&
-                                                                                        inlineSlidePicker.slideIndex === sIdx
-                                                                                    )
-                                                                                }
                                                                                 aria-controls={`courseCont-typePicker-${mIdx}-${tIdx}-${sIdx}`}
-                                                                                onClick={() => {
-                                                                                    if (
-                                                                                        inlineSlidePicker &&
-                                                                                        inlineSlidePicker.moduleIndex === mIdx &&
-                                                                                        inlineSlidePicker.topicIndex === tIdx &&
-                                                                                        inlineSlidePicker.slideIndex === sIdx
-                                                                                    ) {
-                                                                                        setInlineSlidePicker(null);
-                                                                                    } else {
-                                                                                        setInlineSlidePicker({ moduleIndex: mIdx, topicIndex: tIdx, slideIndex: sIdx });
-                                                                                    }
-                                                                                }}
+                                                                                onClick={(e) => openAddMenu(e, 'SLIDE', { mIdx, tIdx, sIdx })} // CHANGED
                                                                             >
                                                                                 <FontAwesomeIcon icon={faCirclePlus} />
                                                                             </button>
@@ -1514,13 +1635,21 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                 onClose={() => setInlineSlidePicker(null)}
                 onSelect={(typeId) => {
                     if (!inlineSlidePicker) return;
-                    addSlideAfter(
-                        inlineSlidePicker.moduleIndex,
-                        inlineSlidePicker.topicIndex,
-                        inlineSlidePicker.slideIndex,
-                        typeId
-                    );
-                    // addSlideAfter already closes with setInlineSlidePicker(null)
+                    if (inlineSlidePicker.insertPosition === 'BEFORE') {
+                        addSlideBefore(
+                            inlineSlidePicker.moduleIndex,
+                            inlineSlidePicker.topicIndex,
+                            inlineSlidePicker.slideIndex,
+                            typeId
+                        );
+                    } else {
+                        addSlideAfter(
+                            inlineSlidePicker.moduleIndex,
+                            inlineSlidePicker.topicIndex,
+                            inlineSlidePicker.slideIndex,
+                            typeId
+                        );
+                    }
                 }}
                 options={[
                     { id: SLIDE_TYPES.TEXT, label: "Text Only", imgSrc: "/Content_Text.png", alt: "Text" },
@@ -1544,6 +1673,12 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                     DEFAULT_ASPECT={ratio}
                 />
             )}
+            {addMenu.isOpen && (<AddMenuPopup
+                isOpen={addMenu.isOpen}
+                anchorRect={addMenu.anchorRect}
+                onClose={closeAddMenu}
+                onSelect={handleAddOptionSelect}
+            />)}
         </div>
     );
 };

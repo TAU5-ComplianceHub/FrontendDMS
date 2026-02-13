@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../Notifications/TopBar";
 import "./ControlAttributes.css";
 import { canIn, getCurrentUser } from "../../utils/auth";
 import AddControlPopup from "./AddControlPopup";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify"; // Added toast import
 import EditControlPopup from "./EditControlPopup";
+import ControlPopupMenuOptions from "./ControlPopupMenuOptions";
 
 const ControlAttributes = () => {
     const [controls, setControls] = useState([]); // State to hold the file data
@@ -24,10 +25,23 @@ const ControlAttributes = () => {
     const access = getCurrentUser();
     const scrollerRef = useRef(null);
     const tbodyRef = useRef(null);
-    const drag = useRef({ active: false, startX: 0, startLeft: 0 });
+    const DRAG_THRESHOLD_PX = 6;
+    const drag = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
     const [addControl, setAddControl] = useState(false);
     const [modifyControl, setModifyControl] = useState(false);
     const [modifyingControl, setModifyingControl] = useState("")
+    const [categoryChanges, setCategoryChanges] = useState({});
+
+    // --- NEW: Dropdown State & Refs ---
+    const [filteredCategories, setFilteredCategories] = useState([]);
+    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+    const [activeCategoryRow, setActiveCategoryRow] = useState(null);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+    const categoryInputRefs = useRef({}); // Store refs for each row's textarea
+    const dropdownRef = useRef(null);
+
+    const DROPDOWN_MAX_HEIGHT = 240; // px
+    const DROPDOWN_MARGIN = 8;       // viewport padding
 
     // --- Unified Sort Configuration ---
     const DEFAULT_SORT = { colId: "nr", direction: "asc" };
@@ -44,6 +58,49 @@ const ControlAttributes = () => {
     const [excelSearch, setExcelSearch] = useState("");
     const [excelSelected, setExcelSelected] = useState(new Set());
     const excelPopupRef = useRef(null);
+    const [activeControlMenuId, setActiveControlMenuId] = useState(null);
+
+    const handleControlRowClick = (row) => (e) => {
+        if (drag.current.moved) return;
+
+        if (
+            e.target.closest(".rca-action-btn") ||
+            e.target.closest(".risk-control-attributes-action-cell") ||
+            e.target.closest(".category-input-container") ||
+            e.target.closest(".control-popup-menu") ||
+            e.target.closest("button") ||
+            e.target.closest("a") ||
+            e.target.closest("input") ||
+            e.target.closest("textarea") ||
+            e.target.closest("select")
+        ) {
+            return;
+        }
+
+        setActiveControlMenuId(prev => (prev === row._id ? null : row._id));
+    };
+
+    useEffect(() => {
+        if (!activeControlMenuId) return;
+
+        const handleClickOutside = (e) => {
+            if (e.target.closest(".control-popup-menu")) return;
+            setActiveControlMenuId(null);
+        };
+
+        const handleScroll = (e) => {
+            if (e.target.closest(".control-popup-menu")) return;
+            setActiveControlMenuId(null);
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        window.addEventListener("scroll", handleScroll, true);
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+            window.removeEventListener("scroll", handleScroll, true);
+        };
+    }, [activeControlMenuId]);
 
     const openAddControl = () => {
         setAddControl(true);
@@ -72,6 +129,8 @@ const ControlAttributes = () => {
         if (
             e.target.closest(".rca-action-btn") ||
             e.target.closest(".risk-control-attributes-action-cell") ||
+            e.target.closest(".category-input-container") ||
+            e.target.closest(".control-popup-menu") ||
             e.target.closest("button") ||
             e.target.closest("a") ||
             e.target.closest("input") ||
@@ -81,32 +140,48 @@ const ControlAttributes = () => {
             return;
         }
 
-        if (!e.target.closest("tr")) return;
+        const tr = e.target.closest("tr");
+        if (!tr) return;
 
         const scroller = scrollerRef.current;
         if (!scroller) return;
 
         drag.current.active = true;
+        drag.current.moved = false;
         drag.current.startX = e.clientX;
         drag.current.startLeft = scroller.scrollLeft;
-        e.currentTarget.setPointerCapture?.(e.pointerId);
-        scroller.classList.add("dragging");
+
+        tr.setPointerCapture?.(e.pointerId);
     };
 
     const onRowPointerMove = (e) => {
         if (!drag.current.active) return;
+
         const scroller = scrollerRef.current;
         if (!scroller) return;
+
         const dx = e.clientX - drag.current.startX;
+
+        // Don't treat it as a drag until user moves enough
+        if (!drag.current.moved) {
+            if (Math.abs(dx) < DRAG_THRESHOLD_PX) return;
+
+            drag.current.moved = true;
+            scroller.classList.add("dragging");
+        }
+
         scroller.scrollLeft = drag.current.startLeft - dx;
         e.preventDefault();
     };
 
     const endRowDrag = (e) => {
         if (!drag.current.active) return;
+
         drag.current.active = false;
         scrollerRef.current?.classList.remove("dragging");
-        e.currentTarget.releasePointerCapture?.(e.pointerId);
+
+        const tr = e.target.closest("tr");
+        tr?.releasePointerCapture?.(e.pointerId);
     };
 
     useEffect(() => {
@@ -120,6 +195,157 @@ const ControlAttributes = () => {
     useEffect(() => {
         fetchControls();
     }, []);
+
+    // --- NEW: Category Dropdown Logic ---
+
+    // 1. Memoize unique categories from the backend data
+    const allCategoryOptions = useMemo(() => {
+        const backendCategories = controls.map(c => c.category);
+        const localCategories = Object.values(categoryChanges);
+        const categories = [...backendCategories, ...localCategories]
+            .filter(c => c && typeof c === 'string' && c.trim() !== "");
+        return Array.from(new Set(categories)).sort();
+    }, [controls, categoryChanges]);
+
+    const calculateDropdownPosition = (inputEl, dropdownEl) => {
+        const inputRect = inputEl.getBoundingClientRect();
+        const dropdownHeight = dropdownEl?.offsetHeight ?? DROPDOWN_MAX_HEIGHT;
+
+        const viewportHeight = window.innerHeight;
+
+        const spaceBelow = viewportHeight - inputRect.bottom - DROPDOWN_MARGIN;
+        const spaceAbove = inputRect.top - DROPDOWN_MARGIN;
+
+        const openDownwards =
+            spaceBelow >= dropdownHeight || spaceBelow >= spaceAbove;
+
+        const top = openDownwards
+            ? inputRect.bottom + window.scrollY + 4
+            : inputRect.top + window.scrollY - dropdownHeight - 4;
+
+        return {
+            top: Math.max(DROPDOWN_MARGIN, top),
+            left: inputRect.left + window.scrollX,
+            width: inputRect.width,
+        };
+    };
+
+    const handleCategoryFocus = (rowId, currentValue) => {
+        const matches = allCategoryOptions.filter(opt =>
+            opt.toLowerCase().includes((currentValue || "").toLowerCase())
+        );
+
+        setFilteredCategories(matches);
+        setActiveCategoryRow(rowId);
+        setShowCategoryDropdown(true);
+
+        const el = categoryInputRefs.current[rowId];
+        if (el) {
+            setDropdownPosition(calculateDropdownPosition(el));
+        }
+    };
+
+    const handleCategoryInput = (rowId, value) => {
+        handleCategoryChange(rowId, value);
+
+        const matches = allCategoryOptions.filter(opt =>
+            opt.toLowerCase().includes(value.toLowerCase())
+        );
+
+        setFilteredCategories(matches);
+        setActiveCategoryRow(rowId);
+        setShowCategoryDropdown(true);
+
+        const el = categoryInputRefs.current[rowId];
+        if (el) {
+            setDropdownPosition(calculateDropdownPosition(el));
+        }
+    };
+
+    const selectCategorySuggestion = (suggestion) => {
+        if (activeCategoryRow) {
+            handleCategoryChange(activeCategoryRow, suggestion);
+            setShowCategoryDropdown(false);
+            setActiveCategoryRow(null);
+        }
+    };
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            const isInsidePopup = e.target.closest('.floating-dropdown');
+            const isInsideInput = e.target.closest('.category-inline-input'); // Class used on textarea
+
+            if (!isInsidePopup && !isInsideInput) {
+                setShowCategoryDropdown(false);
+                setActiveCategoryRow(null);
+            }
+        };
+
+        const handleScroll = (e) => {
+            const isInsidePopup = e.target.closest('.floating-dropdown');
+            if (!isInsidePopup) {
+                setShowCategoryDropdown(false);
+                setActiveCategoryRow(null);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, []);
+
+    const handleCategoryChange = (rowId, value) => {
+        setCategoryChanges(prev => ({
+            ...prev,
+            [rowId]: value
+        }));
+    };
+
+    const handleSaveCategory = async (row) => {
+        const rowId = row._id;
+        const newCategory = categoryChanges[rowId];
+
+        // If 'undefined', it means no change was typed; if empty string, user might be clearing it.
+        if (newCategory === undefined) return;
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/controls/${rowId}/category`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify({ category: newCategory }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to update category");
+            }
+
+            // 1. Update the main controls state so the "original" value is now the new value
+            setControls(prevControls =>
+                prevControls.map(c => c._id === rowId ? { ...c, category: newCategory } : c)
+            );
+
+            // 2. Clear the 'dirty' state for this specific row so the Save icon disappears
+            setCategoryChanges(prev => {
+                const next = { ...prev };
+                delete next[rowId];
+                return next;
+            });
+
+            toast.success("Category updated successfully");
+
+        } catch (error) {
+            console.error("Save failed:", error);
+            toast.error("Failed to save category");
+        }
+    };
 
     const handleDownload = async () => {
         const dataToStore = controls;
@@ -178,7 +404,8 @@ const ControlAttributes = () => {
 
     const getFilterValuesForCell = (row, colId, index) => {
         if (colId === "nr") return [String(index + 1)];
-        // Handle critical specifically if it needs standardizing (e.g. Yes/No)
+        // Add category handler
+        if (colId === "category") return [row.category ? String(row.category).trim() : "-"];
         if (colId === "critical") return [row.critical ? String(row.critical).trim() : "-"];
 
         const val = row[colId];
@@ -291,6 +518,7 @@ const ControlAttributes = () => {
         { id: "hierarchy", title: "Hierarchy of Controls" },
         { id: "quality", title: "Control Quality" },
         { id: "cons", title: "Main Consequence Addressed" },
+        { id: "category", title: "Category" }, // New Column Added
         { id: "action", title: "Action" },
     ];
 
@@ -303,6 +531,7 @@ const ControlAttributes = () => {
         "activation",
         "hierarchy",
         "cons",
+        "category", // Default to show
         "action",
     ]);
 
@@ -373,6 +602,7 @@ const ControlAttributes = () => {
         hierarchy: 220,
         quality: 120,
         cons: 150,
+        category: 150, // Default width for Category
         action: 80,
     });
 
@@ -387,6 +617,7 @@ const ControlAttributes = () => {
         hierarchy: 220,
         quality: 120,
         cons: 150,
+        category: 150,
         action: 80,
     });
 
@@ -401,6 +632,7 @@ const ControlAttributes = () => {
         hierarchy: { min: 150, max: 400 },
         quality: { min: 100, max: 250 },
         cons: { min: 120, max: 300 },
+        category: { min: 100, max: 300 }, // Limits for category
         action: { min: 80, max: 80 },
     };
 
@@ -673,6 +905,20 @@ const ControlAttributes = () => {
         }
     }, [excelFilter.open, excelFilter.pos, excelSearch]);
 
+    useLayoutEffect(() => {
+        if (!showCategoryDropdown) return;
+        if (!activeCategoryRow) return;
+
+        const inputEl = categoryInputRefs.current[activeCategoryRow];
+        const dropdownEl = dropdownRef.current;
+
+        if (!inputEl || !dropdownEl) return;
+
+        setDropdownPosition(
+            calculateDropdownPosition(inputEl, dropdownEl)
+        );
+    }, [showCategoryDropdown, filteredCategories, activeCategoryRow]);
+
     return (
         <div className="risk-control-attributes-container">
             {isSidebarVisible && (
@@ -860,6 +1106,35 @@ const ControlAttributes = () => {
                                             Control Effectiveness Rating (CER)
                                         </th>
                                     )}
+
+                                    {showColumns.includes("category") && (
+                                        <th
+                                            className="risk-control-attributes-category"
+                                            rowSpan={2}
+                                            style={{
+                                                position: "relative",
+                                                width: columnWidths.category ? `${columnWidths.category}px` : undefined,
+                                                minWidth: columnSizeLimits.category?.min,
+                                                maxWidth: columnSizeLimits.category?.max,
+                                                cursor: "pointer",
+                                                zIndex: 2, // Keep header above
+                                                textAlign: "center",
+                                                borderLeft: "1px solid white"
+                                            }}
+                                            onClick={(e) => {
+                                                if (isResizingRef.current) return;
+                                                if (e.target.classList.contains('rca-col-resizer')) return;
+                                                openExcelFilterPopup("category", e);
+                                            }}
+                                        >
+                                            <span>Category</span>
+                                            {(activeExcelFilters["category"] || sortConfig.colId === "category") && (
+                                                <FontAwesomeIcon icon={faFilter} className="th-filter-icon" style={{ marginLeft: "8px", opacity: 0.8 }} />
+                                            )}
+                                            <div className="rca-col-resizer" onMouseDown={(e) => startColumnResize(e, "category")} />
+                                        </th>
+                                    )}
+
                                     {showColumns.includes("action") && (
                                         <th
                                             className="risk-control-attributes-action"
@@ -886,6 +1161,7 @@ const ControlAttributes = () => {
                                     {/* Render header columns dynamically with filter logic */}
                                     {availableColumns.map(col => {
                                         if (col.id === "action") return null; // Handled in rowSpan above
+                                        if (col.id === "category") return null; // Skip category here
                                         if (!showColumns.includes(col.id)) return null;
 
                                         // Map to current CSS classes
@@ -949,73 +1225,149 @@ const ControlAttributes = () => {
                                 onPointerCancel={endRowDrag}
                                 onDragStart={onNativeDragStart}
                             >
-                                {processedControls.map((row, index) => (
-                                    <tr className="table-scroll-wrapper-attributes-controls" key={row._id ?? index}>
-                                        {showColumns.includes("nr") && (
-                                            <td className="procCent" style={{ fontSize: "14px" }}>
-                                                {index + 1}
-                                            </td>
-                                        )}
+                                {processedControls.map((row, index) => {
+                                    const currentVal = categoryChanges[row._id];
+                                    const originalVal = row.category || "";
+                                    const isDirty = currentVal !== undefined && currentVal !== originalVal;
+                                    const displayVal = currentVal !== undefined ? currentVal : originalVal;
 
-                                        {showColumns.includes("control") && (
-                                            <td style={{ fontSize: "14px" }}>{row.control}</td>
-                                        )}
+                                    return (
+                                        <tr
+                                            className="table-scroll-wrapper-attributes-controls"
+                                            key={row._id ?? index}
+                                            onClick={handleControlRowClick(row)}
+                                        >
+                                            {showColumns.includes("nr") && (
+                                                <td className="procCent" style={{ fontSize: "14px" }}>
+                                                    {index + 1}
+                                                </td>
+                                            )}
 
-                                        {showColumns.includes("description") && (
-                                            <td style={{ fontSize: "14px" }}>{row.description}</td>
-                                        )}
+                                            {showColumns.includes("control") && (
+                                                <td style={{ fontSize: "14px", position: "relative" }}>
+                                                    {row.control}
 
-                                        {showColumns.includes("performance") && (
-                                            <td style={{ fontSize: "14px" }}>{row.performance}</td>
-                                        )}
+                                                    {activeControlMenuId === row._id && (
+                                                        <ControlPopupMenuOptions
+                                                            id={row._id}
+                                                            onClose={() => setActiveControlMenuId(null)}
+                                                        />
+                                                    )}
+                                                </td>
+                                            )}
 
-                                        {showColumns.includes("critical") && (
-                                            <td
-                                                className={`${row.critical === "Yes"
-                                                    ? "procCent cea-table-page-critical"
-                                                    : "procCent"
-                                                    }`}
-                                                style={{ fontSize: "14px" }}
-                                            >
-                                                {row.critical}
-                                            </td>
-                                        )}
+                                            {showColumns.includes("description") && (
+                                                <td style={{ fontSize: "14px" }}>{row.description}</td>
+                                            )}
 
-                                        {showColumns.includes("act") && (
-                                            <td className="procCent" style={{ fontSize: "14px" }}>
-                                                {row.act}
-                                            </td>
-                                        )}
+                                            {showColumns.includes("performance") && (
+                                                <td style={{ fontSize: "14px" }}>{row.performance}</td>
+                                            )}
 
-                                        {showColumns.includes("activation") && (
-                                            <td style={{ fontSize: "14px" }}>{row.activation}</td>
-                                        )}
-
-                                        {showColumns.includes("hierarchy") && (
-                                            <td style={{ fontSize: "14px" }}>{row.hierarchy}</td>
-                                        )}
-
-                                        {showColumns.includes("quality") && (
-                                            <td style={{ fontSize: "14px" }}>{row.quality}</td>
-                                        )}
-
-                                        {showColumns.includes("cons") && (
-                                            <td style={{ fontSize: "14px" }}>{row.cons}</td>
-                                        )}
-
-                                        {showColumns.includes("action") && (
-                                            <td className="risk-control-attributes-action-cell">
-                                                <button
-                                                    type="button"
-                                                    className="rca-action-btn"
-                                                    onClick={() => openModifyControl(row)}
+                                            {showColumns.includes("critical") && (
+                                                <td
+                                                    className={`${row.critical === "Yes"
+                                                        ? "procCent cea-table-page-critical"
+                                                        : "procCent"
+                                                        }`}
+                                                    style={{ fontSize: "14px" }}
                                                 >
-                                                    <FontAwesomeIcon icon={faEdit} />
-                                                </button>
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
+                                                    {row.critical}
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("act") && (
+                                                <td className="procCent" style={{ fontSize: "14px" }}>
+                                                    {row.act}
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("activation") && (
+                                                <td style={{ fontSize: "14px" }}>{row.activation}</td>
+                                            )}
+
+                                            {showColumns.includes("hierarchy") && (
+                                                <td style={{ fontSize: "14px" }}>{row.hierarchy}</td>
+                                            )}
+
+                                            {showColumns.includes("quality") && (
+                                                <td style={{ fontSize: "14px" }}>{row.quality}</td>
+                                            )}
+
+                                            {showColumns.includes("cons") && (
+                                                <td style={{ fontSize: "14px" }}>{row.cons}</td>
+                                            )}
+
+                                            {showColumns.includes("category") && (
+                                                <td style={{ fontSize: "14px", padding: "4px" }}>
+                                                    <div className="category-input-container" style={{ display: "flex", alignItems: "center", gap: "2px", width: "100%", height: "100%" }}>
+                                                        <textarea
+                                                            type="text"
+                                                            value={displayVal}
+                                                            onChange={(e) => handleCategoryInput(row._id, e.target.value)}
+                                                            onFocus={(e) => handleCategoryFocus(row._id, e.target.value)}
+                                                            className="category-inline-input"
+                                                            style={{
+                                                                flex: "1", // Takes all available space
+                                                                minWidth: "0", // Allow shrinking
+                                                                padding: "4px 6px",
+                                                                borderRadius: "4px",
+                                                                border: "1px solid gray",
+                                                                transition: "all 0.2s",
+                                                                resize: "none",
+                                                                minHeight: "10px",
+                                                                fieldSizing: "content",
+                                                                fontFamily: "Arial",
+                                                                wordBreak: "break-word",
+                                                            }}
+                                                            ref={el => {
+                                                                const key = row._id;
+                                                                if (el) {
+                                                                    categoryInputRefs.current[key] = el;
+                                                                } else {
+                                                                    delete categoryInputRefs.current[key];
+                                                                }
+                                                            }}
+                                                        />
+                                                        {isDirty && (
+                                                            <button
+                                                                onClick={() => handleSaveCategory(row)}
+                                                                className="category-save-btn"
+                                                                title="Save Change"
+                                                                style={{
+                                                                    flex: "0 0 auto", // Do not shrink
+                                                                    background: "transparent",
+                                                                    color: "gray",
+                                                                    border: "none",
+                                                                    borderRadius: "4px",
+                                                                    fontSize: "24px",
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                    cursor: "pointer",
+                                                                }}
+                                                            >
+                                                                <FontAwesomeIcon icon={faSave} size="xs" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("action") && (
+                                                <td className="risk-control-attributes-action-cell">
+                                                    <button
+                                                        type="button"
+                                                        className="rca-action-btn"
+                                                        onClick={() => openModifyControl(row)}
+                                                    >
+                                                        <FontAwesomeIcon icon={faEdit} />
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    )
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -1156,6 +1508,31 @@ const ControlAttributes = () => {
                         );
                     })()}
                 </div>
+            )}
+
+            {/* NEW: Floating Category Dropdown */}
+            {showCategoryDropdown && filteredCategories.length > 0 && (
+                <ul
+                    className="floating-dropdown"
+                    ref={dropdownRef}
+                    style={{
+                        position: 'fixed',
+                        top: dropdownPosition.top,
+                        left: dropdownPosition.left,
+                        width: dropdownPosition.width,
+                        zIndex: 1000
+                    }}
+                    onMouseDown={e => e.preventDefault()} // Prevents blur
+                >
+                    {filteredCategories.map((term, i) => (
+                        <li
+                            key={i}
+                            onMouseDown={() => selectCategorySuggestion(term)}
+                        >
+                            {term}
+                        </li>
+                    ))}
+                </ul>
             )}
 
             {addControl && (<AddControlPopup onClose={closeAddControl} />)}

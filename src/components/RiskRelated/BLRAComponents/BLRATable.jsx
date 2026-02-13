@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import axios from "axios";
 import DatePicker from "react-multi-date-picker";
 
-const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false }) => {
+const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false, relevantControls = [] }) => {
     const ibraBoxRef = useRef(null);
     const tableWrapperRef = useRef(null);
     const [ibraPopup, setIbraPopup] = useState(false);
@@ -1868,7 +1868,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 </button>)}
             </div>
             {showNote && (<IbraNote setClose={closeNote} text={noteText} />)}
-            {ibraPopup && (<BLRAPopup onClose={closePopup} data={selectedRowData} onSave={handleSaveWithRiskTreatment} rowsData={rows} readOnly={readOnly} />)}
+            {ibraPopup && (<BLRAPopup onClose={closePopup} data={selectedRowData} onSave={handleSaveWithRiskTreatment} rowsData={rows} readOnly={readOnly} availableControls={relevantControls} />)}
 
             {showExeDropdown && filteredExe.length > 0 && (
                 <ul

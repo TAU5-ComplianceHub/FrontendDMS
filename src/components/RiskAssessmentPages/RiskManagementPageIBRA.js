@@ -34,6 +34,7 @@ import DatePicker from "react-multi-date-picker";
 import RelevantControlsTable from "../RiskRelated/RelevantControlsTable";
 import ControlPopupNote from "../Popups/ControlPopupNote";
 import UnusedControlsPopup from "../RiskRelated/UnusedControlsPopup";
+import ImportControlChanges from "../RiskRelated/ImportControlChanges";
 
 const RiskManagementPageIBRA = () => {
     const navigate = useNavigate();
@@ -73,6 +74,9 @@ const RiskManagementPageIBRA = () => {
     const [lockUser, setLockUser] = useState(null);
     const scrollableRef = useRef(null);
     const [allSystemControls, setAllSystemControls] = useState([]);
+    const [importPopup, setImportPopup] = useState(false);
+    const [diffsToImport, setDiffsToImport] = useState([]);
+    const [highlightedRows, setHighlightedRows] = useState([]);
 
     const openWorkflow = () => {
         setShowWorkflow(true);
@@ -348,6 +352,7 @@ const RiskManagementPageIBRA = () => {
 
             if (hasUnusedControls()) {
                 setUnusedPopup(true);
+                return;
             }
 
             if (!readOnly) {
@@ -557,7 +562,18 @@ const RiskManagementPageIBRA = () => {
                 return {
                     ...row,
                     mainFlag: row.mainFlag ?? false,
-                    // ... (keep all your existing flags)
+                    subFlag: row.subFlag ?? false,
+                    ownerFlag: row.ownerFlag ?? false,
+                    oddsFlag: row.oddsFlag ?? false,
+                    riskRankFlag: row.riskRankFlag ?? false,
+                    hazardFlag: row.hazardFlag ?? false,
+                    controlFlag: row.controlFlag ?? false,
+                    ueFlag: row.ueFlag ?? false,
+                    additionalFlag: row.additionalFlag ?? false,
+                    maxConsequenceFlag: row.maxConsequenceFlag ?? false,
+                    sourceFlag: row.sourceFlag ?? false,
+                    materialFlag: row.materialFlag ?? false,
+                    priorityFlag: row.priorityFlag ?? false,
                     possible: possible.map(block => {
                         // ... (keep existing possible logic)
                         const possibleId = block?.id ?? uuidv4();
@@ -1502,8 +1518,6 @@ const RiskManagementPageIBRA = () => {
 
     // Send data to backend to generate a Word document
     const handleGenerateIBRADocument = async () => {
-        saveDraft();
-
         const dataToStore = {
             formData,
         };
@@ -1927,6 +1941,183 @@ const RiskManagementPageIBRA = () => {
         return definedControlNames.some(name => !usedControlNames.has(name));
     };
 
+
+    // Track which draft we've already checked (so we don't spam logs on every state change)
+    const lastCheckedDraftIdRef = useRef(null);
+
+    // Compare CEA rows against system controls and log differences
+    const logCeaVsSystemControlDifferences = useCallback((ceaRows = [], systemControls = [], draftId = "") => {
+        if (!Array.isArray(ceaRows) || !Array.isArray(systemControls)) return;
+
+        const fieldsToCompare = [
+            "description",
+            "critical",
+            "act",
+            "activation",
+            "hierarchy",
+            "cons",
+            "quality",
+            "cer",
+            "notes",
+            "performance",
+            "dueDate",
+            "responsible",
+            "action",
+        ];
+
+        const normalizeVal = (v) => (v == null ? "" : String(v).trim());
+
+        // Map system controls by normalized control name
+        const sysMap = new Map(
+            systemControls
+                .filter(c => c && normalizeVal(c.control))
+                .map(c => [normalizeVal(c.control), c])
+        );
+
+        const diffs = [];
+
+        ceaRows.forEach((row) => {
+            const controlName = normalizeVal(row?.control);
+            if (!controlName) return;
+
+            const sys = sysMap.get(controlName);
+            if (!sys) return; // only check rows that have a corresponding system control
+
+            const mismatches = {};
+
+            fieldsToCompare.forEach((key) => {
+                const ceaVal = normalizeVal(row?.[key]);
+                const sysVal = normalizeVal(sys?.[key]);
+
+                // If system has a value (or even if it's blank) and it's not the same as draft -> log it.
+                // (This catches "system updated" OR "draft diverged".)
+                if (ceaVal !== sysVal) {
+                    mismatches[key] = { cea: ceaVal, system: sysVal };
+                }
+            });
+
+            if (Object.keys(mismatches).length > 0) {
+                diffs.push({
+                    draftId,
+                    ceaRowId: row?.id,
+                    nr: row?.nr,
+                    control: controlName,
+                    mismatches,
+                });
+            }
+        });
+
+        if (diffs.length > 0) {
+            console.groupCollapsed(`🟧 CEA vs System Controls differences (${diffs.length}) [draft: ${draftId}]`);
+            diffs.forEach(d => console.log(d));
+            console.groupEnd();
+        } else {
+            console.log(`✅ CEA matches System Controls [draft: ${draftId}]`);
+        }
+    }, []);
+
+    // Compare CEA rows against system controls and Trigger Popup
+    useEffect(() => {
+        const draftId = loadedIDRef.current;
+
+        // Conditions to run: Draft loaded, system controls fetched, CEA rows exist, not checked yet
+        if (!draftId) return;
+        if (!allSystemControls || allSystemControls.length === 0) return;
+        if (!formData?.cea || formData.cea.length === 0) return;
+        if (lastCheckedDraftIdRef.current === draftId) return;
+
+        lastCheckedDraftIdRef.current = draftId;
+
+        const normalizeVal = (v) => (v == null ? "" : String(v).trim());
+        const fieldsToCompare = ["description", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", "performance", "dueDate", "responsible", "action"];
+
+        // Map system controls
+        const sysMap = new Map(
+            allSystemControls
+                .filter(c => c && normalizeVal(c.control))
+                .map(c => [normalizeVal(c.control), c])
+        );
+
+        const diffs = [];
+
+        formData.cea.forEach((row) => {
+            const controlName = normalizeVal(row?.control);
+            if (!controlName) return;
+
+            const sys = sysMap.get(controlName);
+            if (!sys) return;
+
+            const mismatches = {};
+            let hasDiff = false;
+
+            fieldsToCompare.forEach((key) => {
+                const ceaVal = normalizeVal(row?.[key]);
+                const sysVal = normalizeVal(sys?.[key]);
+
+                // Detect difference
+                if (ceaVal !== sysVal) {
+                    mismatches[key] = { cea: ceaVal, system: sysVal };
+                    hasDiff = true;
+                }
+            });
+
+            if (hasDiff) {
+                diffs.push({
+                    ceaRowId: row.id,
+                    control: controlName,
+                    mismatches,
+                });
+            }
+        });
+
+        if (diffs.length > 0) {
+            console.log("System Control Updates Found:", diffs);
+            setDiffsToImport(diffs);
+            setImportPopup(true);
+        }
+    }, [allSystemControls, formData?.cea, loadedIDRef.current]);
+
+    const handleImportConfirm = () => {
+        if (diffsToImport.length === 0) {
+            setImportPopup(false);
+            return;
+        }
+
+        // 1. Create a map of updates for fast lookup
+        // Structure of diff item: { ceaRowId, mismatches: { field: { system: '...' } } }
+        const updatesMap = {};
+        const changedIds = [];
+
+        diffsToImport.forEach(diff => {
+            updatesMap[diff.ceaRowId] = diff.mismatches;
+            changedIds.push(diff.ceaRowId);
+        });
+
+        // 2. Update formData.cea
+        const updatedCEA = formData.cea.map(row => {
+            const updates = updatesMap[row.id];
+            if (!updates) return row; // No changes for this row
+
+            // Apply system values
+            const newRow = { ...row };
+            Object.keys(updates).forEach(field => {
+                newRow[field] = updates[field].system;
+            });
+            return newRow;
+        });
+
+        // 3. Save state
+        setFormData(prev => ({ ...prev, cea: updatedCEA }));
+        setHighlightedRows(changedIds); // Highlight the rows that changed
+        setImportPopup(false);
+
+        toast.success("Controls updated from system values");
+    };
+
+    const handleImportCancel = () => {
+        setImportPopup(false);
+    };
+
     return (
         <div className="risk-create-container">
             {isSidebarVisible && (
@@ -2345,7 +2536,7 @@ const RiskManagementPageIBRA = () => {
                     <TermTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
                     <AttendanceTable readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
                     {formData.documentType === "IBRA" && (<IBRATable relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
-                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
+                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} highlightedRows={highlightedRows} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
 
                     <ExecutiveSummary readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.execSummary} handleInputChange={handleInputChange} />
                     <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
@@ -2376,7 +2567,13 @@ const RiskManagementPageIBRA = () => {
             {helpScope && (<RiskScope setClose={closeHelpScope} />)}
             <ToastContainer />
             {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={riskType} userID={userID} create={false} />)}
-
+            {importPopup && (
+                <ImportControlChanges
+                    closeModal={handleImportCancel}
+                    generate={handleImportConfirm}
+                    cancel={handleImportCancel}
+                />
+            )}
             {showSiteDropdown && filteredSites.length > 0 && (
                 <ul
                     className="floating-dropdown"

@@ -7,7 +7,7 @@ const RepublishTrainingConfirmation = ({ closeModal, retakeInduction, normalPubl
         <div className="delete-popup-overlay">
             <div className="delete-popup-content">
                 <div className="delete-file-header">
-                    <h2 className="delete-file-title">Republish Coures</h2>
+                    <h2 className="delete-file-title">Republish Course</h2>
                     <button className="delete-file-close" onClick={closeModal} title="Close Popup">×</button>
                 </div>
 
