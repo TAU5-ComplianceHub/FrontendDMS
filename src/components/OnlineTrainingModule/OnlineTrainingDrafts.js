@@ -271,6 +271,44 @@ const OnlineTrainingDrafts = () => {
 
     const handleInnerScrollWheel = (e) => e.stopPropagation();
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortBy !== null || sortDir !== null;
+        return hasColumnFilters || hasSort;
+    }, [activeExcelFilters, sortBy, sortDir]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setActiveExcelFilters({});
+        setSortBy(null);
+        setSortDir(null);
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        return "top-right-button-control-att";
+    };
+
     return (
         <div className="gen-file-info-container">
             {isSidebarVisible && (
@@ -323,6 +361,20 @@ const OnlineTrainingDrafts = () => {
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
                         <label className="risk-control-label">{"Saved Drafts"}</label>
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
+                        />
                     </div>
                     <div className="table-container-file-flameproof-all-assets">
                         {isLoadingDraft ? (

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./AddMenuPopup.css";
 
-const AddMenuPopup = ({ isOpen, anchorRect, onClose, onSelect }) => {
+const AddMenuPopup = ({ isOpen, anchorRect, onClose, onSelect, onMouseEnter, onMouseLeave }) => {
     const menuRef = useRef(null);
     const [positionStyle, setPositionStyle] = useState({});
 
@@ -34,12 +34,13 @@ const AddMenuPopup = ({ isOpen, anchorRect, onClose, onSelect }) => {
             const MENU_HEIGHT = 85; // Approx height of 2 items
             const spaceBelow = window.innerHeight - anchorRect.bottom;
 
+            // Inside AddMenuPopup.jsx useEffect
             let top;
-            // If space below is less than menu height, flip up
+            // If flipping up, add a tiny offset so it overlaps the button slightly
             if (spaceBelow < MENU_HEIGHT) {
-                top = anchorRect.top - MENU_HEIGHT;
+                top = anchorRect.top - MENU_HEIGHT + 5;
             } else {
-                top = anchorRect.bottom;
+                top = anchorRect.bottom - 5;
             }
 
             setPositionStyle({
@@ -56,6 +57,8 @@ const AddMenuPopup = ({ isOpen, anchorRect, onClose, onSelect }) => {
             className="popup-menu-container-add-options"
             style={positionStyle}
             ref={menuRef}
+            onMouseEnter={onMouseEnter} // Added this
+            onMouseLeave={onMouseLeave} // Added this
         >
             <div className="popup-content-add-options">
                 <ul>

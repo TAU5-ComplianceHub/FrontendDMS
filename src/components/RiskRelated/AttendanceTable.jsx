@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import "./AttendanceTable.css";
 import "../CreatePage/ReferenceTable.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faDownload, faInfoCircle, faPlusCircle, faTableColumns, faTimes, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faFilter, faInfoCircle, faPlusCircle, faTableColumns, faTimes, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { toast } from "react-toastify";
+import { saveAs } from "file-saver";
 
-const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, generateAR, setErrors, readOnly = false }) => {
+const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, generateAR, setErrors, readOnly = false, title, documentType }) => {
     const [designations, setDesignations] = useState([]);
     const [authors, setAuthors] = useState([]);
     const [companies, setCompanies] = useState([]);
@@ -19,6 +20,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const popupRef = useRef(null);
     const [nameToPositionMap, setNameToPositionMap] = useState({});
+    const [loading, setLoading] = useState(false);
 
     const availableColumns = [
         { id: "nr", title: "Nr" },
@@ -38,6 +40,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
             const outside =
                 !e.target.closest(popupSelector) &&
                 !e.target.closest(columnSelector) &&
+                !e.target.closest('.excel-filter-popup') && // <--- ADD THIS LINE
                 !e.target.closest('input');
             if (outside) {
                 closeDropdowns();
@@ -54,6 +57,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
         const closeDropdowns = () => {
             setShowDropdown(null);
             setShowColumnSelector(null);
+            setExcelFilter(prev => ({ ...prev, open: false }));
 
             if (document.activeElement instanceof HTMLElement) {
                 document.activeElement.blur();
@@ -335,6 +339,180 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
         updateRows(newRows);
     };
 
+    // --- START: Excel Filter & Sort State ---
+    const [filters, setFilters] = useState({});
+    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
+
+    const [excelFilter, setExcelFilter] = useState({
+        open: false,
+        colId: null,
+        anchorRect: null,
+        pos: { top: 0, left: 0, width: 0 }
+    });
+    const [excelSearch, setExcelSearch] = useState("");
+    const [excelSelected, setExcelSelected] = useState(new Set());
+    const excelPopupRef = useRef(null);
+    const BLANK = "(Blanks)";
+
+    // Helper to get values for filtering
+    const getFilterValuesForCell = (row, colId) => {
+        const raw = row?.[colId];
+        const s = raw == null ? "" : String(raw).trim();
+        return s === "" ? [BLANK] : [s];
+    };
+
+    // Calculate Filtered & Sorted Rows
+    const filteredRows = React.useMemo(() => {
+        // 1. Attach original index to keep track of data for editing
+        let current = rows.map((r, i) => ({ ...r, _originalIndex: i }));
+
+        // 2. Apply Filters
+        if (filters.site?.selected) {
+            current = current.filter(row => {
+                const cellValues = getFilterValuesForCell(row, "site");
+                return cellValues.some(v => filters.site.selected.includes(v));
+            });
+        }
+
+        // 3. Apply Sorting
+        const { colId, direction } = sortConfig;
+
+        // If sort is default (nr), we rely on original index order (effectively no sort)
+        if (colId !== "nr") {
+            const dir = direction === "desc" ? -1 : 1;
+
+            current.sort((a, b) => {
+                const valA = getFilterValuesForCell(a, colId)[0];
+                const valB = getFilterValuesForCell(b, colId)[0];
+
+                if (valA === BLANK && valB !== BLANK) return 1;
+                if (valA !== BLANK && valB === BLANK) return -1;
+                if (valA === BLANK && valB === BLANK) return 0;
+
+                return String(valA).localeCompare(String(valB)) * dir;
+            });
+        }
+
+        return current;
+    }, [rows, filters, sortConfig]);
+
+    // Open Filter Menu
+    const openExcelFilterPopup = (colId, e) => {
+        const th = e.target.closest("th");
+        const rect = th.getBoundingClientRect();
+
+        // Get unique values from ALL rows (not just visible ones)
+        const values = Array.from(
+            new Set(rows.flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort();
+
+        const existing = filters?.[colId]?.selected;
+        // Default to all selected if no filter exists
+        setExcelSelected(new Set(existing || values));
+        setExcelSearch("");
+
+        setExcelFilter({
+            open: true,
+            colId,
+            anchorRect: rect,
+            pos: {
+                top: rect.bottom + window.scrollY + 4,
+                left: rect.left + window.scrollX,
+                width: Math.max(220, rect.width),
+            },
+        });
+    };
+
+    // Handle Popup Positioning
+    useEffect(() => {
+        if (!excelFilter.open || !excelPopupRef.current) return;
+
+        const popupRect = excelPopupRef.current.getBoundingClientRect();
+        const viewportH = window.innerHeight;
+        let newTop = excelFilter.pos.top;
+
+        // Flip up if near bottom
+        if (popupRect.bottom > viewportH - 10) {
+            if (excelFilter.anchorRect) {
+                newTop = excelFilter.anchorRect.top + window.scrollY - popupRect.height - 4;
+            }
+        }
+
+        if (newTop !== excelFilter.pos.top) {
+            setExcelFilter(prev => ({ ...prev, pos: { ...prev.pos, top: newTop } }));
+        }
+    }, [excelFilter.open, excelSearch]);
+
+    const handleGenerateARegister = async () => {
+        const dataToStore = {
+            attendance: filteredRows
+        };
+
+        if (rows.some(row => !row.name.trim())) {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.warn("All attedees names must have a value.", {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+            return;
+        }
+
+        if (rows.some(row => !row.site.trim())) {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.warn("All attedees company/site must have a value.", {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+            return;
+        }
+
+        if (rows.some(row => !row.designation.trim())) {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.warn("All attedees designation must have a value.", {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+            return;
+        }
+
+        const documentName = (title) + ' ' + documentType + " Attendance Register";
+        setLoading(true);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskGenerate/generate-attend-xlsx`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+
+            const blob = await response.blob();
+            saveAs(blob, `${documentName}.xlsx`);
+            setLoading(false);
+            //saveAs(blob, `${documentName}.pdf`);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="input-row-risk-create">
             <div className={`input-box-attendance ${error ? "error-sign" : ""}`}>
@@ -352,7 +530,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                 <button
                     className="top-right-button-ar-2"
                     title="Generate Attendance Register"
-                    onClick={generateAR}
+                    onClick={handleGenerateARegister}
                 >
                     <FontAwesomeIcon icon={faDownload} className="icon-um-search" />
                 </button>
@@ -415,7 +593,21 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                         <tr>
                             <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-nr` : `attend-nr`}`}>Nr</th>
                             <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-name` : `attend-name-exp`}`}>Name & Surname</th>
-                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-comp` : `attend-comp-exp`}`}>Company/Site</th>
+                            <th
+                                className={`font-fam cent ${!showColumns.includes("num") ? `attend-comp` : `attend-comp-exp`}`}
+                                style={{ cursor: "pointer", position: "relative" }}
+                                onClick={(e) => {
+                                    // Only open if not clicking resizing handles (if you have them)
+                                    // or just open directly
+                                    openExcelFilterPopup("site", e);
+                                }}
+                            >
+                                Company/Site
+                                {/* Show filter icon if filtered OR sorted by site */}
+                                {(filters["site"] || sortConfig.colId === "site") && (
+                                    <FontAwesomeIcon icon={faFilter} style={{ marginLeft: "8px", color: "#002060" }} />
+                                )}
+                            </th>
                             <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-desg` : `attend-desg-exp`}`}>Designation</th>
                             <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-pres` : `attend-pres-exp`}`}>Attendance</th>
                             {showColumns.includes("num") && (<th className="font-fam cent attend-id">Company / ID Number</th>)}
@@ -423,113 +615,116 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map((row, index) => (
-                            <tr key={index}>
-                                <td className="cent" >{index + 1}</td>
-                                <td>
-                                    <input
-                                        type="text"
-                                        className="table-control font-fam"
-                                        value={row.name || ""}
-                                        style={{ fontSize: "14px" }}
-                                        onChange={(e) => handleInputChange(index, "name", e)}
-                                        onFocus={() => handleFocus(index, "name")}
-                                        placeholder="Insert or select name"
-                                        ref={(el) => (inputRefs.current[`name-${index}`] = el)}
-                                        readOnly={readOnly}
-                                    />
-                                </td>
-                                <td>
-                                    <input
-                                        type="text"
-                                        className="table-control font-fam"
-                                        value={row.site || ""}
-                                        onFocus={() => handleFocus(index, "site")}
-                                        style={{ fontSize: "14px" }}
-                                        onChange={(e) => handleInputChange(index, "site", e)}
-                                        placeholder="Insert company/site"
-                                        ref={(el) => (inputRefs.current[`site-${index}`] = el)}
-                                        readOnly={readOnly}
-                                    />
-                                </td>
-                                <td>
-                                    <input
-                                        type="text"
-                                        className="table-control font-fam"
-                                        value={row.designation || ""}
-                                        onChange={(e) => handleInputChange(index, "designation", e)}
-                                        onFocus={() => handleFocus(index, "designation")}
-                                        placeholder="Insert or select designation"
-                                        readOnly={index === 0 || readOnly}
-                                        style={{ fontSize: "14px" }}
-                                        ref={(el) => (inputRefs.current[`designation-${index}`] = el)}
-                                    />
-                                </td>
-                                <td>
-                                    <input
-                                        type="checkbox"
-                                        className="checkbox-inp-attend"
-                                        checked={row.presence === "Present"}
-                                        onChange={(e) => {
-                                            const updatedRow = {
-                                                ...rows[index],
-                                                presence: e.target.checked ? "Present" : "Absent"
-                                            };
-                                            const newRows = [...rows];
-                                            newRows[index] = updatedRow;
-                                            updateRows(newRows);
-                                        }}
-                                        disabled={readOnly}
-                                    />
-                                </td>
-                                {showColumns.includes("num") && (<td className="font-fam cent">
-                                    <input
-                                        type="text"
-                                        className="table-control font-fam"
-                                        value={row.num || ""}
-                                        style={{ fontSize: "14px" }}
-                                        onChange={(e) => handleInputChange(index, "num", e)}
-                                        placeholder="Insert company / ID number"
-                                        readOnly={readOnly}
-                                    />
-                                </td>)}
-                                {!readOnly && (
-                                    <td className="procCent action-cell-auth-risk">
-                                        <button
-                                            className="remove-row-button font-fam"
-                                            onClick={() => {
-                                                if (index !== 0) { // Prevent removal of the first row
-                                                    removeRow(index);
-                                                } else {
-                                                    toast.dismiss();
-                                                    toast.clearWaitingQueue();
-                                                    toast.warn("The Facilitator cannot be removed.", {
-                                                        closeButton: false,
-                                                        autoClose: 800,
-                                                        style: {
-                                                            textAlign: 'center'
-                                                        }
-                                                    });
-                                                }
-                                            }}
-                                            title="Remove Row"
-                                            type="button"
-                                        >
-                                            <FontAwesomeIcon icon={faTrash} />
-                                        </button>
-                                        <button
-                                            className="insert-row-button-sig font-fam"
-                                            onClick={() => insertRowAt(index + 1)}
-                                            title="Add row"
-                                            type="button"
-                                            style={{ fontSize: "15px" }}
-                                        >
-                                            <FontAwesomeIcon icon={faPlusCircle} />
-                                        </button>
+                        {filteredRows.map((row, visualIndex) => {
+                            const index = row._originalIndex; // USE THIS for logic
+                            return (
+                                <tr key={index}>
+                                    {/* Display Nr based on Visual Index (1, 2, 3...) */}
+                                    <td className="cent">{visualIndex + 1}</td>
+
+                                    <td>
+                                        <input
+                                            type="text"
+                                            className="table-control font-fam"
+                                            value={row.name || ""}
+                                            style={{ fontSize: "14px" }}
+                                            onChange={(e) => handleInputChange(index, "name", e)}
+                                            onFocus={() => handleFocus(index, "name")}
+                                            placeholder="Insert or select name"
+                                            ref={(el) => (inputRefs.current[`name-${index}`] = el)}
+                                            readOnly={readOnly}
+                                        />
                                     </td>
-                                )}
-                            </tr>
-                        ))}
+                                    <td>
+                                        <input
+                                            type="text"
+                                            className="table-control font-fam"
+                                            value={row.site || ""}
+                                            onFocus={() => handleFocus(index, "site")}
+                                            style={{ fontSize: "14px" }}
+                                            onChange={(e) => handleInputChange(index, "site", e)}
+                                            placeholder="Insert company/site"
+                                            ref={(el) => (inputRefs.current[`site-${index}`] = el)}
+                                            readOnly={readOnly}
+                                        />
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="text"
+                                            className="table-control font-fam"
+                                            value={row.designation || ""}
+                                            onChange={(e) => handleInputChange(index, "designation", e)}
+                                            onFocus={() => handleFocus(index, "designation")}
+                                            placeholder="Insert or select designation"
+                                            readOnly={index === 0 || readOnly}
+                                            style={{ fontSize: "14px" }}
+                                            ref={(el) => (inputRefs.current[`designation-${index}`] = el)}
+                                        />
+                                    </td>
+                                    <td>
+                                        <input
+                                            type="checkbox"
+                                            className="checkbox-inp-attend"
+                                            checked={row.presence === "Present"}
+                                            onChange={(e) => {
+                                                const updatedRow = {
+                                                    ...rows[index], // Use original index
+                                                    presence: e.target.checked ? "Present" : "Absent"
+                                                };
+                                                const newRows = [...rows];
+                                                newRows[index] = updatedRow;
+                                                updateRows(newRows);
+                                            }}
+                                            disabled={readOnly}
+                                        />
+                                    </td>
+                                    {showColumns.includes("num") && (<td className="font-fam cent">
+                                        <input
+                                            type="text"
+                                            className="table-control font-fam"
+                                            value={row.num || ""}
+                                            style={{ fontSize: "14px" }}
+                                            onChange={(e) => handleInputChange(index, "num", e)}
+                                            placeholder="Insert company / ID number"
+                                            readOnly={readOnly}
+                                        />
+                                    </td>)}
+                                    {!readOnly && (
+                                        <td className="procCent action-cell-auth-risk">
+                                            <button
+                                                className="remove-row-button font-fam"
+                                                onClick={() => {
+                                                    if (index !== 0) {
+                                                        removeRow(index); // Prevent removal of the first row
+                                                    } else {
+                                                        toast.dismiss();
+                                                        toast.clearWaitingQueue();
+                                                        toast.warn("The Facilitator cannot be removed.", {
+                                                            closeButton: false,
+                                                            autoClose: 800,
+                                                            style: { textAlign: 'center' }
+                                                        });
+                                                    }
+                                                }}
+                                                title="Remove Row"
+                                                type="button"
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} />
+                                            </button>
+                                            <button
+                                                className="insert-row-button-sig font-fam"
+                                                onClick={() => insertRowAt(index + 1)} // Use original index
+                                                title="Add row"
+                                                type="button"
+                                                style={{ fontSize: "15px" }}
+                                            >
+                                                <FontAwesomeIcon icon={faPlusCircle} />
+                                            </button>
+                                        </td>
+                                    )}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -590,6 +785,134 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {/* --- Excel Filter Popup --- */}
+            {excelFilter.open && (
+                <div
+                    className="excel-filter-popup"
+                    ref={excelPopupRef}
+                    style={{
+                        position: "fixed",
+                        top: excelFilter.pos.top,
+                        left: excelFilter.pos.left,
+                        width: excelFilter.pos.width,
+                        zIndex: 9999,
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+                >
+                    <div className="excel-filter-sortbar">
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`}
+                            onClick={() => {
+                                if (sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc") {
+                                    setSortConfig(DEFAULT_SORT); // Revert to default if already active
+                                } else {
+                                    setSortConfig({ colId: excelFilter.colId, direction: "asc" });
+                                }
+                            }}
+                        >
+                            Sort A to Z
+                        </button>
+                        <button
+                            type="button"
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`}
+                            onClick={() => {
+                                if (sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc") {
+                                    setSortConfig(DEFAULT_SORT); // Revert to default if already active
+                                } else {
+                                    setSortConfig({ colId: excelFilter.colId, direction: "desc" });
+                                }
+                            }}
+                        >
+                            Sort Z to A
+                        </button>
+                    </div>
+
+                    <input
+                        type="text"
+                        className="excel-filter-search"
+                        placeholder="Search"
+                        value={excelSearch}
+                        onChange={(e) => setExcelSearch(e.target.value)}
+                    />
+
+                    {(() => {
+                        // Logic to calculate visible checkboxes
+                        const allValues = Array.from(new Set(rows.flatMap(r => getFilterValuesForCell(r, excelFilter.colId)))).sort();
+                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleValue = (v) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (next.has(v)) next.delete(v); else next.add(v);
+                                return next;
+                            });
+                        };
+
+                        const toggleAllVisible = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                visibleValues.forEach(v => {
+                                    if (checked) next.add(v); else next.delete(v);
+                                });
+                                return next;
+                            });
+                        };
+
+                        const apply = () => {
+                            setFilters(prev => {
+                                const next = { ...prev };
+                                // If all possible values are selected, remove the filter
+                                if (allValues.every(v => excelSelected.has(v))) {
+                                    delete next[excelFilter.colId];
+                                } else {
+                                    next[excelFilter.colId] = { selected: Array.from(excelSelected) };
+                                }
+                                return next;
+                            });
+                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                        };
+
+                        return (
+                            <>
+                                <div className="excel-filter-list">
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={allVisibleSelected}
+                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">(Select All)</span>
+                                    </label>
+
+                                    {visibleValues.map(v => (
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="excel-filter-actions">
+                                    <button type="button" className="excel-filter-btn" onClick={apply}>Apply</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={() => setExcelFilter(prev => ({ ...prev, open: false }))}>Cancel</button>
+                                </div>
+                            </>
+                        );
+                    })()}
+                </div>
             )}
         </div>
     );

@@ -29,6 +29,7 @@ const BurgerMenuFI = ({ isOpen, setIsOpen, admin, reset, setReset, isProfile, vi
                 <div className="menu-content-FI" onMouseLeave={() => setIsOpen(false)}>
                     <ul>
                         {!isProfile && !visitor && !student && (<li onClick={() => navigate("/FrontendDMS/userProfile")}>My Profile</li>)}
+                        {!isProfile && student && (<li onClick={() => navigate("/FrontendDMS/myStudentProfile")}>My Profile</li>)}
                         <li onClick={handleLogout}>Logout</li>
 
                     </ul>

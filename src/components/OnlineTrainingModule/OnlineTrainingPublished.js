@@ -649,6 +649,44 @@ const OnlineTrainingPublished = () => {
         }
     }, [excelFilter.open, excelFilter.pos, excelSearch]);
 
+
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [activeExcelFilters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setActiveExcelFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        return "top-right-button-control-att-2";
+    };
+
     return (
         <div className="gen-file-info-container">
             {isSidebarVisible && (
@@ -712,6 +750,21 @@ const OnlineTrainingPublished = () => {
                             title="Select Columns to Display"
                             className="top-right-button-control-att"
                             onClick={() => setShowColumnSelector(v => !v)}
+                        />
+
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
                         />
 
                         {showColumnSelector && (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck, faX } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../Notifications/TopBar";
@@ -31,6 +31,12 @@ const ControlAttributes = () => {
     const [modifyControl, setModifyControl] = useState(false);
     const [modifyingControl, setModifyingControl] = useState("")
     const [categoryChanges, setCategoryChanges] = useState({});
+    const [searchQuery, setSearchQuery] = useState("");
+    const [categories, setCategories] = useState([]);
+
+    const clearSearch = () => {
+        setSearchQuery("");
+    };
 
     // --- NEW: Dropdown State & Refs ---
     const [filteredCategories, setFilteredCategories] = useState([]);
@@ -194,6 +200,7 @@ const ControlAttributes = () => {
 
     useEffect(() => {
         fetchControls();
+        fetchCategories();
     }, []);
 
     // --- NEW: Category Dropdown Logic ---
@@ -389,6 +396,24 @@ const ControlAttributes = () => {
         }
     };
 
+    const fetchCategories = async () => {
+        const route = `/api/riskInfo/getCategories`;
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}${route}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch files');
+            }
+            const data = await response.json();
+
+            const sortedControls = data.categories.sort((a, b) =>
+                a.category.localeCompare(b.category, undefined, { sensitivity: 'base' })
+            );
+            setCategories(sortedControls);
+        } catch (error) {
+            setError(error.message);
+        }
+    };
+
     const handleSearchClick = () => setSearchPopupVisible(prev => !prev);
 
     const handleCloseSearch = () => {
@@ -405,7 +430,7 @@ const ControlAttributes = () => {
     const getFilterValuesForCell = (row, colId, index) => {
         if (colId === "nr") return [String(index + 1)];
         // Add category handler
-        if (colId === "category") return [row.category ? String(row.category).trim() : "-"];
+        if (colId === "category") return [row.category ? String(row.category).trim() : "No Category"];
         if (colId === "critical") return [row.critical ? String(row.critical).trim() : "-"];
 
         const val = row[colId];
@@ -458,8 +483,8 @@ const ControlAttributes = () => {
         let current = [...controls];
 
         // 1. Global Search (on control name)
-        if (searchInput) {
-            const lowerQ = searchInput.toLowerCase();
+        if (searchQuery) {
+            const lowerQ = searchQuery.toLowerCase();
             current = current.filter(c =>
                 c.control.toLowerCase().includes(lowerQ)
             );
@@ -505,7 +530,7 @@ const ControlAttributes = () => {
 
         return current;
 
-    }, [controls, searchInput, activeExcelFilters, sortConfig]);
+    }, [controls, searchQuery, activeExcelFilters, sortConfig]);
 
     const availableColumns = [
         { id: "nr", title: "Nr" },
@@ -602,7 +627,7 @@ const ControlAttributes = () => {
         hierarchy: 220,
         quality: 120,
         cons: 150,
-        category: 150, // Default width for Category
+        category: 180, // Default width for Category
         action: 80,
     });
 
@@ -617,7 +642,7 @@ const ControlAttributes = () => {
         hierarchy: 220,
         quality: 120,
         cons: 150,
-        category: 150,
+        category: 180,
         action: 80,
     });
 
@@ -919,6 +944,47 @@ const ControlAttributes = () => {
         );
     }, [showCategoryDropdown, filteredCategories, activeCategoryRow]);
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [activeExcelFilters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setActiveExcelFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        if (showResetButton) {
+            return "top-right-button-control-att-4";
+        }
+
+        return "top-right-button-control-att-3";
+    };
+
     return (
         <div className="risk-control-attributes-container">
             {isSidebarVisible && (
@@ -969,6 +1035,20 @@ const ControlAttributes = () => {
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
+
+                    <div className="um-input-container">
+                        <input
+                            className="search-input-um"
+                            type="text"
+                            placeholder="Search"
+                            autoComplete="off"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {searchQuery !== "" && (<i><FontAwesomeIcon icon={faX} onClick={clearSearch} className="icon-um-search" title="Clear Search" /></i>)}
+                        {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
+                    </div>
+
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
 
@@ -980,51 +1060,42 @@ const ControlAttributes = () => {
                         <label className="risk-control-label">Manage Controls</label>
 
                         <FontAwesomeIcon
-                            icon={faSearch}
-                            title="Search"
-                            className="top-right-button-control-att"
-                            onClick={handleSearchClick}
-                        />
-
-                        <FontAwesomeIcon
                             icon={faDownload}
                             title="Download Excel"
-                            className="top-right-button-control-att-2"
+                            className="top-right-button-control-att"
                             onClick={handleDownload}
                         />
 
                         <FontAwesomeIcon
                             icon={faTableColumns}
                             title="Show / Hide Columns"
-                            className="top-right-button-control-att-3"
+                            className="top-right-button-control-att-2"
                             onClick={() => setShowColumnSelector(prev => !prev)}
+                        />
+
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray",
+                                userSelect: "none"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
                         />
 
                         {showResetButton && (
                             <FontAwesomeIcon
                                 icon={faArrowsRotate}
                                 title="Reset column widths"
-                                className={showFitButton ? "top-right-button-control-att-4" : "top-right-button-control-att-4"}
+                                className={showFitButton ? "top-right-button-control-att-3" : "top-right-button-control-att-3"}
                                 onClick={resetColumnWidths}
                             />
-                        )}
-
-                        {searchPopupVisible && (
-                            <div className="search-popup-rca">
-                                <input
-                                    type="text"
-                                    value={searchInput}
-                                    onChange={handleSearchChange}
-                                    autoComplete="off"
-                                    placeholder="Search control name."
-                                    className="search-popup-input-rca"
-                                />
-                                <FontAwesomeIcon
-                                    icon={faTimes}
-                                    className="search-popup-close-rca"
-                                    onClick={handleCloseSearch}
-                                />
-                            </div>
                         )}
 
                         {showColumnSelector && (
@@ -1267,7 +1338,7 @@ const ControlAttributes = () => {
                                             {showColumns.includes("critical") && (
                                                 <td
                                                     className={`${row.critical === "Yes"
-                                                        ? "procCent cea-table-page-critical"
+                                                        ? "procCent"
                                                         : "procCent"
                                                         }`}
                                                     style={{ fontSize: "14px" }}
@@ -1300,35 +1371,37 @@ const ControlAttributes = () => {
 
                                             {showColumns.includes("category") && (
                                                 <td style={{ fontSize: "14px", padding: "4px" }}>
+                                                    {row.category || "No Category"}
+                                                </td>
+                                            )}
+
+
+                                            {false && showColumns.includes("category") && (
+                                                <td style={{ fontSize: "14px", padding: "4px" }}>
                                                     <div className="category-input-container" style={{ display: "flex", alignItems: "center", gap: "2px", width: "100%", height: "100%" }}>
-                                                        <textarea
-                                                            type="text"
-                                                            value={displayVal}
-                                                            onChange={(e) => handleCategoryInput(row._id, e.target.value)}
-                                                            onFocus={(e) => handleCategoryFocus(row._id, e.target.value)}
-                                                            className="category-inline-input"
-                                                            style={{
-                                                                flex: "1", // Takes all available space
-                                                                minWidth: "0", // Allow shrinking
-                                                                padding: "4px 6px",
-                                                                borderRadius: "4px",
-                                                                border: "1px solid gray",
-                                                                transition: "all 0.2s",
-                                                                resize: "none",
-                                                                minHeight: "10px",
-                                                                fieldSizing: "content",
-                                                                fontFamily: "Arial",
-                                                                wordBreak: "break-word",
-                                                            }}
-                                                            ref={el => {
-                                                                const key = row._id;
-                                                                if (el) {
-                                                                    categoryInputRefs.current[key] = el;
-                                                                } else {
-                                                                    delete categoryInputRefs.current[key];
-                                                                }
-                                                            }}
-                                                        />
+                                                        <div className="category-RMS-select-container">
+                                                            <select
+                                                                className="category-RMS-select"
+                                                                value={displayVal}
+                                                                onChange={(e) => handleCategoryInput(row._id, e.target.value)}
+                                                                onFocus={(e) => handleCategoryFocus(row._id, e.target.value)}
+                                                                ref={el => {
+                                                                    const key = row._id;
+                                                                    if (el) {
+                                                                        categoryInputRefs.current[key] = el;
+                                                                    } else {
+                                                                        delete categoryInputRefs.current[key];
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <option value="">Select Category</option>
+                                                                {categories.map((cat, i) => (
+                                                                    <option key={i} value={cat.category}>
+                                                                        {cat.category}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
                                                         {isDirty && (
                                                             <button
                                                                 onClick={() => handleSaveCategory(row)}
@@ -1508,31 +1581,6 @@ const ControlAttributes = () => {
                         );
                     })()}
                 </div>
-            )}
-
-            {/* NEW: Floating Category Dropdown */}
-            {showCategoryDropdown && filteredCategories.length > 0 && (
-                <ul
-                    className="floating-dropdown"
-                    ref={dropdownRef}
-                    style={{
-                        position: 'fixed',
-                        top: dropdownPosition.top,
-                        left: dropdownPosition.left,
-                        width: dropdownPosition.width,
-                        zIndex: 1000
-                    }}
-                    onMouseDown={e => e.preventDefault()} // Prevents blur
-                >
-                    {filteredCategories.map((term, i) => (
-                        <li
-                            key={i}
-                            onMouseDown={() => selectCategorySuggestion(term)}
-                        >
-                            {term}
-                        </li>
-                    ))}
-                </ul>
             )}
 
             {addControl && (<AddControlPopup onClose={closeAddControl} />)}

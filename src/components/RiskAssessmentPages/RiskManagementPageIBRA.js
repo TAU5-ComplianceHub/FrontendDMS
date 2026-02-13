@@ -614,6 +614,7 @@ const RiskManagementPageIBRA = () => {
         if (Array.isArray(normalized.cea)) {
             normalized.cea = normalized.cea.map(block => ({
                 ...block,
+                uniqueId: block.uniqueId ?? null,
                 action: block.action !== undefined ? block.action : '',
                 responsible: block.responsible !== undefined ? block.responsible : '',
                 dueDate: block.dueDate !== undefined ? block.dueDate : ''
@@ -815,7 +816,7 @@ const RiskManagementPageIBRA = () => {
         ],
         cea: [
             {
-                id: uuidv4(), nr: 1, control: "", critical: "", act: "", activation: "", hierarchy: "", cons: "", quality: "", cer: "", notes: "", description: "", performance: "", dueDate: "", responsible: "", action: ""
+                id: uuidv4(), uniqueId: null, nr: 1, control: "", critical: "", act: "", activation: "", hierarchy: "", cons: "", quality: "", cer: "", notes: "", description: "", performance: "", dueDate: "", responsible: "", action: ""
             }
         ],
         abbrRows: [],
@@ -1863,12 +1864,19 @@ const RiskManagementPageIBRA = () => {
                 }
             }
 
+            const findSystemId = (name) => {
+                const match = allSystemControls.find(sc => sc.control.trim().toLowerCase() === name.trim().toLowerCase());
+                return match ? match._id : null;
+            };
+
             // Build rows to add for missing controls
             const addedRows = missingNames.map(name => {
                 const b = backendMap.get(name) || {};
+                const sysId = findSystemId(name);
                 return {
                     id: uuidv4(),
                     control: name,
+                    uniqueId: sysId || null,
                     nr: 0, // set later
                     description: b.description || "",
                     critical: b.critical || "",
@@ -2020,62 +2028,130 @@ const RiskManagementPageIBRA = () => {
     useEffect(() => {
         const draftId = loadedIDRef.current;
 
-        // Conditions to run: Draft loaded, system controls fetched, CEA rows exist, not checked yet
-        if (!draftId) return;
-        if (!allSystemControls || allSystemControls.length === 0) return;
-        if (!formData?.cea || formData.cea.length === 0) return;
-        if (lastCheckedDraftIdRef.current === draftId) return;
-
-        lastCheckedDraftIdRef.current = draftId;
-
-        const normalizeVal = (v) => (v == null ? "" : String(v).trim());
-        const fieldsToCompare = ["description", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", "performance", "dueDate", "responsible", "action"];
-
-        // Map system controls
-        const sysMap = new Map(
-            allSystemControls
-                .filter(c => c && normalizeVal(c.control))
-                .map(c => [normalizeVal(c.control), c])
-        );
-
-        const diffs = [];
-
-        formData.cea.forEach((row) => {
-            const controlName = normalizeVal(row?.control);
-            if (!controlName) return;
-
-            const sys = sysMap.get(controlName);
-            if (!sys) return;
-
-            const mismatches = {};
-            let hasDiff = false;
-
-            fieldsToCompare.forEach((key) => {
-                const ceaVal = normalizeVal(row?.[key]);
-                const sysVal = normalizeVal(sys?.[key]);
-
-                // Detect difference
-                if (ceaVal !== sysVal) {
-                    mismatches[key] = { cea: ceaVal, system: sysVal };
-                    hasDiff = true;
-                }
-            });
-
-            if (hasDiff) {
-                diffs.push({
-                    ceaRowId: row.id,
-                    control: controlName,
-                    mismatches,
-                });
-            }
+        console.log("Running CEA vs System Control check...", {
+            draftId,
+            ceaCount: formData?.cea?.length || 0,
+            lastCheckedDraftId: lastCheckedDraftIdRef.current,
+            diffsToImportCount: diffsToImport.length
         });
 
-        if (diffs.length > 0) {
-            console.log("System Control Updates Found:", diffs);
-            setDiffsToImport(diffs);
-            setImportPopup(true);
-        }
-    }, [allSystemControls, formData?.cea, loadedIDRef.current]);
+        // Conditions to run: Draft loaded, system controls fetched, CEA rows exist, not checked yet
+        if (!draftId) return;
+        if (!formData?.cea || formData.cea.length === 0) return;
+
+        const checkForUpdates = async () => {
+            console.log("Checking for system control updates against CEA...");
+            lastCheckedDraftIdRef.current = draftId;
+
+            try {
+                const res = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/controls-sync-map`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const { controls: syncData } = await res.json();
+
+                console.log("Fetched system controls for sync check:", syncData);
+
+                if (!syncData || !Array.isArray(syncData)) return;
+
+                const normalizeVal = (v) => (v == null ? "" : String(v).trim());
+                const normalizeKey = (v) => normalizeVal(v).toLowerCase();
+                const fieldsToCompare = ["description", "critical", "act", "activation", "hierarchy", "cons", "quality", "performance", "category"];
+
+                // 2. Build Lookup Maps
+                // mapIdToLatest: Points ANY version ID (old or new) to the Latest Control Object
+                const mapIdToLatest = new Map();
+                // mapNameToLatest: Points Current Name to Latest Control Object (Fallback for legacy)
+                const mapNameToLatest = new Map();
+
+                syncData.forEach(latestCtrl => {
+                    // Map the current ID
+                    mapIdToLatest.set(latestCtrl._id, latestCtrl);
+
+                    // Map ALL previous IDs to this latest control
+                    if (Array.isArray(latestCtrl.previousIds)) {
+                        latestCtrl.previousIds.forEach(prevId => {
+                            mapIdToLatest.set(prevId, latestCtrl);
+                        });
+                    }
+
+                    // Map Name
+                    mapNameToLatest.set(normalizeKey(latestCtrl.control), latestCtrl);
+                });
+
+                const diffs = [];
+
+                // 3. Compare Draft Rows
+                formData.cea.forEach((row) => {
+                    const rowControlName = normalizeVal(row?.control);
+                    const rowControlKey = normalizeKey(row?.control);
+                    let sys = null;
+                    let matchType = 'none';
+
+                    // A. Try Match by ID (Handles Versioning & Renames)
+                    if (row.uniqueId && mapIdToLatest.has(row.uniqueId)) {
+                        sys = mapIdToLatest.get(row.uniqueId);
+                        matchType = 'id';
+                    }
+
+                    // B. Fallback: Match by Name (For legacy rows without IDs)
+                    if (!sys && rowControlKey && mapNameToLatest.has(rowControlKey)) {
+                        sys = mapNameToLatest.get(rowControlKey);
+                        matchType = 'name';
+                    }
+
+                    if (!sys) return; // No link found
+
+                    const mismatches = {};
+                    let hasDiff = false;
+
+                    // Check 1: Is the Draft ID different from the Latest System ID? 
+                    // (This catches if we are using an old version OR if we are backfilling a missing ID)
+                    if (row.uniqueId !== sys._id) {
+                        mismatches['uniqueId'] = { cea: row.uniqueId, system: sys._id };
+                        hasDiff = true;
+                    }
+
+                    // Check 2: Has the Name Changed? (Rename detected via ID match)
+                    const sysControlName = normalizeVal(sys.control);
+                    if (sysControlName !== rowControlName) {
+                        mismatches['control'] = { cea: rowControlName, system: sysControlName };
+                        hasDiff = true;
+                    }
+
+                    // Check 3: Has any system-sourced control metadata changed?
+                    fieldsToCompare.forEach((key) => {
+                        const ceaVal = normalizeVal(row?.[key]);
+                        const sysVal = normalizeVal(sys?.[key]);
+                        if (ceaVal !== sysVal) {
+                            mismatches[key] = { cea: ceaVal, system: sysVal };
+                            hasDiff = true;
+                        }
+                    });
+
+                    if (hasDiff) {
+                        diffs.push({
+                            ceaRowId: row.id,
+                            currentName: rowControlName,
+                            mismatches,
+                            matchType,
+                            systemLatestId: sys._id // Store strictly the latest ID
+                        });
+                    }
+                });
+
+                if (diffs.length > 0) {
+                    console.log("System Control Updates Found:", diffs);
+                    setDiffsToImport(diffs);
+                    setImportPopup(true);
+                }
+
+            } catch (error) {
+                console.error("Error checking for control updates:", error);
+            }
+        };
+
+        checkForUpdates();
+    }, [loadedIDRef.current]);
 
     const handleImportConfirm = () => {
         if (diffsToImport.length === 0) {
@@ -2083,40 +2159,127 @@ const RiskManagementPageIBRA = () => {
             return;
         }
 
-        // 1. Create a map of updates for fast lookup
-        // Structure of diff item: { ceaRowId, mismatches: { field: { system: '...' } } }
         const updatesMap = {};
         const changedIds = [];
+        const renames = [];
 
         diffsToImport.forEach(diff => {
             updatesMap[diff.ceaRowId] = diff.mismatches;
             changedIds.push(diff.ceaRowId);
+
+            // Detect if this update involves a Rename
+            if (diff.mismatches.control) {
+                renames.push({
+                    oldName: diff.mismatches.control.cea,
+                    newName: diff.mismatches.control.system
+                });
+            }
         });
 
-        // 2. Update formData.cea
+        // 1. Update CEA Table (The Source of Truth)
         const updatedCEA = formData.cea.map(row => {
             const updates = updatesMap[row.id];
-            if (!updates) return row; // No changes for this row
+            if (!updates) return row;
 
-            // Apply system values
             const newRow = { ...row };
+
+            // Apply all mismatched fields (Description, Hierarchy, etc.)
             Object.keys(updates).forEach(field => {
-                newRow[field] = updates[field].system;
+                if (updates[field]?.system !== undefined) {
+                    newRow[field] = updates[field].system;
+                }
             });
+
+            // Explicitly ensure the uniqueId is updated to the latest System ID
+            // (This "upgrades" the row from an old version ID to the current one)
+            if (updates.uniqueId) {
+                newRow.uniqueId = updates.uniqueId.system;
+            }
+
             return newRow;
         });
 
-        // 3. Save state
-        setFormData(prev => ({ ...prev, cea: updatedCEA }));
-        setHighlightedRows(changedIds); // Highlight the rows that changed
-        setImportPopup(false);
+        // 2. Propagate Renames to other tables
+        let updatedIBRA = formData.ibra;
+        let updatedRelevant = formData.relevantControls;
 
-        toast.success("Controls updated from system values");
+        if (renames.length > 0) {
+            console.log("Applying Control Renames to IBRA/Relevant:", renames);
+
+            renames.forEach(({ oldName, newName }) => {
+                const normOld = oldName.trim();
+                const normNew = newName.trim();
+
+                // A. Update IBRA (The usage table)
+                updatedIBRA = updatedIBRA.map(r => ({
+                    ...r,
+                    controls: r.controls.map(c => {
+                        const cName = typeof c === 'string' ? c : c.control;
+                        // If exact match, swap it
+                        if (cName && cName.trim() === normOld) {
+                            return normNew;
+                        }
+                        return c;
+                    })
+                }));
+
+                // B. Update Relevant Controls (The selection list)
+                updatedRelevant = updatedRelevant.map(r => ({
+                    ...r,
+                    control: r.control.trim() === normOld ? normNew : r.control
+                }));
+            });
+        }
+
+        // 3. Save State
+        setFormData(prev => ({
+            ...prev,
+            cea: updatedCEA,
+            ibra: updatedIBRA,
+            relevantControls: updatedRelevant
+        }));
+
+        setHighlightedRows(changedIds);
+        setImportPopup(false);
+        setDiffsToImport([]);
+
+        toast.success("Controls updated to latest system versions");
     };
 
     const handleImportCancel = () => {
         setImportPopup(false);
     };
+
+    // NEW: Backfill uniqueId for legacy drafts (Normalization for IDs only)
+    useEffect(() => {
+        if (!allSystemControls.length || !formData.cea.length) return;
+
+        let hasChanges = false;
+
+        // Map system controls for fast lookup by Name
+        const sysNameMap = new Map(
+            allSystemControls.map(c => [c.control.trim().toLowerCase(), c._id])
+        );
+
+        const updatedCEA = formData.cea.map(row => {
+            // If row already has an ID, skip
+            if (row.uniqueId) return row;
+
+            // If no ID, try to find a match by name in the system
+            const sysId = sysNameMap.get((row.control || '').trim().toLowerCase());
+
+            if (sysId) {
+                hasChanges = true;
+                return { ...row, uniqueId: sysId }; // Only assign the ID
+            }
+            return row;
+        });
+
+        if (hasChanges) {
+            console.log("Backfilled uniqueIds for legacy CEA rows.");
+            setFormData(prev => ({ ...prev, cea: updatedCEA }));
+        }
+    }, [allSystemControls, loadedIDRef.current]);
 
     return (
         <div className="risk-create-container">
@@ -2534,7 +2697,7 @@ const RiskManagementPageIBRA = () => {
 
                     <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
                     <TermTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
-                    <AttendanceTable readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
+                    <AttendanceTable title={formData.title} documentType={formData.documentType} readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
                     {formData.documentType === "IBRA" && (<IBRATable relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
                     {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} highlightedRows={highlightedRows} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
 

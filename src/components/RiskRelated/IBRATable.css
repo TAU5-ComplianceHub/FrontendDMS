@@ -564,6 +564,26 @@ td.ibraDeadline {
     color: #CB6F6F;
 }
 
+.top-left-button-tables {
+    position: absolute;
+    top: 15px;
+    left: 25px;
+    z-index: 1;
+    background: transparent;
+    color: #002060;
+    font-size: 30px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    border-radius: 6px;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+}
+
 .top-right-button-ibra {
     position: absolute;
     top: 15px;
@@ -648,6 +668,46 @@ td.ibraDeadline {
     position: absolute;
     top: 15px;
     right: 225px;
+    z-index: 1;
+    background: transparent;
+    color: #002060;
+    font-size: 30px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    border-radius: 6px;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+}
+
+.top-right-button-ibra6 {
+    position: absolute;
+    top: 15px;
+    right: 265px;
+    z-index: 1;
+    background: transparent;
+    color: #002060;
+    font-size: 30px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    border-radius: 6px;
+    justify-content: center;
+    align-items: center;
+    padding: 0px;
+}
+
+.top-right-button-ibra7 {
+    position: absolute;
+    top: 15px;
+    right: 305px;
     z-index: 1;
     background: transparent;
     color: #002060;

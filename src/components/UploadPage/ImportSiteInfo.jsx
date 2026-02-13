@@ -61,7 +61,7 @@ const ImportSiteInfo = ({ onClose }) => {
     const downloadTemplate = () => {
         const link = document.createElement('a');
         link.href = `${process.env.PUBLIC_URL}/Risk_Template.xlsx`; // Adjust path as needed
-        link.setAttribute('download', 'Site Information Document V0.23.xlsx');
+        link.setAttribute('download', 'Site Information Document V0.25.xlsx');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -212,9 +212,9 @@ const ImportSiteInfo = ({ onClose }) => {
                         </button>
                         <div className="import-si-file-text">Site Information Document Template</div>
                         <div className="import-si-label">Version</div>
-                        <div className="import-si-value">V0.24</div>
+                        <div className="import-si-value">V0.25</div>
                         <div className="import-si-label">Date Uploaded</div>
-                        <div className="import-si-value">2025-09-01</div>
+                        <div className="import-si-value">2026-01-11</div>
                     </div>
 
                     <div className="import-si-file-group" style={{ position: "relative" }}>

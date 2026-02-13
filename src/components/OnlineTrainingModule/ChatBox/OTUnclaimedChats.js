@@ -5,6 +5,7 @@ import { faArrowLeft, faCaretLeft, faCaretRight, faUser, faFilter } from "@forta
 import TopBarDD from "../../Notifications/TopBarDD";
 import { ToastContainer } from "react-toastify";
 import OTChatPanelLecturer from "./OTChatPanelLecturer";
+import { faFolderOpen } from "@fortawesome/free-regular-svg-icons";
 
 const OTUnclaimedChats = () => {
     const [error, setError] = useState(null);
@@ -299,6 +300,43 @@ const OTUnclaimedChats = () => {
         }
     }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(filters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [filters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        return "top-right-button-control-att";
+    };
+
     return (
         <div className="dc-version-history-file-info-container">
             {isSidebarVisible && (
@@ -314,7 +352,7 @@ const OTUnclaimedChats = () => {
                         <div className="button-container-dm-fi">
                             <button className="but-dm-fi" onClick={() => { navigate('/FrontendDMS/claimedChats') }}>
                                 <div className="button-content">
-                                    <FontAwesomeIcon icon={faUser} className="button-logo-custom" />
+                                    <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
                                     <span className="button-text">Claimed Chats</span>
                                 </div>
                             </button>
@@ -347,6 +385,20 @@ const OTUnclaimedChats = () => {
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
                         <label className="risk-control-label">Unclaimed Chats</label>
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
+                        />
                     </div>
 
                     <div className="table-container-file">

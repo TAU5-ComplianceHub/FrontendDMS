@@ -112,6 +112,43 @@ const GeneratedFileInfo = () => {
     useEffect(() => { if (!excelFilter.open) return; const c = (e) => { if (!e.target.closest('.excel-filter-popup')) setExcelFilter(p => ({ ...p, open: false })); }; document.addEventListener('mousedown', c); window.addEventListener('scroll', c, true); return () => { document.removeEventListener('mousedown', c); window.removeEventListener('scroll', c, true); }; }, [excelFilter.open]);
     useEffect(() => { if (!excelFilter.open) return; const el = excelPopupRef.current; if (!el) return; const rect = el.getBoundingClientRect(); let { top, left } = excelFilter.pos; if (rect.bottom > window.innerHeight - 8) top = Math.max(8, excelFilter.anchorRect.top - rect.height - 4); if (rect.right > window.innerWidth - 8) left = Math.max(8, left - (rect.right - (window.innerWidth - 8))); if (top !== excelFilter.pos.top || left !== excelFilter.pos.left) setExcelFilter(p => ({ ...p, pos: { ...p.pos, top, left } })); }, [excelFilter.open, excelSearch]);
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [activeExcelFilters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setActiveExcelFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        return "top-right-button-control-att-2";
+    };
+
     if (error) return <div>Error: {error}</div>;
 
     return (
@@ -156,6 +193,20 @@ const GeneratedFileInfo = () => {
                     <div className="flameproof-table-header-label-wrapper">
                         <label className="risk-control-label">{"Ready for Approval Procedures"}</label>
                         <FontAwesomeIcon icon={faColumns} className="top-right-button-control-att" onClick={() => setShowColumnSelector(v => !v)} />
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
+                        />
                         {showColumnSelector && (<div className="column-selector-popup" onMouseDown={(e) => e.stopPropagation()}><div className="column-selector-header"><h4>Select Columns</h4><button className="close-popup-btn" onClick={() => setShowColumnSelector(false)}>×</button></div><div className="column-selector-content"><div className="select-all-container"><label className="select-all-checkbox"><input type="checkbox" checked={allColumns.every(c => showColumns.includes(c.id))} onChange={(e) => setShowColumns(e.target.checked ? allColumns.map(c => c.id) : ["nr", "action"])} /><span className="select-all-text">Select All</span></label></div><div className="column-checkbox-container">{allColumns.map(col => (<div className="column-checkbox-item" key={col.id}><label><input type="checkbox" checked={showColumns.includes(col.id)} disabled={col.id === "nr" || col.id === "action"} onChange={() => setShowColumns(p => p.includes(col.id) ? p.filter(x => x !== col.id) : [...p, col.id])} /><span>{col.title}</span></label></div>))}</div><div className="column-selector-footer"><p>{visibleColumns.length} columns selected</p><button className="apply-columns-btn" onClick={() => setShowColumnSelector(false)}>Apply</button></div></div></div>)}
                     </div>
                     <div className="table-container-file-flameproof-all-assets">

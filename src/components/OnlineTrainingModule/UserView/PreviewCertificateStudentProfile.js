@@ -28,26 +28,41 @@ const PreviewCertificateStudentProfile = () => {
 
     useEffect(() => {
         const fetchPdf = async () => {
+            /*
+                        const res = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/preview-certificate-induction`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({ studentName, idNumber, dateCompleted, dateExpiry, inductionName })
+                        });
+            
+                        if (!res.ok) {
+                            console.error("Failed to fetch pdf");
+                            return;
+                        }
+                        */
 
-            const res = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/preview-certificate-induction`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ studentName, idNumber, dateCompleted, dateExpiry, inductionName })
+            const params = new URLSearchParams({
+                studentName,
+                idNumber,
+                dateCompleted,
+                dateExpiry,
+                inductionName
             });
 
-            if (!res.ok) {
-                console.error("Failed to fetch pdf");
-                return;
-            }
-
+            /*
             const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            setIframeSrc(url);
+
+            const safeName = `${studentName} - ${inductionName}`.replace(/[<>:"/\\|?*\x00-\x1F]/g, "").trim();
+            const file = new File([blob], `${safeName || "Certificate"}.pdf`, { type: "application/pdf" });
+
+            const url = URL.createObjectURL(file);
+            */
+            setIframeSrc(`${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/preview-certificate-induction?${params.toString()}`);
 
             // Cleanup when unmounting
-            return () => URL.revokeObjectURL(url);
+            // return () => URL.revokeObjectURL(url);
         };
 
         fetchPdf();

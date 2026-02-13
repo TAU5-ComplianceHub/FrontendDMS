@@ -520,3 +520,34 @@
 .control-popup-item:hover {
     background: #f0f0f0;
 }
+
+.category-RMS-select-container {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.category-RMS-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    appearance: none;
+    background-color: white;
+    color: #555;
+    font-size: 14px;
+}
+
+.category-RMS-select-container::after {
+    content: '';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid #777;
+    pointer-events: none;
+}

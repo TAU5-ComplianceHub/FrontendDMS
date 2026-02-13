@@ -558,7 +558,7 @@ const StudentCourseViewPage = () => {
         }
 
         if (type.startsWith("image/")) return <img src={src} alt={item.media?.filename || "image"} style={mediaTagStyle} />;
-        if (type.startsWith("video/")) return <video src={src} controls style={{ width: "100%", height: "100%" }} controlsList="nodownload" disablePictureInPicture />;
+        if (type.startsWith("video/")) return <video src={src} controls style={{ width: "100%", height: "100%" }} controlsList="nodownload noremoteplayback" disablePictureInPicture disableRemotePlayback onContextMenu={(e) => e.preventDefault()} />;
         if (type.startsWith("audio/")) return (<AudioPlayer
             className="popup-audio"
             src={src}
@@ -580,7 +580,7 @@ const StudentCourseViewPage = () => {
         if (type.includes("pdf")) {
             return (
                 <iframe
-                    src={src}
+                    src={`${src}#toolbar=0&navpanes=0&scrollbar=0`}
                     title="PDF preview"
                     className="courseCont-pdfFrame-view"
                     onContextMenu={(e) => e.preventDefault()}

@@ -38,7 +38,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
     const [excelSearch, setExcelSearch] = useState("");
     const [excelSelected, setExcelSelected] = useState(new Set()); // values checked in popup
-    const [sortConfig, setSortConfig] = useState([{ colId: "control", direction: "asc" }]);
+    const [sortConfig, setSortConfig] = useState({ colId: null, direction: null });
 
     const availableColumns = [
         { id: "nr", title: "Nr", className: "control-analysis-nr", icon: null },
@@ -60,7 +60,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
             ? [{ id: "actions", title: "Action", className: "control-analysis-nr", icon: null }] : []),
     ];
 
-    const DEFAULT_SORT = { colId: "control", direction: "asc" };
+    const DEFAULT_SORT = { colId: null, direction: null };
 
     const initialColumnWidths = {
         nr: 55,
@@ -909,6 +909,51 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         });
     };
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(filters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== null || sortConfig.direction !== null;
+        return hasColumnFilters || hasSort;
+    }, [filters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setFilters({});
+        setSortConfig({ colId: null, direction: null });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        if (showFitButton && showResetButton) {
+            return "top-right-button-ibra5";
+        }
+
+        if (showFitButton || showResetButton) {
+            return "top-right-button-ibra4";
+        }
+
+        return "top-right-button-ibra3";
+    };
+
     return (
         <div className="input-row-risk-create">
             <div className={`input-box-attendance ${error ? "error-create" : ""}`} ref={caeBoxRef}>
@@ -1010,6 +1055,26 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                         <FontAwesomeIcon icon={faArrowsRotate} className="icon-um-search" />
                     </button>
                 )}
+
+                <button
+                    className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                    title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                    style={{
+                        cursor: hasActiveFilters ? "pointer" : "default",
+                        color: hasActiveFilters ? "#002060" : "gray"
+                    }}
+                    onMouseEnter={(e) => {
+                        if (hasActiveFilters) openFilterMenu(e);
+                    }}
+                    onMouseLeave={closeFilterMenuWithDelay}
+                    onDoubleClick={handleClearFilters}
+                >
+                    <FontAwesomeIcon
+                        icon={faFilter}
+                        className="icon-um-search"
+                        style={{ color: hasActiveFilters ? "#002060" : "inherit" }}
+                    />
+                </button>
 
                 {false && (<button
                     className={showFitButton ? showResetButton ? "top-right-button-ibra5" : "top-right-button-ibra4" : showResetButton ? "top-right-button-ibra4" : "top-right-button-ibra3"}

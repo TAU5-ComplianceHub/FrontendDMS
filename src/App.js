@@ -147,6 +147,8 @@ import PreviewCertificateStudentProfile from './components/OnlineTrainingModule/
 import OnlineTrainingCourseGrading from './components/OnlineTrainingModule/OnlineTrainingCourseGrading';
 import SuggestedControls from './components/RiskRelated/ControlManagement/SuggestedControls';
 import ControlVersionHistory from './components/RiskRelated/ControlVersionHistory';
+import StudentProfilePage from './components/OnlineTrainingModule/StudentProfile/StudentProfilePage';
+import JRAAttributes from './components/RiskRelated/JRAAttributes';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -359,7 +361,9 @@ function App() {
         <Route path="FrontendDMS/studentPreview" element={<PreviewCertificateStudentProfile />} />
         <Route path="FrontendDMS/gradeSubmission/:studentID/:courseID" element={<OnlineTrainingCourseGrading />} />
         <Route path="FrontendDMS/suggestedControls/:id" element={<SuggestedControls />} />
-        <Route path="/controlsHistory/:id" element={<ControlVersionHistory />} />
+        <Route path="FrontendDMS/controlsHistory/:id" element={<ControlVersionHistory />} />
+        <Route path="FrontendDMS/myStudentProfile" element={<StudentProfilePage />} />
+        <Route path="FrontendDMS/myNewTest" element={<JRAAttributes />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

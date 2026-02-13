@@ -20,6 +20,7 @@ import PopupMenu from "./FileInfo/PopupMenu";
 import Notifications from "./Notifications/Notifications";
 import RenameDocument from "./FileInfo/RenameDocument";
 import { getCurrentUser, can, isAdmin, hasRole, canIn } from "../utils/auth";
+import RestoreDocumentPopup from "./FileInfo/RestoreDocumentPopup";
 
 const FileInfo = () => {
   const { type } = useParams();
@@ -59,11 +60,12 @@ const FileInfo = () => {
   const [count, setCount] = useState("");
   const [profilePic, setProfilePic] = useState(null);
   const excelPopupRef = useRef(null);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [sortField, setSortField] = useState("");
   const [sortOrder, setSortOrder] = useState("ascending");
 
   // --- EXCEL FILTER & SORT STATE ---
-  const DEFAULT_SORT = { colId: "reviewDate", direction: "asc" };
+  const DEFAULT_SORT = { colId: null, direction: null };
   const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
   const [columnFilters, setColumnFilters] = useState({}); // { colId: { selected: ["Val1", "Val2"] } }
 
@@ -156,7 +158,10 @@ const FileInfo = () => {
     } else if (colId === "status") {
       // Format Status (e.g., "in_review" -> "In Review")
       val = formatStatus(row[colId]);
-    } else {
+    } else if (colId === "fileName") {
+      val = removeFileExtension(row[colId]);
+    }
+    else {
       val = row[colId];
     }
 
@@ -335,12 +340,15 @@ const FileInfo = () => {
   const clearSearch = () => setSearchQuery("");
 
   const restoreFile = async (fileId) => {
+    if (!selectedFileId) return;
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/file/trash/restore/${fileId}`, {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/file/trash/restore/${selectedFileId}`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed');
+      setIsRestoreModalOpen(false);
+      setSelectedFileId(null);
       fetchFiles();
     } catch (error) { alert('Error restoring the file.'); }
   };
@@ -439,6 +447,8 @@ const FileInfo = () => {
 
   const openModal = (fileId, fileName) => { setSelectedFileId(fileId); setSelectedFileName(fileName); setIsModalOpen(true); };
   const closeModal = () => { setSelectedFileId(null); setSelectedFileName(null); setIsModalOpen(false); };
+  const openRestoreModal = (fileId, fileName) => { setSelectedFileId(fileId); setSelectedFileName(fileName); setIsRestoreModalOpen(true); };
+  const closeRestoreModal = () => { setSelectedFileId(null); setSelectedFileName(null); setIsRestoreModalOpen(false); };
   const openDownloadModal = (fileId, fileName) => { setDownloadFileId(fileId); setDownloadFileName(fileName); setIsDownloadModalOpen(true); };
   const closeDownloadModal = () => { setDownloadFileId(null); setDownloadFileName(null); setIsDownloadModalOpen(false); };
   const confirmDownload = () => { if (downloadFileId && downloadFileName) downloadFile(downloadFileId, downloadFileName); closeDownloadModal(); };
@@ -486,8 +496,8 @@ const FileInfo = () => {
     }
 
     // 5. Sorting
-    const { colId, direction } = sortConfig;
-    const dir = direction === 'desc' ? -1 : 1;
+    const colId = sortConfig?.colId || "reviewDate";
+    const dir = sortConfig?.direction === "desc" ? -1 : 1;
 
     current.sort((a, b) => {
       let av, bv;
@@ -532,6 +542,44 @@ const FileInfo = () => {
       return !isNaN(d) && d < today;
     }).length;
   }, [filteredFiles]);
+
+  const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+  const filterMenuTimerRef = useRef(null);
+
+  const hasActiveFilters = useMemo(() => {
+    const hasColumnFilters = Object.keys(columnFilters).length > 0;
+    // Assuming default sort is nr/asc. Change if your default differs.
+    const hasSort = sortConfig.colId !== null || sortConfig.direction !== null;
+
+    return hasColumnFilters || hasSort;
+  }, [columnFilters, sortConfig]);
+
+  const openFilterMenu = (e) => {
+    if (!hasActiveFilters) return;
+    if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFilterMenu({ isOpen: true, anchorRect: rect });
+  };
+
+  const closeFilterMenuWithDelay = () => {
+    filterMenuTimerRef.current = setTimeout(() => {
+      setFilterMenu(prev => ({ ...prev, isOpen: false }));
+    }, 200);
+  };
+
+  const cancelCloseFilterMenu = () => {
+    if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+  };
+
+  const handleClearFilters = () => {
+    setColumnFilters({});
+    setSortConfig({ colId: null, direction: null });
+    setFilterMenu({ isOpen: false, anchorRect: null });
+  };
+
+  const getFilterBtnClass = () => {
+    return "top-right-button-control-att";
+  };
 
   if (error) {
     return <div>Error: {error}</div>;
@@ -639,6 +687,26 @@ const FileInfo = () => {
         <div className="table-flameproof-card">
           <div className="flameproof-table-header-label-wrapper">
             <label className="risk-control-label">{(type === "Policy" ? "Policies" : `${type}s`)}</label>
+            <button
+              className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+              title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+              style={{
+                cursor: hasActiveFilters ? "pointer" : "default",
+                color: hasActiveFilters ? "#002060" : "gray",
+                userSelect: "none"
+              }}
+              onMouseEnter={(e) => {
+                if (hasActiveFilters) openFilterMenu(e);
+              }}
+              onMouseLeave={closeFilterMenuWithDelay}
+              onDoubleClick={handleClearFilters}
+            >
+              <FontAwesomeIcon
+                icon={faFilter}
+                className="icon-um-search"
+                style={{ color: hasActiveFilters ? "#002060" : "inherit" }}
+              />
+            </button>
           </div>
           <div className="table-container-file">
             <table>
@@ -704,7 +772,7 @@ const FileInfo = () => {
                         {isTrashView && (
                           <button
                             className={isTrashView ? "delete-button-fi col-but-res trashed-color" : "delete-button-fi col-but-res"}
-                            onClick={() => restoreFile(file._id)}
+                            onClick={() => openRestoreModal(file._id, file.fileName)}
                           >
                             <FontAwesomeIcon icon={faRotate} title="Restore Document" />
                           </button>
@@ -857,7 +925,7 @@ const FileInfo = () => {
 
       {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} deleteFileFromTrash={deleteFileFromTrash} isTrashView={isTrashView} loading={loading} selectedFileName={selectedFileName} />)}
       {isDownloadModalOpen && (<DownloadPopup closeDownloadModal={closeDownloadModal} confirmDownload={confirmDownload} downloadFileName={downloadFileName} loading={loading} />)}
-      {rename && (<RenameDocument documentName={documentRenameName} isOpen={rename} onClose={closeRename} fileID={updateID} />)}
+      {isRestoreModalOpen && (<RestoreDocumentPopup closeModal={closeRestoreModal} restoreFile={restoreFile} selectedFileName={selectedFileName} loading={loading} />)}
       <ToastContainer />
     </div >
   );

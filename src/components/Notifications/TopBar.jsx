@@ -14,7 +14,7 @@ const TopBar = ({ menu, setReset, isProfile = false, visitor = false, student = 
 
     useEffect(() => {
         // Load from sessionStorage on mount
-        const cached = sessionStorage.getItem('profilePic');
+        const cached = sessionStorage.getItem('profilePic') || sessionStorage.getItem('profilePicStudent');
         setProfilePic(cached || null);
     }, []);
 
@@ -43,14 +43,14 @@ const TopBar = ({ menu, setReset, isProfile = false, visitor = false, student = 
     return (
         <div className="icons-container">
             <div className="burger-menu-icon-um-home">
-                <FontAwesomeIcon onClick={() => navigate(!visitor ? !student ? "/home" : "/FrontendDMS/studentHomePage" : "/FrontendDMS/visitorHomePage")} icon={faHome} title="Home" />
+                <FontAwesomeIcon onClick={() => navigate(!visitor ? !student ? "/FrontendDMS/home" : "/studentHomePage" : "/visitorHomePage")} icon={faHome} title="Home" />
             </div>
             {(!visitor && !student) && (<div className="burger-menu-icon-um notifications-bell-wrapper">
                 <FontAwesomeIcon icon={faBell} onClick={() => setShowNotifications(!showNotifications)} title="Notifications" />
                 {count != 0 && <div className="notifications-badge"></div>}{/* Replace with unread count from backend later */}
             </div>)}
             <div className="burger-menu-icon-um" onClick={() => setIsMenuOpen(!isMenuOpen)} title="Menu" style={{ cursor: "pointer" }}>
-                {profilePic && (!visitor && !student) ? (
+                {profilePic && (!visitor) ? (
                     <img
                         src={profilePic}
                         alt="Profile"

@@ -139,7 +139,7 @@ const FlameProofInfoAll = () => {
   const closeUpload = (assetNr, id, nav) => {
     setUpload(!upload);
     if (nav) {
-      navigate(`/FrontendDMS/flameManageSub/${assetNr}/${id}`)
+      navigate(`/flameManageSub/${assetNr}/${id}`)
     }
   };
 
@@ -158,7 +158,7 @@ const FlameProofInfoAll = () => {
 
   const closeRegister = (id, type) => {
     setRegister(!register);
-    navigate(`/FrontendDMS/flameproofComponents/${type}/${id}`)
+    navigate(`/flameproofComponents/${type}/${id}`)
   };
 
   const exitRegister = () => {
@@ -504,6 +504,43 @@ const FlameProofInfoAll = () => {
     );
   };
 
+  const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+  const filterMenuTimerRef = useRef(null);
+
+  const hasActiveFilters = useMemo(() => {
+    const hasColumnFilters = Object.keys(filters).length > 0;
+    // Assuming default sort is nr/asc. Change if your default differs.
+    const hasSort = sortConfig.colId !== null
+    return hasColumnFilters || hasSort;
+  }, [filters, sortConfig]);
+
+  const openFilterMenu = (e) => {
+    if (!hasActiveFilters) return;
+    if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setFilterMenu({ isOpen: true, anchorRect: rect });
+  };
+
+  const closeFilterMenuWithDelay = () => {
+    filterMenuTimerRef.current = setTimeout(() => {
+      setFilterMenu(prev => ({ ...prev, isOpen: false }));
+    }, 200);
+  };
+
+  const cancelCloseFilterMenu = () => {
+    if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+  };
+
+  const handleClearFilters = () => {
+    setFilters({});
+    setSortConfig({ colId: null, direction: "asc" });
+    setFilterMenu({ isOpen: false, anchorRect: null });
+  };
+
+  const getFilterBtnClass = () => {
+    return "top-right-button-control-att-2";
+  };
+
   return (
     <div className="file-info-container">
       {isSidebarVisible && (
@@ -512,7 +549,7 @@ const FlameProofInfoAll = () => {
             <FontAwesomeIcon icon={faCaretLeft} />
           </div>
           <div className="sidebar-logo-um">
-            <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
+            <img src="/CH_Logo.svg" alt="Logo" className="logo-img-um" onClick={() => navigate('/home')} title="Home" />
             <p className="logo-text-um">EPA Management</p>
           </div>
 
@@ -535,7 +572,7 @@ const FlameProofInfoAll = () => {
             </div>
           )}
           <div className="sidebar-logo-dm-fi">
-            <img src={`${process.env.PUBLIC_URL}/allDocumentsDMS.svg`} alt="Logo" className="icon-risk-rm" />
+            <img src={`allDocumentsDMS.svg`} alt="Logo" className="icon-risk-rm" />
             <p className="logo-text-dm-fi">{(`All Organisation Assets`)}</p>
           </div>
         </div>
@@ -584,6 +621,21 @@ const FlameProofInfoAll = () => {
               title="Export to Excel"
               className="top-right-button-control-att"
               onClick={exportSID}
+            />
+
+            <FontAwesomeIcon
+              icon={faFilter}
+              className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+              title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+              style={{
+                cursor: hasActiveFilters ? "pointer" : "default",
+                color: hasActiveFilters ? "#002060" : "gray"
+              }}
+              onMouseEnter={(e) => {
+                if (hasActiveFilters) openFilterMenu(e);
+              }}
+              onMouseLeave={closeFilterMenuWithDelay}
+              onDoubleClick={handleClearFilters}
             />
           </div>
           <div className="table-container-file-flameproof-all-assets">

@@ -800,16 +800,9 @@ const ControlVersionHistory = () => {
                         <label className="risk-control-label">Control Version History</label>
 
                         <FontAwesomeIcon
-                            icon={faSearch}
-                            title="Search"
-                            className="top-right-button-control-att"
-                            onClick={handleSearchClick}
-                        />
-
-                        <FontAwesomeIcon
                             icon={faTableColumns}
                             title="Show / Hide Columns"
-                            className="top-right-button-control-att-3"
+                            className="top-right-button-control-att"
                             onClick={() => setShowColumnSelector(prev => !prev)}
                         />
 
@@ -817,7 +810,7 @@ const ControlVersionHistory = () => {
                             <FontAwesomeIcon
                                 icon={faArrowsRotate}
                                 title="Reset column widths"
-                                className="top-right-button-control-att-4"
+                                className="top-right-button-control-att-2"
                                 onClick={resetColumnWidths}
                             />
                         )}

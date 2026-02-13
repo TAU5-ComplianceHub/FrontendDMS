@@ -1032,10 +1032,10 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
     return (
         <div className="flowchart-container">
             <div className="flowchart-buttons">
-                <button onClick={openModal} className="top-right-button-proc-3" title="Preview Flowchart">
+                <button onClick={openModal} className="top-right-button-ibra2" title="Preview Flowchart">
                     <FontAwesomeIcon icon={faEye} className="icon-um-search" />
                 </button>
-                <button onClick={exportImage} className="top-right-button-proc" title="Download Flowchart">
+                <button onClick={exportImage} className="top-right-button-ibra" title="Download Flowchart">
                     <FontAwesomeIcon icon={faDownload} className="icon-um-search" />
                 </button>
             </div>

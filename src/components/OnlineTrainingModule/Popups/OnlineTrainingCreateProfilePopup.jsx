@@ -164,6 +164,13 @@ const OnlineTrainingCreateProfilePopup = ({ onClose, refresh, openUserLinkShare 
                                                     <PhoneInput
                                                         international
                                                         country={country || 'za'}
+                                                        masks={{
+                                                            za: '.. ... ....', // Format: 082 123 4567
+                                                            us: '(...) ...-....', // Format: (202) 555-0123
+                                                            au: '.... ... ...',  // Australia: 0412 345 678
+                                                            nz: '... ... ....',  // New Zealand: 021 123 4567
+                                                            bw: '.. ... ...',
+                                                        }}
                                                         defaultCountry="za"
                                                         placeholder="Contact Number"
                                                         countryCodeEditable={false}

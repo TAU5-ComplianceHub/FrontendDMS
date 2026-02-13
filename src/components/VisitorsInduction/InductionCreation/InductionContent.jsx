@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faChevronRight,
@@ -103,6 +103,7 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
     const [slideID, setSlideID] = useState("");
     const [audioFile, setAudioFile] = useState("");
     const [ratio, setRatio] = useState([]);
+    const addMenuTimerRef = useRef(null);
     // --- NEW: Add Menu Logic ---
     const [addMenu, setAddMenu] = useState({
         isOpen: false,
@@ -559,6 +560,8 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
     };
 
     const openAddMenu = (e, type, indices) => {
+        if (addMenuTimerRef.current) clearTimeout(addMenuTimerRef.current);
+
         const rect = e.currentTarget.getBoundingClientRect();
         setAddMenu({
             isOpen: true,
@@ -566,6 +569,16 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
             indices,
             anchorRect: rect
         });
+    };
+
+    const closeAddMenuWithDelay = () => {
+        addMenuTimerRef.current = setTimeout(() => {
+            setAddMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200); // 200ms buffer to move mouse to popup
+    };
+
+    const cancelClose = () => {
+        if (addMenuTimerRef.current) clearTimeout(addMenuTimerRef.current);
     };
 
     const closeAddMenu = () => {
@@ -683,7 +696,8 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                             type="button"
                                             className="courseCont-iconBtn"
                                             title="Add module"
-                                            onClick={(e) => openAddMenu(e, 'MODULE', { mIdx })} // CHANGED
+                                            onMouseEnter={(e) => openAddMenu(e, 'MODULE', { mIdx })} // CHANGED
+                                            onMouseLeave={closeAddMenuWithDelay}
                                             aria-label={`Add module options for ${mIdx + 1}`}
                                         >
                                             <FontAwesomeIcon icon={faCirclePlus} />
@@ -765,7 +779,8 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                             type="button"
                                                             className="courseCont-iconBtn"
                                                             title="Add topic"
-                                                            onClick={(e) => openAddMenu(e, 'TOPIC', { mIdx, tIdx })} // CHANGED
+                                                            onMouseEnter={(e) => openAddMenu(e, 'TOPIC', { mIdx, tIdx })} // CHANGED
+                                                            onMouseLeave={closeAddMenuWithDelay}
                                                             aria-label={`Add topic options for ${mIdx + 1}.${tIdx + 1}`}
                                                         >
                                                             <FontAwesomeIcon icon={faCirclePlus} />
@@ -900,7 +915,8 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                                                                                 title="Add slide"
                                                                                 aria-haspopup="menu"
                                                                                 aria-controls={`courseCont-typePicker-${mIdx}-${tIdx}-${sIdx}`}
-                                                                                onClick={(e) => openAddMenu(e, 'SLIDE', { mIdx, tIdx, sIdx })} // CHANGED
+                                                                                onMouseEnter={(e) => openAddMenu(e, 'SLIDE', { mIdx, tIdx, sIdx })}
+                                                                                onMouseLeave={closeAddMenuWithDelay}
                                                                             >
                                                                                 <FontAwesomeIcon icon={faCirclePlus} />
                                                                             </button>
@@ -1673,12 +1689,16 @@ const InductionContent = ({ formData, setFormData, readOnly = false }) => {
                     DEFAULT_ASPECT={ratio}
                 />
             )}
-            {addMenu.isOpen && (<AddMenuPopup
-                isOpen={addMenu.isOpen}
-                anchorRect={addMenu.anchorRect}
-                onClose={closeAddMenu}
-                onSelect={handleAddOptionSelect}
-            />)}
+            {addMenu.isOpen && (
+                <AddMenuPopup
+                    isOpen={addMenu.isOpen}
+                    anchorRect={addMenu.anchorRect}
+                    onClose={() => setAddMenu(prev => ({ ...prev, isOpen: false }))}
+                    onSelect={handleAddOptionSelect}
+                    onMouseEnter={cancelClose} // Keep open if mouse enters popup
+                    onMouseLeave={closeAddMenuWithDelay} // Close if mouse leaves popup
+                />
+            )}
         </div>
     );
 };

@@ -1242,6 +1242,51 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         }
     }, [excelFilter.open, excelFilter.pos.top, excelFilter.pos.left, excelFilter.anchorRect, excelSearch]);
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(filters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [filters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        if (showFitButton && showResetButton) {
+            return "top-right-button-ibra6";
+        }
+
+        if (showFitButton || showResetButton) {
+            return "top-right-button-ibra5";
+        }
+
+        return "top-right-button-ibra4";
+    };
+
     return (
         <div className="input-row-risk-ibra">
             <div className={`ibra-box ${error ? "error-create" : ""}`} ref={ibraBoxRef}>
@@ -1284,6 +1329,28 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                     onClick={toggleFlagFilter}
                 >
                     <FontAwesomeIcon icon={faFlag} className={`icon-um-search ${showFlagged ? "flag-filter-active" : ""}`} />
+                </button>
+
+
+
+                <button
+                    className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                    title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                    style={{
+                        cursor: hasActiveFilters ? "pointer" : "default",
+                        color: hasActiveFilters ? "#002060" : "gray"
+                    }}
+                    onMouseEnter={(e) => {
+                        if (hasActiveFilters) openFilterMenu(e);
+                    }}
+                    onMouseLeave={closeFilterMenuWithDelay}
+                    onDoubleClick={handleClearFilters}
+                >
+                    <FontAwesomeIcon
+                        icon={faFilter}
+                        className="icon-um-search"
+                        style={{ color: hasActiveFilters ? "#002060" : "inherit" }}
+                    />
                 </button>
 
                 {showColumnSelector && (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCaretLeft, faCaretRight, faX, faSearch, faArrowLeft, faTrash, faShareAlt, faUser, faUserGroup, faColumns, faSort, faFilter } from '@fortawesome/free-solid-svg-icons';
+import { faCaretLeft, faCaretRight, faX, faSearch, faArrowLeft, faTrash, faShareAlt, faUser, faUserGroup, faColumns, faSort, faFilter, faCircle, faPlus, faEdit } from '@fortawesome/free-solid-svg-icons';
 import { jwtDecode } from 'jwt-decode';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -14,6 +14,7 @@ import OnlineTrainingCreateBatchProfiles from "./Popups/OnlineTrainingCreateBatc
 import OnlineTrainingCreateProfileLink from "./Popups/OnlineTrainingCreateProfileLink";
 import OnlineTrainingDeleteVisitor from "./Popups/OnlineTrainingDeleteVisitor";
 import OnlineTrainingSortPopupVisitors from "./Popups/OnlineTrainingSortPopupVisitors";
+import OnlineTrainingModifyProfilePopup from "./Popups/OnlineTrainingModifyProfilePopup";
 
 const OnlineTrainingStudentProfiles = () => {
     // --- Existing Drag Scroll State ---
@@ -39,6 +40,8 @@ const OnlineTrainingStudentProfiles = () => {
     });
     const [excelSearch, setExcelSearch] = useState("");
     const [excelSelected, setExcelSelected] = useState(new Set());
+    const [editProfile, setEditProfile] = useState({});
+    const [editPopup, setEditPopup] = useState(false);
 
     // --- Standard State ---
     const [upload, setUpload] = useState(false);
@@ -187,6 +190,8 @@ const OnlineTrainingStudentProfiles = () => {
     const openUpload = () => setUpload(true);
     const closeUpload = () => setUpload(!upload);
     const openDelete = (name, id) => { setDeleteName(name); setDeleteId(id); setDeleteVisitor(true); };
+    const openEditPopup = (user) => { setEditProfile(user); setEditPopup(true); };
+    const closeEditPopup = () => { setEditProfile({}); setEditPopup(false); };
     const closeDelete = () => { setDeleteName(""); setDeleteId(""); setDeleteVisitor(!deleteVisitor); };
     const openBatchProg = () => setBatchProg(true);
     const closeBatchProg = () => setBatchProg(!batchProg);
@@ -431,6 +436,45 @@ const OnlineTrainingStudentProfiles = () => {
         closeSortModal();
     };
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(filters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== null || sortConfig.direction !== null;
+
+        console.log("Active Filters Check:", { filters, sortConfig, hasColumnFilters, hasSort });
+        return hasColumnFilters || hasSort;
+    }, [filters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setFilters({});
+        setSortConfig({ colId: null, direction: null });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        return "top-right-button-control-att-2";
+    };
+
     return (
         <div className="file-info-container">
             {isSidebarVisible && (
@@ -442,25 +486,6 @@ const OnlineTrainingStudentProfiles = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
-
-                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (
-                        <div className="filter-dm-fi-2">
-                            <div className="button-container-dm-fi">
-                                <button className="but-dm-fi" onClick={openUpload}>
-                                    <div className="button-content" >
-                                        <FontAwesomeIcon icon={faUser} className="button-icon" />
-                                        <span className="button-text">Create Profile</span>
-                                    </div>
-                                </button>
-                                <button className="but-dm-fi" onClick={openBatchProg}>
-                                    <div className="button-content">
-                                        <FontAwesomeIcon icon={faUserGroup} className="button-icon" />
-                                        <span className="button-text">Create Group</span>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-                    )}
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/visitorInductionIcon2.svg`} alt="Logo" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">Student Profiles</p>
@@ -477,11 +502,78 @@ const OnlineTrainingStudentProfiles = () => {
             )}
 
             <div className="main-box-file-info">
-                <div className="top-section-um">
+                <div className="top-section-um" style={{ gap: "6px" }}>
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
+                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (
+                        <>
+                            <div className="burger-menu-icon-um">
+                                <span
+                                    className="fa-layers fa-fw"
+                                    style={{ fontSize: "28px" }}
+                                    title="Add User"
+                                    onClick={openUpload}
+                                >
+                                    {/* Main user icon */}
+                                    <FontAwesomeIcon icon={faUser} color="gray" />
 
+                                    {/* Outer "cut-out" circle (page background color) */}
+                                    <FontAwesomeIcon
+                                        icon={faCircle}
+                                        transform="shrink-6 down-4 right-7"
+                                        color="white"   // match your page background
+                                    />
+
+                                    {/* Inner gray circle */}
+                                    <FontAwesomeIcon
+                                        icon={faCircle}
+                                        transform="shrink-8 down-4 right-7"
+                                        color="gray"
+                                    />
+
+                                    {/* Plus icon */}
+                                    <FontAwesomeIcon
+                                        icon={faPlus}
+                                        transform="shrink-11 down-4 right-7"
+                                        color="white"
+                                    />
+                                </span>
+                            </div>
+
+                            <div className="burger-menu-icon-um" onClick={openBatchProg}>
+                                <span
+                                    className="fa-layers fa-fw"
+                                    style={{ fontSize: "28px", cursor: "pointer" }}
+                                    title="Create Group"
+                                >
+                                    {/* Main group icon */}
+                                    <FontAwesomeIcon icon={faUserGroup} color="gray" />
+
+                                    {/* Outer cut-out circle (match page background) */}
+                                    <FontAwesomeIcon
+                                        icon={faCircle}
+                                        transform="shrink-6 down-4 right-12"
+                                        color="white"
+                                    />
+
+                                    {/* Inner badge circle */}
+                                    <FontAwesomeIcon
+                                        icon={faCircle}
+                                        transform="shrink-8 down-4 right-12"
+                                        color="gray"
+                                    />
+
+                                    {/* Plus icon */}
+                                    <FontAwesomeIcon
+                                        icon={faPlus}
+                                        transform="shrink-11 down-4 right-12"
+                                        color="white"
+                                    />
+                                </span>
+                            </div>
+                        </>
+                    )}
                     <div className="um-input-container">
                         <input
                             className="search-input-um"
@@ -508,6 +600,20 @@ const OnlineTrainingStudentProfiles = () => {
                             title="Select Columns to Display"
                             className="top-right-button-control-att"
                             onClick={() => setShowColumnSelector(v => !v)}
+                        />
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
                         />
                         {showColumnSelector && (
                             <div className="column-selector-popup"
@@ -611,6 +717,7 @@ const OnlineTrainingStudentProfiles = () => {
                                                         <td className="col-act" key={`${file._id ?? index}-action`}>
                                                             <button
                                                                 className={"flame-delete-button-fi col-but-res"}
+                                                                style={{ width: "33%" }}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     openShareLink(file.name, file.email, file._id);
@@ -619,7 +726,18 @@ const OnlineTrainingStudentProfiles = () => {
                                                                 <FontAwesomeIcon icon={faShareAlt} title="Share Link" />
                                                             </button>
                                                             <button
+                                                                className={"flame-delete-button-fi col-but-res"}
+                                                                style={{ width: "33%" }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openEditPopup(file);
+                                                                }}
+                                                            >
+                                                                <FontAwesomeIcon icon={faEdit} title="Edit Profile" />
+                                                            </button>
+                                                            <button
                                                                 className={"flame-delete-button-fi col-but"}
+                                                                style={{ width: "33%" }}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     openDelete(file.name, file._id)
@@ -769,6 +887,7 @@ const OnlineTrainingStudentProfiles = () => {
             {batchExcel && (<OnlineTrainingBatchExcelUpload onClose={closeBatchExcel} refresh={fetchFiles} />)}
             {shareLink && (<OnlineTrainingCreateProfileLink onClose={closeShareLink} studentEmail={email} studentName={username} profileId={linkId} />)}
             {deleteVisitor && (<OnlineTrainingDeleteVisitor closeModal={closeDelete} deleteVisitor={deleteVisitorInstance} name={deleteName} />)}
+            {editPopup && (<OnlineTrainingModifyProfilePopup onClose={closeEditPopup} refresh={fetchFiles} data={editProfile} />)}
             <ToastContainer />
         </div >
     );

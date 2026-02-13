@@ -102,6 +102,7 @@ const StudentLogin = () => {
 
                 sessionStorage.setItem("studentToken", data.token);
 
+                await fetchAndCacheProfilePic(userId, data.token);
                 navigate(`/FrontendDMS/studentHomePage`);
             } else {
                 throw new Error('Invalid login attempt.');
@@ -119,6 +120,35 @@ const StudentLogin = () => {
             }, 500);
         }
     };
+
+    async function fetchAndCacheProfilePic(userId, token) {
+        try {
+            const resp = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingStudentManagement/${userId}/profile-picture`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (resp.status === 200) {
+                const blob = await resp.blob();
+                // Convert Blob -> data URL so we can store it in sessionStorage (strings only)
+                const toDataURL = (blob) =>
+                    new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+
+                const dataUrl = await toDataURL(blob);
+                sessionStorage.setItem('profilePicStudent', dataUrl);
+            } else {
+                // 204 (no content) or 404 -> keep icon
+                sessionStorage.removeItem('profilePicStudent');
+            }
+        } catch {
+            // Network or other error -> fall back to icon
+            sessionStorage.removeItem('profilePicStudent');
+        }
+    }
 
     const togglePasswordVisibility = () => {
         setShowPassword((prev) => !prev);

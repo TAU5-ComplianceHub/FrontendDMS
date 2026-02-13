@@ -62,7 +62,7 @@ const RiskDocumentsJRA = () => {
 
     const getFilterValuesForCell = (row, colId, index) => {
         if (colId === "nr") return [String(index + 1)];
-        if (colId === "name") return [removeFileExtension(row.formData.title)];
+        if (colId === "name") return [(row.formData.title)];
         if (colId === "version") return [String(row.formData.version)];
         if (colId === "firstPublishedBy") return [row.publisher?.username || "N/A"];
         if (colId === "firstPublishedDate") return [formatDate(row.datePublished)];
@@ -127,6 +127,43 @@ const RiskDocumentsJRA = () => {
         if (top !== excelFilter.pos.top || left !== excelFilter.pos.left) setExcelFilter(p => ({ ...p, pos: { ...p.pos, top, left } }));
     }, [excelFilter.open, excelSearch]);
 
+    const [filterMenu, setFilterMenu] = useState({ isOpen: false, anchorRect: null });
+    const filterMenuTimerRef = useRef(null);
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [activeExcelFilters, sortConfig]);
+
+    const openFilterMenu = (e) => {
+        if (!hasActiveFilters) return;
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+        const rect = e.currentTarget.getBoundingClientRect();
+        setFilterMenu({ isOpen: true, anchorRect: rect });
+    };
+
+    const closeFilterMenuWithDelay = () => {
+        filterMenuTimerRef.current = setTimeout(() => {
+            setFilterMenu(prev => ({ ...prev, isOpen: false }));
+        }, 200);
+    };
+
+    const cancelCloseFilterMenu = () => {
+        if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+    };
+
+    const handleClearFilters = () => {
+        setActiveExcelFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+        setFilterMenu({ isOpen: false, anchorRect: null });
+    };
+
+    const getFilterBtnClass = () => {
+        return "top-right-button-control-att-2";
+    };
+
     if (error) return <div>Error: {error}</div>;
 
     return (
@@ -176,6 +213,21 @@ const RiskDocumentsJRA = () => {
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
                         <label className="risk-control-label">{"Ready for Approval JRAs"}</label>
+
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray"
+                            }}
+                            onMouseEnter={(e) => {
+                                if (hasActiveFilters) openFilterMenu(e);
+                            }}
+                            onMouseLeave={closeFilterMenuWithDelay}
+                            onDoubleClick={handleClearFilters}
+                        />
                         <FontAwesomeIcon icon={faColumns} className="top-right-button-control-att" onClick={() => setShowColumnSelector(v => !v)} />
                         {showColumnSelector && (<div className="column-selector-popup" onMouseDown={(e) => e.stopPropagation()}><div className="column-selector-header"><h4>Select Columns</h4><button className="close-popup-btn" onClick={() => setShowColumnSelector(false)}>×</button></div><div className="column-selector-content"><div className="select-all-container"><label className="select-all-checkbox"><input type="checkbox" checked={areAllSelected()} onChange={(e) => toggleAllColumns(e.target.checked)} /><span className="select-all-text">Select All</span></label></div><div className="column-checkbox-container">{allColumns.map(col => (<div className="column-checkbox-item" key={col.id}><label><input type="checkbox" checked={showColumns.includes(col.id)} disabled={col.id === "nr" || col.id === "action"} onChange={() => toggleColumn(col.id)} /><span>{col.title}</span></label></div>))}</div><div className="column-selector-footer"><p>{visibleColumns.length} columns selected</p><button className="apply-columns-btn" onClick={() => setShowColumnSelector(false)}>Apply</button></div></div></div>)}
                     </div>
