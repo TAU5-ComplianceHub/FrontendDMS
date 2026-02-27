@@ -10,7 +10,7 @@ import ReferenceTable from "../CreatePage/ReferenceTable";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faQuestionCircle, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faTeeth, faTriangleCircleSquare, faTriangleExclamation, faUserTie, faHardHat, faMagicWandSparkles, faCircle, faPen, faSave, faArrowLeft, faArrowUp, faCaretLeft, faCaretRight, faCalendarDays } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faQuestionCircle, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faTeeth, faTriangleCircleSquare, faTriangleExclamation, faUserTie, faHardHat, faMagicWandSparkles, faCircle, faPen, faSave, faArrowLeft, faArrowUp, faCaretLeft, faCaretRight, faCalendarDays, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import TopBarDD from "../Notifications/TopBarDD";
 import AttendanceTable from "../RiskRelated/AttendanceTable";
@@ -35,6 +35,7 @@ import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
 import DraftPopup from "../Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup"
 
 const RiskReviewPageJRA = () => {
     const navigate = useNavigate();
@@ -68,7 +69,18 @@ const RiskReviewPageJRA = () => {
     const fileID = useParams().fileId;
     const [change, setChange] = useState("");
     const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
+    const [readOnly, setReadOnly] = useState(false);
     const [draftNote, setDraftNote] = useState(null);
+    const [approval, setApproval] = useState(false);
+    const [inApproval, setInApproval] = useState(false);
+
+    const openApproval = () => {
+        setApproval(true);
+    }
+
+    const closeApproval = () => {
+        setApproval(false);
+    }
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -244,7 +256,7 @@ const RiskReviewPageJRA = () => {
 
     const handleClick3 = async () => {
         try {
-            await handleGeneratePublish();
+            openApproval();
         } catch (err) {
             toast.error("Could not save draft, generation aborted." + err);
         }
@@ -309,19 +321,51 @@ const RiskReviewPageJRA = () => {
 
     const getNewAzureFileName = async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/jra/getFile/${fileID}`);
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/fileGenDocs/jra/getFile/${fileID}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch file");
+
             const storedData = await response.json();
-            setAzureFN(storedData.files.azureFileName || "");
+            setAzureFN(storedData.files?.azureFileName || "");
+
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error("Error loading data:", error);
         }
     };
 
     const loadData = async (fileID) => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/jra/getFile/${fileID}`);
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/fileGenDocs/jra/getFile/${fileID}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch file");
+
             const data = await response.json();
             const storedData = data.files;
+            const readOnly = data.readOnly || false;
+
+            setReadOnly(readOnly);
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
             setUsedPPEOptions(storedData.usedPPEOptions || []);
@@ -333,6 +377,7 @@ const RiskReviewPageJRA = () => {
             setFormData(prev => ({ ...prev }));
             setTitleSet(true);
             setAzureFN(storedData.azureFileName || "");
+            setInApproval(Boolean(data.statusApproval));
         } catch (error) {
             console.error('Error loading data:', error);
         }
@@ -936,6 +981,98 @@ const RiskReviewPageJRA = () => {
         await sendUpdatedFormData(updatedFormData, documentName);
     };
 
+
+    const handlePublishApprovalFlow = async (approversValue) => {
+        const dataToStore = {
+            draftID: fileID,
+            approvers: approversValue
+        };
+
+        setLoading(true);
+        saveData(fileID);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/start-approval-jra-published`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`JRA Publishing Approval Started.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            if (!data.currentApprover) {
+                setReadOnly(true)
+            }
+
+            setInApproval(data.approvalStatus);
+
+            setLoading(false);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
+    const handleApproveClick = () => {
+        const newErrors = validateForm();
+        setErrors(newErrors);
+
+        approveDraft();
+    };
+
+    const approveDraft = async () => {
+        const dataToStore = {
+            draftID: fileID
+        };
+
+        setLoading(true);
+        saveData(fileID);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/approve-published-jra`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`JRA Successfully Approved.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            setReadOnly(true);
+            setLoading(false);
+
+            if (data.fullyApproved) {
+                await handleGeneratePublish()
+            }
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
     const sendUpdatedFormData = async (formDataToStore, documentName) => {
         setLoading(true);
 
@@ -1087,11 +1224,11 @@ const RiskReviewPageJRA = () => {
                             <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
                         </div>
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={openSaveAs} title="Save As">
                                 {/* base floppy-disk, full size */}
                                 <FontAwesomeIcon icon={faSave} />
@@ -1102,17 +1239,25 @@ const RiskReviewPageJRA = () => {
                                     color="gray"   /* or whatever contrast you need */
                                 />
                             </span>
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faRotateLeft} onClick={undoLastChange} title="Undo" />
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
-                        </div>
+                        </div>)}
 
-                        {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
+                        {!readOnly && !inApproval && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick3} title="Publish" />
+                        </div>)}
+
+                        {inApproval && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        </div>)}
+
+                        {false && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <FontAwesomeIcon icon={faUpload} onClick={handleClick3} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
                             </div>
@@ -1126,6 +1271,12 @@ const RiskReviewPageJRA = () => {
                 </div>
 
                 <div className={`scrollable-box-risk-create`}>
+                    {(readOnly && inApproval) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the approval process and needs to be approved.
+                        </div>
+                    </div>)}
+
                     <div className="input-row-risk-create" onClick={() => console.log(formData)}>
                         <div className={`input-box-title-risk-create ${errors.title ? "error-create" : ""}`}>
                             <h3 className="font-fam-labels">Risk Assessment Title <span className="required-field">*</span></h3>
@@ -1137,6 +1288,7 @@ const RiskReviewPageJRA = () => {
                                     className="font-fam title-input"
                                     value={formData.title}
                                     onChange={handleInputChange}
+                                    readOnly={readOnly}
                                     placeholder="Insert the Risk Assessment Title (E.g. Perform Earth Leakage Test on Electrical Circuits)"
                                 />
                                 <span className="type-risk-create-JRA">{formData.documentType + " and PTO"}</span>
@@ -1156,6 +1308,7 @@ const RiskReviewPageJRA = () => {
                                     placeholder="Select Site"
                                     onChange={e => handleSiteInput(e.target.value)}
                                     onFocus={handleSiteFocus}
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
@@ -1173,6 +1326,7 @@ const RiskReviewPageJRA = () => {
                                     editable={false}
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    readOnly={readOnly}
                                     inputClass='date-input-risk-create'
                                     onFocus={() => {
                                         setErrors(prev => ({
@@ -1191,20 +1345,20 @@ const RiskReviewPageJRA = () => {
                         </div>
                     </div>
 
-                    <DocumentSignaturesRiskTable rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} />
-                    <AbbreviationTableRisk risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
-                    <TermTableRisk risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
-                    <IntroTaskInfo formData={formData} setFormData={setFormData} />
-                    <PPETableRisk formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
-                    <HandToolsTableRisk formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
-                    <MaterialsTableRisk formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
-                    <EquipmentTableRisk formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
-                    <MobileMachineTableRisk formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
-                    <AttendanceTable title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attendance} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
-                    <JRATable formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} />
-                    <OtherTeam formData={formData} />
-                    <SupportingDocumentTable formData={formData} setFormData={setFormData} />
-                    <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
+                    <DocumentSignaturesRiskTable readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} />
+                    <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
+                    <TermTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
+                    <IntroTaskInfo readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <PPETableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
+                    <HandToolsTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
+                    <MaterialsTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
+                    <EquipmentTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
+                    <MobileMachineTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
+                    <AttendanceTable readOnly={readOnly} title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attendance} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
+                    <JRATable readOnly={readOnly} formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} />
+                    <OtherTeam readOnly={readOnly} formData={formData} />
+                    <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
                     <div className="input-row">
                         <div className={`input-box-aim-cp`}>
                             <h3 className="font-fam-labels">Document Change Reason <span className="required-field">*</span></h3>
@@ -1213,6 +1367,7 @@ const RiskReviewPageJRA = () => {
                                 name="aim"
                                 className="aim-textarea font-fam"
                                 value={change}
+                                readOnly={readOnly}
                                 onChange={(e) => setChange(e.target.value)}
                                 rows="4"   // Adjust the number of rows for initial height
                                 placeholder="Insert the reason for the document update..." // Optional placeholder text
@@ -1244,7 +1399,7 @@ const RiskReviewPageJRA = () => {
             {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
             <ToastContainer />
 
-            {showSiteDropdown && filteredSites.length > 0 && (
+            {showSiteDropdown && !readOnly && filteredSites.length > 0 && (
                 <ul
                     className="floating-dropdown"
                     style={{
@@ -1265,6 +1420,8 @@ const RiskReviewPageJRA = () => {
                     ))}
                 </ul>
             )}
+
+            {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
         </div>
     );
 };

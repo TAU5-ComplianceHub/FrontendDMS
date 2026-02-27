@@ -7,7 +7,6 @@ import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, 
 import TopBar from "../Notifications/TopBar";
 import BatchUpload from "../FileInfo/BatchUpload";
 import DMSTemplatesPopup from "../FileInfo/DMSTemplatesPopup";
-import MigrateOwnership from "../FileInfo/MigrateOwnership";
 
 const DMSAdminPage = () => {
     const [error, setError] = useState(null);
@@ -17,7 +16,6 @@ const DMSAdminPage = () => {
     const [loggedInUserId, setloggedInUserId] = useState('');
     const [batch, setBatch] = useState(false);
     const navigate = useNavigate();
-    const [migrate, setMigrate] = useState(false);
     const [template, setTemplate] = useState(false);
 
     const openTemplate = () => {
@@ -34,14 +32,6 @@ const DMSAdminPage = () => {
 
     const closeBatch = () => {
         setBatch(!batch);
-    };
-
-    const openMigrate = () => {
-        setMigrate(true);
-    };
-
-    const closeMigrate = () => {
-        setMigrate(!migrate);
     };
 
     useEffect(() => {
@@ -124,19 +114,10 @@ const DMSAdminPage = () => {
                             <h3 className="document-title-fi-home">Upload Batch Documents</h3>
                         </>
                     </div>
-                    <div className={`document-card-fi-home`} onClick={openMigrate} >
-                        <>
-                            <div className="icon-dept">
-                                <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} className={"icon-dept"} />
-                            </div>
-                            <h3 className="document-title-fi-home">Migrate Documents</h3>
-                        </>
-                    </div>
                 </div>
             </div>
             <ToastContainer />
             {template && (<DMSTemplatesPopup onClose={closeTemplate} />)}
-            {migrate && (<MigrateOwnership onClose={closeMigrate} />)}
         </div>
     );
 };

@@ -10,7 +10,7 @@ import ReferenceTable from "../CreatePage/ReferenceTable";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretRight, faCaretLeft, faCalendarDays } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretRight, faCaretLeft, faCalendarDays, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import TopBarDD from "../Notifications/TopBarDD";
 import AttendanceTable from "../RiskRelated/AttendanceTable";
@@ -33,6 +33,7 @@ import DatePicker from "react-multi-date-picker";
 import RelevantControlsTable from "../RiskRelated/RelevantControlsTable";
 import ControlPopupNote from "../Popups/ControlPopupNote";
 import UnusedControlsPopup from "../RiskRelated/UnusedControlsPopup";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup"
 
 const RiskReviewPageBLRA = () => {
     const navigate = useNavigate();
@@ -67,7 +68,19 @@ const RiskReviewPageBLRA = () => {
     const fileID = useParams().fileId;
     const [change, setChange] = useState("");
     const [draftNote, setDraftNote] = useState(null);
+    const [readOnly, setReadOnly] = useState(false);
     const [allSystemControls, setAllSystemControls] = useState([]);
+    const [approval, setApproval] = useState(false);
+    const [inApproval, setInApproval] = useState(false);
+    const [unusedRelevantControlsHighlight, setUnusedRelevantControlsHighlight] = useState([]);
+
+    const openApproval = () => {
+        setApproval(true);
+    }
+
+    const closeApproval = () => {
+        setApproval(false);
+    }
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -257,7 +270,8 @@ const RiskReviewPageBLRA = () => {
                 setUnusedPopup(true);
             }
 
-            await handleGeneratePublish();
+            openApproval();
+            //await handleGeneratePublish();
         } catch (err) {
             toast.error("Could not save draft, generation aborted." + err);
         }
@@ -430,10 +444,10 @@ const RiskReviewPageBLRA = () => {
             });
 
             const { response: newText } = await response.json();
-            setLoadingScopeI(true);
+            setLoadingScopeI(false);
             setFormData(fd => ({ ...fd, scopeInclusions: newText }));
         } catch (error) {
-            setLoadingScopeI(true);
+            setLoadingScopeI(false);
             console.error('Error saving data:', error);
         }
     }
@@ -470,11 +484,26 @@ const RiskReviewPageBLRA = () => {
 
     const getNewAzureFileName = async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/blra/getFile/${fileID}`);
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/fileGenDocs/blra/getFile/${fileID}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch file");
+
             const storedData = await response.json();
-            setAzureFN(storedData.files.azureFileName || "");
+            setAzureFN(storedData.files?.azureFileName || "");
+
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error("Error loading data:", error);
         }
     };
 
@@ -590,15 +619,33 @@ const RiskReviewPageBLRA = () => {
             console.log(`[Migration] Auto-generated ${normalized.relevantControls.length} relevant controls for old draft.`);
         }
 
+        normalized.execSummaryGen = normalized.execSummaryGen ?? "";
+        normalized.execSummary = normalized.execSummary ?? "";
+
         return normalized;
     }
 
     const loadData = async (fileID) => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/blra/getFile/${fileID}`);
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/fileGenDocs/blra/getFile/${fileID}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch file");
+
             const data = await response.json();
-            const storedData = data.files;
-            // Update your states as needed:
+            const storedData = data.files || {};
+            const readOnly = data.readOnly || false;
+
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
 
@@ -606,11 +653,15 @@ const RiskReviewPageBLRA = () => {
             const patched = normalizeIbraFormData(raw);
             setFormData(patched);
 
+            setInApproval(Boolean(data.statusApproval));
+
+            setReadOnly(readOnly);
             setFormData(prev => ({ ...prev }));
             setTitleSet(true);
             setAzureFN(storedData.azureFileName || "");
+
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error("Error loading data:", error);
         }
     };
 
@@ -1338,7 +1389,10 @@ const RiskReviewPageBLRA = () => {
 
     const cancelGenerateUnused = () => {
         setUnusedPopup(false);
-    }
+
+        const unused = getUnusedControls();
+        setUnusedRelevantControlsHighlight(unused.map(n => n.toLowerCase()));
+    };
 
     const handleGenerateARegister = async () => {
         const dataToStore = {
@@ -1462,6 +1516,98 @@ const RiskReviewPageBLRA = () => {
         setFormData(updatedFormData);
 
         await sendUpdatedFormData(updatedFormData, documentName);
+    };
+
+    const handlePublishApprovalFlow = async (approversValue) => {
+        const dataToStore = {
+            draftID: fileID,
+            approvers: approversValue
+        };
+
+        setLoading(true);
+        saveData(fileID);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/start-approval-blra-published`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`BLRA Publishing Approval Started.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            if (!data.currentApprover) {
+                setReadOnly(true)
+            }
+
+            setInApproval(data.approvalStatus);
+
+            setLoading(false);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
+    const handleApproveClick = () => {
+        const newErrors = validateForm();
+        setErrors(newErrors);
+
+
+        approveDraft();
+    };
+
+    const approveDraft = async () => {
+        const dataToStore = {
+            draftID: fileID
+        };
+
+        setLoading(true);
+        saveData(fileID);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/approve-published-blra`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`BLRA Successfully Approved.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            setReadOnly(true);
+            setLoading(false);
+
+            if (data.fullyApproved) {
+                await handleGeneratePublish()
+            }
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
     };
 
     const sendUpdatedFormData = async (formDataToStore, documentName) => {
@@ -1749,6 +1895,58 @@ const RiskReviewPageBLRA = () => {
         return definedControlNames.some(name => !usedControlNames.has(name));
     };
 
+    const getUnusedControls = () => {
+        const relevant = formData.relevantControls || [];
+        if (relevant.length === 0) return [];
+
+        const definedControlNames = relevant
+            .map(r => (r?.control ?? "").toString().trim())
+            .filter(Boolean);
+
+        const usedControlNames = new Set();
+        (formData.ibra || []).forEach(row => {
+            if (Array.isArray(row.controls)) {
+                row.controls.forEach(c => {
+                    const name = typeof c === "string" ? c : c?.control;
+                    if (name) usedControlNames.add(String(name).trim());
+                });
+            }
+        });
+
+        return definedControlNames.filter(name => !usedControlNames.has(name));
+    };
+
+    useEffect(() => {
+        if (!unusedRelevantControlsHighlight?.length) return;
+
+        const relevant = formData.relevantControls || [];
+        const ibraRows = formData.ibra || [];
+
+        // Collect all used controls from IBRA
+        const usedControlNames = new Set();
+
+        ibraRows.forEach(row => {
+            if (Array.isArray(row.controls)) {
+                row.controls.forEach(c => {
+                    const name = typeof c === "string" ? c : c?.control;
+                    if (name) {
+                        usedControlNames.add(String(name).trim().toLowerCase());
+                    }
+                });
+            }
+        });
+
+        // Remove any highlighted control that is now used
+        const updatedHighlights = unusedRelevantControlsHighlight.filter(
+            ctrlName => !usedControlNames.has(ctrlName.toLowerCase())
+        );
+
+        if (updatedHighlights.length !== unusedRelevantControlsHighlight.length) {
+            setUnusedRelevantControlsHighlight(updatedHighlights);
+        }
+
+    }, [formData.ibra, unusedRelevantControlsHighlight]);
+
     return (
         <div className="risk-create-container">
             {isSidebarVisible && (
@@ -1783,11 +1981,11 @@ const RiskReviewPageBLRA = () => {
                             <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
                         </div>
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={openSaveAs} title="Save As">
                                 {/* base floppy-disk, full size */}
                                 <FontAwesomeIcon icon={faSave} />
@@ -1798,17 +1996,25 @@ const RiskReviewPageBLRA = () => {
                                     color="gray"   /* or whatever contrast you need */
                                 />
                             </span>
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faRotateLeft} onClick={undoLastChange} title="Undo" />
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
-                        </div>
+                        </div>)}
 
-                        {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
+                        {!readOnly && !inApproval && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick3} title="Publish" />
+                        </div>)}
+
+                        {inApproval && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        </div>)}
+
+                        {false && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <FontAwesomeIcon icon={faUpload} onClick={handleClick3} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
                             </div>
@@ -1823,6 +2029,12 @@ const RiskReviewPageBLRA = () => {
                 </div>
 
                 <div className={`scrollable-box-risk-create`}>
+                    {(readOnly && inApproval) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the approval process and needs to be approved.
+                        </div>
+                    </div>)}
+
                     <div className="input-row-risk-create">
                         <div className={`input-box-title-risk-create ${errors.title ? "error-create" : ""}`}>
                             <h3 className="font-fam-labels">Risk Assessment Title <span className="required-field">*</span></h3>
@@ -1834,7 +2046,8 @@ const RiskReviewPageBLRA = () => {
                                     className="font-fam title-input"
                                     value={formData.title}
                                     onChange={handleInputChange}
-                                    placeholder="Insert Risk Assessment Title"
+                                    readOnly={readOnly}
+                                    placeholder="Insert Risk Assessment Title (e.g., Working at Heights)"
                                 />
                                 <span className="type-risk-create">{formData.documentType}</span>
                             </div>
@@ -1853,11 +2066,13 @@ const RiskReviewPageBLRA = () => {
                                     placeholder="Select Site"
                                     onChange={e => handleSiteInput(e.target.value)}
                                     onFocus={handleSiteFocus}
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
                         <div className={`input-box-type-risk-create-date ${errors.dateConducted ? "error-create" : ""}`}>
                             <h3 className="font-fam-labels">Date Conducted <span className="required-field">*</span></h3>
+
                             <div className="date-input-risk-create-container" style={{ position: "relative" }}>
                                 <DatePicker
                                     value={formData.dateConducted || ""}
@@ -1870,6 +2085,7 @@ const RiskReviewPageBLRA = () => {
                                     editable={false}
                                     placeholder="YYYY-MM-DD"
                                     hideIcon={false}
+                                    readOnly={readOnly}
                                     inputClass='date-input-risk-create'
                                     onFocus={() => {
                                         setErrors(prev => ({
@@ -1888,7 +2104,7 @@ const RiskReviewPageBLRA = () => {
                         </div>
                     </div>
 
-                    <DocumentSignaturesRiskTable rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} />
+                    <DocumentSignaturesRiskTable readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
 
                     <div className="input-row-risk-create">
                         <div className={`input-box-aim-risk-create ${errors.aim ? "error-create" : ""}`}>
@@ -1898,39 +2114,45 @@ const RiskReviewPageBLRA = () => {
                             >
                                 <FontAwesomeIcon icon={faInfoCircle} onClick={openHelpRA} style={{ cursor: 'pointer' }} className="icon-um-search" />
                             </button>
-                            <h3 className="font-fam-labels">Aim</h3>
+                            <h3 className="font-fam-labels">Aim <span className="required-field">*</span></h3>
                             <textarea
                                 spellCheck="true"
                                 name="aim"
                                 className="aim-textarea-risk-create-ibra font-fam"
                                 onChange={handleInputChange}
+                                readOnly={readOnly}
                                 value={formData.aim}
                                 rows="5"   // Adjust the number of rows for initial height
                                 placeholder="Clearly state the goal of the risk assessment, focusing on what the assessment intends to achieve or address. Keep it specific, relevant, and outcome-driven." // Optional placeholder text
                             />
 
-                            {loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
-                                <FontAwesomeIcon
-                                    icon={faMagicWandSparkles}
-                                    className="aim-textarea-icon-ibra"
-                                    title="AI Rewrite"
-                                    style={{ fontSize: "15px" }}
-                                    onClick={() => AiRewriteAim()}
-                                />
-                            )}
+                            {!readOnly && (
+                                <>
+                                    {
+                                        loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
+                                            <FontAwesomeIcon
+                                                icon={faMagicWandSparkles}
+                                                className="aim-textarea-icon-ibra"
+                                                title="AI Rewrite"
+                                                style={{ fontSize: "15px" }}
+                                                onClick={() => AiRewriteAim()}
+                                            />
+                                        )}
 
-                            <FontAwesomeIcon
-                                icon={faRotateLeft}
-                                className="aim-textarea-icon-ibra-undo"
-                                title="Undo AI Rewrite"
-                                onClick={() => undoAiRewrite('aim')}
-                                style={{
-                                    marginLeft: '8px',
-                                    opacity: rewriteHistory.aim.length ? 1 : 0.3,
-                                    cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
-                                    fontSize: "15px"
-                                }}
-                            />
+                                    <FontAwesomeIcon
+                                        icon={faRotateLeft}
+                                        className="aim-textarea-icon-ibra-undo"
+                                        title="Undo AI Rewrite"
+                                        onClick={() => undoAiRewrite('aim')}
+                                        style={{
+                                            marginLeft: '8px',
+                                            opacity: rewriteHistory.aim.length ? 1 : 0.3,
+                                            cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
+                                            fontSize: "15px"
+                                        }}
+                                    />
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -1942,7 +2164,7 @@ const RiskReviewPageBLRA = () => {
                             >
                                 <FontAwesomeIcon icon={faInfoCircle} onClick={openHelpScope} style={{ cursor: 'pointer' }} className="icon-um-search" />
                             </button>
-                            <h3 className="font-fam-labels">Scope</h3>
+                            <h3 className="font-fam-labels">Scope <span className="required-field">*</span></h3>
                             <div className="risk-scope-group" style={{ marginBottom: "-10px" }}>
                                 <div className="risk-execSummary-popup-page-additional-row ">
                                     <div className="risk-popup-page-column-half-scope">
@@ -1953,33 +2175,39 @@ const RiskReviewPageBLRA = () => {
                                             name="scope"
                                             className="aim-textarea-risk-scope-2 font-fam"
                                             onChange={handleInputChange}
+                                            readOnly={readOnly}
                                             value={formData.scope}
                                             rows="5"   // Adjust the number of rows for initial height
                                             placeholder="Insert a brief scope introduction (General scope notes and comments)." // Optional placeholder text
                                         />
-                                        {loadingScope ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />)
-                                            : (
-                                                <FontAwesomeIcon
-                                                    icon={faMagicWandSparkles}
-                                                    className="scope-textarea-icon"
-                                                    title="AI Rewrite"
-                                                    style={{ fontSize: "15px" }}
-                                                    onClick={() => AiRewriteScope()}
-                                                />
-                                            )}
+                                        {!readOnly && (
+                                            <>
+                                                {
+                                                    loadingScope ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />)
+                                                        : (
+                                                            <FontAwesomeIcon
+                                                                icon={faMagicWandSparkles}
+                                                                className="scope-textarea-icon"
+                                                                title="AI Rewrite"
+                                                                style={{ fontSize: "15px" }}
+                                                                onClick={() => AiRewriteScope()}
+                                                            />
+                                                        )}
 
-                                        <FontAwesomeIcon
-                                            icon={faRotateLeft}
-                                            className="scope-textarea-icon-undo"
-                                            title="Undo AI Rewrite"
-                                            onClick={() => undoAiRewrite('scope')}
-                                            style={{
-                                                marginLeft: '8px',
-                                                opacity: rewriteHistory.scope.length ? 1 : 0.3,
-                                                cursor: rewriteHistory.scope.length ? 'pointer' : 'not-allowed',
-                                                fontSize: "15px"
-                                            }}
-                                        />
+                                                <FontAwesomeIcon
+                                                    icon={faRotateLeft}
+                                                    className="scope-textarea-icon-undo"
+                                                    title="Undo AI Rewrite"
+                                                    onClick={() => undoAiRewrite('scope')}
+                                                    style={{
+                                                        marginLeft: '8px',
+                                                        opacity: rewriteHistory.scope.length ? 1 : 0.3,
+                                                        cursor: rewriteHistory.scope.length ? 'pointer' : 'not-allowed',
+                                                        fontSize: "15px"
+                                                    }}
+                                                />
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1993,30 +2221,36 @@ const RiskReviewPageBLRA = () => {
                                             className="aim-textarea-risk-scope font-fam"
                                             value={formData.scopeInclusions}
                                             onChange={handleInputChange}
+                                            readOnly={readOnly}
                                             rows="5"   // Adjust the number of rows for initial height
                                             placeholder="Insert scope inclusions (List the specific items, activities, or areas covered in this risk assessment)."
                                         />
-                                        {loadingScopeI ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />)
-                                            : (<FontAwesomeIcon
-                                                icon={faMagicWandSparkles}
-                                                className="scope-textarea-icon"
-                                                title="AI Rewrite"
-                                                style={{ fontSize: "15px" }}
-                                                onClick={() => AiRewriteScopeInclusions()}
-                                            />)}
+                                        {!readOnly && (
+                                            <>
+                                                {
+                                                    loadingScopeI ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />)
+                                                        : (<FontAwesomeIcon
+                                                            icon={faMagicWandSparkles}
+                                                            className="scope-textarea-icon"
+                                                            title="AI Rewrite"
+                                                            style={{ fontSize: "15px" }}
+                                                            onClick={() => AiRewriteScopeInclusions()}
+                                                        />)}
 
-                                        <FontAwesomeIcon
-                                            icon={faRotateLeft}
-                                            className="scope-textarea-icon-undo"
-                                            title="Undo AI Rewrite"
-                                            style={{
-                                                marginLeft: '8px',
-                                                opacity: rewriteHistory.scopeInclusions.length ? 1 : 0.3,
-                                                cursor: rewriteHistory.scopeInclusions.length ? 'pointer' : 'not-allowed',
-                                                fontSize: "15px"
-                                            }}
-                                            onClick={() => undoAiRewrite('scopeInclusions')}
-                                        />
+                                                <FontAwesomeIcon
+                                                    icon={faRotateLeft}
+                                                    className="scope-textarea-icon-undo"
+                                                    title="Undo AI Rewrite"
+                                                    style={{
+                                                        marginLeft: '8px',
+                                                        opacity: rewriteHistory.scopeInclusions.length ? 1 : 0.3,
+                                                        cursor: rewriteHistory.scopeInclusions.length ? 'pointer' : 'not-allowed',
+                                                        fontSize: "15px"
+                                                    }}
+                                                    onClick={() => undoAiRewrite('scopeInclusions')}
+                                                />
+                                            </>
+                                        )}
                                     </div>
 
                                     <div className="risk-popup-page-column-half-scope">
@@ -2027,30 +2261,35 @@ const RiskReviewPageBLRA = () => {
                                             className="aim-textarea-risk-scope font-fam"
                                             value={formData.scopeExclusions}
                                             onChange={handleInputChange}
+                                            readOnly={readOnly}
                                             rows="5"   // Adjust the number of rows for initial height
                                             placeholder="Insert scope exclusions (List the specific items, activities, or areas not covered in this risk assessment)."
                                         />
-                                        {loadingScopeE ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />) :
-                                            (< FontAwesomeIcon
-                                                icon={faMagicWandSparkles}
-                                                className="scope-textarea-icon"
-                                                title="AI Rewrite"
-                                                style={{ fontSize: "15px" }}
-                                                onClick={() => AiRewriteScopeExlusions()}
-                                            />)}
+                                        {!readOnly && (
+                                            <>
+                                                {loadingScopeE ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />) :
+                                                    (< FontAwesomeIcon
+                                                        icon={faMagicWandSparkles}
+                                                        className="scope-textarea-icon"
+                                                        title="AI Rewrite"
+                                                        style={{ fontSize: "15px" }}
+                                                        onClick={() => AiRewriteScopeExlusions()}
+                                                    />)}
 
-                                        < FontAwesomeIcon
-                                            icon={faRotateLeft}
-                                            className="scope-textarea-icon-undo"
-                                            title="Undo AI Rewrite"
-                                            style={{
-                                                marginLeft: '8px',
-                                                opacity: rewriteHistory.scopeExclusions.length ? 1 : 0.3,
-                                                cursor: rewriteHistory.scopeExclusions.length ? 'pointer' : 'not-allowed',
-                                                fontSize: "15px"
-                                            }}
-                                            onClick={() => undoAiRewrite('scopeExclusions')}
-                                        />
+                                                < FontAwesomeIcon
+                                                    icon={faRotateLeft}
+                                                    className="scope-textarea-icon-undo"
+                                                    title="Undo AI Rewrite"
+                                                    style={{
+                                                        marginLeft: '8px',
+                                                        opacity: rewriteHistory.scopeExclusions.length ? 1 : 0.3,
+                                                        cursor: rewriteHistory.scopeExclusions.length ? 'pointer' : 'not-allowed',
+                                                        fontSize: "15px"
+                                                    }}
+                                                    onClick={() => undoAiRewrite('scopeExclusions')}
+                                                />
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -2063,18 +2302,21 @@ const RiskReviewPageBLRA = () => {
                         globalControls={allSystemControls}
                         onControlRename={handleControlRename}
                         isCollapsed={formData.isRelevantControlsCollapsed}
+                        readOnly={readOnly}
+                        highlightedControlNames={unusedRelevantControlsHighlight}
                     />
 
-                    <AbbreviationTableRisk risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
-                    <TermTableRisk risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
-                    <AttendanceTable title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
-                    {formData.documentType === "BLRA" && (<BLRATable relevantControls={formData.relevantControls} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
-                    {(["BLRA"].includes(formData.documentType)) && (<ControlAnalysisTable error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
+                    <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
+                    <TermTableRisk risk={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
+                    <AttendanceTable readOnly={readOnly} title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
+                    {formData.documentType === "BLRA" && (<BLRATable readOnly={readOnly} relevantControls={formData.relevantControls} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
+                    {(["BLRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
 
-                    <ExecutiveSummary formData={formData} setFormData={setFormData} error={errors.execSummary} handleInputChange={handleInputChange} />
-                    <SupportingDocumentTable formData={formData} setFormData={setFormData} />
-                    <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
-                    <PicturesTable picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+                    <ExecutiveSummary readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.execSummary} handleInputChange={handleInputChange} />
+                    <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+                    <PicturesTable readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+
                     <div className="input-row">
                         <div className={`input-box-aim-cp`}>
                             <h3 className="font-fam-labels">Document Change Reason <span className="required-field">*</span></h3>
@@ -2083,12 +2325,14 @@ const RiskReviewPageBLRA = () => {
                                 name="aim"
                                 className="aim-textarea font-fam"
                                 value={change}
+                                readOnly={readOnly}
                                 onChange={(e) => setChange(e.target.value)}
                                 rows="4"   // Adjust the number of rows for initial height
                                 placeholder="Insert the reason for the document update..." // Optional placeholder text
                             />
                         </div>
                     </div>
+
                     <div className="input-row-buttons-risk-create">
                         {/* Generate File Button */}
                         <button
@@ -2115,7 +2359,7 @@ const RiskReviewPageBLRA = () => {
             {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
             {unusedPopup && (<UnusedControlsPopup generate={handleGenerateUnused} closeModal={closeUnused} cancel={cancelGenerateUnused} />)}
 
-            {showSiteDropdown && filteredSites.length > 0 && (
+            {showSiteDropdown && !readOnly && filteredSites.length > 0 && (
                 <ul
                     className="floating-dropdown"
                     style={{
@@ -2135,7 +2379,9 @@ const RiskReviewPageBLRA = () => {
                         </li>
                     ))}
                 </ul>
-            )}</div>
+            )}
+            {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+        </div>
     );
 };
 

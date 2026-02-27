@@ -14,8 +14,9 @@ const ApplicableControlHelp = ({ setClose }) => {
                 <div className="exec-table-group-2">
                     <div className="popup-table-wrapper-app-controls">
                         <p>
-                            Choose the controls that apply to this Risk Assessment in the applicable controls table. Only the controls you choose in this table will be visible in the risk assessment table when performing the risk assessment, this is remove controls that are in the system that are not applicable.
-                            If additional controls are required, you can add them to this table at any time, and they will then appear in the risk assessment.
+                            Use this section to select controls that are applicable to this risk assessment. The goal is to narrow down risk assessment controls to ones that are necessary for the execution of a specific risk assessment. If a control of interest does not appear in the options provided, select Suggest New to add controls that have not been captured in the system.
+                            <br /><br />
+                            Controls not included in this section will not be available through out the risk assessment.
                         </p>
                     </div>
                 </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "./Notifications.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -8,6 +8,20 @@ const NotificationsHomePage = ({ setClose, getCount }) => {
     const [notifications, setNotifications] = useState([]);
     const [selectedPill, setSelectedPill] = useState("Approvals");
     const navigate = useNavigate();
+
+    const modalRef = useRef(null);
+
+    useEffect(() => {
+        const onMouseDown = (e) => {
+            // if click is outside the popup -> close
+            if (modalRef.current && !modalRef.current.contains(e.target)) {
+                setClose(false);
+            }
+        };
+
+        document.addEventListener("mousedown", onMouseDown);
+        return () => document.removeEventListener("mousedown", onMouseDown);
+    }, [setClose]);
 
     useEffect(() => {
         const getNotifs = async () => {
@@ -154,6 +168,41 @@ const NotificationsHomePage = ({ setClose, getCount }) => {
                         }
                     }
 
+                    if (note.actionType === "publishApprove") {
+                        if (note.draftType === "IBRA") {
+                            targetPath = `/FrontendDMS/reviewIBRA/${note.actionId}/IBRA`
+                        }
+                        else if (note.draftType === "BLRA") {
+                            targetPath = `/FrontendDMS/reviewBLRA/${note.actionId}/BLRA`
+                        }
+                        else if (note.draftType === "JRA") {
+                            targetPath = `/FrontendDMS/reviewJRA/${note.actionId}/JRA`
+                        }
+                    }
+
+                    if (note.actionType === "signOffApprove") {
+                        if (note.draftType === "IBRA") {
+                            targetPath = `/FrontendDMS/reviewSOIBRA/${note.actionId}/IBRA`
+                        }
+                        else if (note.draftType === "BLRA") {
+                            targetPath = `/FrontendDMS/reviewSOBLRA/${note.actionId}/BLRA`
+                        }
+                        else if (note.draftType === "JRA") {
+                            targetPath = `/FrontendDMS/reviewSOJRA/${note.actionId}/JRA`
+                        }
+                    }
+
+                    if (note.actionType === "draftApprove") {
+                        if (note.draftType === "IBRA") {
+                            targetPath = `/FrontendDMS/riskIBRA/IBRA/${note.actionId}`
+                        }
+                        else if (note.draftType === "BLRA") {
+                            targetPath = `/FrontendDMS/riskBLRA/BLRA/${note.actionId}`
+                        }
+                        else if (note.draftType === "JRA") {
+                            targetPath = `/FrontendDMS/riskJRA/JRA/${note.actionId}`
+                        }
+                    }
                 } else if (note.actionLocation === "DDS") {
                     if (note.actionType === "suggestion") {
                         targetPath = `/FrontendDMS/adminApprover/${note.actionId}`;
@@ -170,19 +219,70 @@ const NotificationsHomePage = ({ setClose, getCount }) => {
                             targetPath = `/FrontendDMS/documentCreateSI/Special Instruction/${note.actionId}`
                         }
                     }
+
+                    if (note.actionType === "publishApprove") {
+                        if (note.draftType === "Procedure") {
+                            targetPath = `/FrontendDMS/review/${note.actionId}`
+                        }
+                        else if (note.draftType === "Standard") {
+                            targetPath = `/FrontendDMS/reviewStandard/${note.actionId}/standard`
+                        }
+                        else if (note.draftType === "Special") {
+                            targetPath = `/FrontendDMS/reviewSpecial/${note.actionId}/special`
+                        }
+                    }
+
+                    if (note.actionType === "signOffApprove") {
+                        if (note.draftType === "Procedure") {
+                            targetPath = `/FrontendDMS/reviewSOProcedure/${note.actionId}`
+                        }
+                        else if (note.draftType === "Standard") {
+                            targetPath = `/FrontendDMS/reviewSOStandards/${note.actionId}/standard`
+                        }
+                        else if (note.draftType === "Special") {
+                            targetPath = `/FrontendDMS/reviewSOSpecial/${note.actionId}/special`
+                        }
+                    }
+
+                    if (note.actionType === "draftApprove") {
+                        if (note.draftType === "Procedure") {
+                            targetPath = `/FrontendDMS/documentCreateProc/Procedure/${note.actionId}`
+                        }
+                        else if (note.draftType === "Standard") {
+                            targetPath = `/FrontendDMS/documentCreateStand/Standard/${note.actionId}`
+                        }
+                        else if (note.draftType === "Special") {
+                            targetPath = `/FrontendDMS/documentCreateSI/Special Instruction/${note.actionId}`
+                        }
+                    }
                 } else if (note.actionLocation === "DMS") {
                     targetPath = `/FrontendDMS/documentManage/${note.fileType}`;
                 } else if (note.actionLocation === "TMS") {
                     if (note.actionType === "draftShared") {
-                        targetPath = `/FrontendDMS/inductionCreation/${note.actionId}`;
+                        if (note.draftType === "Visitor Induction") {
+                            targetPath = `/FrontendDMS/inductionCreation/${note.actionId}`
+                        }
+                        else if (note.draftType === "Online Training Course") {
+                            targetPath = `/FrontendDMS/onlineCreateCourse/${note.actionId}`
+                        }
                     }
 
                     if (note.actionType === "draftApprove") {
-                        targetPath = `/FrontendDMS/inductionCreation/${note.actionId}`;
+                        if (note.draftType === "Visitor Induction") {
+                            targetPath = `/FrontendDMS/inductionCreation/${note.actionId}`;
+                        }
+                        else if (note.draftType === "Online Training Course") {
+                            targetPath = `/FrontendDMS/onlineCreateCourse/${note.actionId}`
+                        }
                     }
 
                     if (note.actionType === "publishApprove") {
-                        targetPath = `/FrontendDMS/inductionReview/${note.actionId}`;
+                        if (note.draftType === "Visitor Induction") {
+                            targetPath = `/FrontendDMS/inductionReview/${note.actionId}`;
+                        }
+                        else if (note.draftType === "Online Training Course") {
+                            targetPath = `/FrontendDMS/onlineReviewCourse/${note.actionId}`
+                        }
                     }
                 }
 
@@ -216,8 +316,8 @@ const NotificationsHomePage = ({ setClose, getCount }) => {
         : notifications.filter(n => n.type?.toLowerCase() === selectedPill.toLowerCase());
 
     return (
-        <div className="notifications-modal-container-home" onMouseLeave={() => setClose(false)}>
-            <div className="notifications-modal-box">
+        <div className="notifications-modal-container-home">
+            <div className="notifications-modal-box" ref={modalRef}>
                 <div className="notifications-modal-title">
                     <span>Notifications</span>
                     <div className="notifications-title-icons">

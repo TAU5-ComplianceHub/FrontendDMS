@@ -10,6 +10,8 @@ import "./RiskDocumentsIBRA.css";
 import PopupMenuPubFiles from "../../PublishedDocuments/PopupMenuPubFiles"
 import TopBar from "../../Notifications/TopBar";
 import DeletePopup from "../../FileInfo/DeletePopup";
+import { ToastContainer } from "react-toastify";
+import RiskSignedOffUploadPopup from "../SignedOffDocuments/RiskSignedOffUploadPopup";
 
 const RiskDocumentsIBRA = () => {
     const [files, setFiles] = useState([]); // State to hold the file data
@@ -23,6 +25,33 @@ const RiskDocumentsIBRA = () => {
     const [fileToDelete, setFileToDelete] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFileName, setSelectedFileName] = useState();
+    const [uploadID, setUploadID] = useState("");
+    const [uploadProcedurePDF, setUploadProcedurePDF] = useState(false);
+
+    const openPDFUpload = (rawId) => {
+        console.log("Raw ID received:", rawId);
+
+        // Safely extract the string if it comes through as an object
+        let stringId = rawId;
+        if (typeof rawId === 'object' && rawId !== null) {
+            // Checks for common MongoDB object formats or the file object itself
+            stringId = rawId.$oid || rawId._id || rawId.id || String(rawId);
+        }
+
+        setUploadID(stringId);
+        setUploadProcedurePDF(true);
+    }
+
+    const closePDFUpload = () => {
+        setUploadID("");
+        setUploadProcedurePDF(false);
+    }
+
+    const closePDFNavigate = () => {
+        setUploadID("");
+        setUploadProcedurePDF(false);
+        navigate("/FrontendDMS/signedOffIBRA")
+    }
 
     const navigate = useNavigate();
 
@@ -394,7 +423,7 @@ const RiskDocumentsIBRA = () => {
             td: (file) => (
                 <div className="popup-anchor">
                     <span>
-                        {removeFileExtension(file.formData.title)}
+                        {(file.formData.title)}
                     </span>
                     {(hoveredFileId === file._id) && (
                         <PopupMenuPubFiles
@@ -405,6 +434,7 @@ const RiskDocumentsIBRA = () => {
                             risk={true}
                             typeDoc={"ibra"}
                             id={file._id}
+                            openProcedurePopup={openPDFUpload}
                         />
                     )}
                 </div>
@@ -969,7 +999,9 @@ const RiskDocumentsIBRA = () => {
                 </div>
             )}
 
+            {uploadProcedurePDF && (<RiskSignedOffUploadPopup docID={uploadID} onClose={closePDFUpload} refresh={fetchFiles} closeNavigate={closePDFNavigate} type={"ibra"} />)}
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
+            <ToastContainer />
         </div >
     );
 };

@@ -10,6 +10,8 @@ import "./RiskDocumentsIBRA.css";
 import PopupMenuPubFiles from "../../PublishedDocuments/PopupMenuPubFiles"
 import TopBar from "../../Notifications/TopBar";
 import DeletePopup from "../../FileInfo/DeletePopup";
+import RiskSignedOffUploadPopup from "../SignedOffDocuments/RiskSignedOffUploadPopup";
+import { ToastContainer } from "react-toastify";
 
 const RiskDocumentsJRA = () => {
     const [files, setFiles] = useState([]);
@@ -23,6 +25,33 @@ const RiskDocumentsJRA = () => {
     const [fileToDelete, setFileToDelete] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFileName, setSelectedFileName] = useState();
+    const [uploadID, setUploadID] = useState("");
+    const [uploadProcedurePDF, setUploadProcedurePDF] = useState(false);
+
+    const openPDFUpload = (rawId) => {
+        console.log("Raw ID received:", rawId);
+
+        // Safely extract the string if it comes through as an object
+        let stringId = rawId;
+        if (typeof rawId === 'object' && rawId !== null) {
+            // Checks for common MongoDB object formats or the file object itself
+            stringId = rawId.$oid || rawId._id || rawId.id || String(rawId);
+        }
+
+        setUploadID(stringId);
+        setUploadProcedurePDF(true);
+    }
+
+    const closePDFUpload = () => {
+        setUploadID("");
+        setUploadProcedurePDF(false);
+    }
+
+    const closePDFNavigate = () => {
+        setUploadID("");
+        setUploadProcedurePDF(false);
+        navigate("/FrontendDMS/signedOffJRA")
+    }
 
     const navigate = useNavigate();
     const DEFAULT_SORT = { colId: "nr", direction: "asc" };
@@ -108,7 +137,7 @@ const RiskDocumentsJRA = () => {
 
     const allColumns = [
         { id: "nr", title: "Nr", thClass: "gen-th ibraGenNr", tdClass: "cent-values-gen gen-point", td: (f, i) => i + 1 },
-        { id: "name", title: "Document Name", thClass: "gen-th ibraGenFN", tdClass: "gen-point", onCellClick: (f) => setHoveredFileId(hoveredFileId === f._id ? null : f._id), td: (f) => (<div className="popup-anchor"><span>{(f.formData.title)}</span>{(hoveredFileId === f._id) && (<PopupMenuPubFiles file={f} isOpen={true} openDownloadModal={downloadFile} setHoveredFileId={setHoveredFileId} risk={true} typeDoc={"jra"} id={f._id} />)}</div>) },
+        { id: "name", title: "Document Name", thClass: "gen-th ibraGenFN", tdClass: "gen-point", onCellClick: (f) => setHoveredFileId(hoveredFileId === f._id ? null : f._id), td: (f) => (<div className="popup-anchor"><span>{(f.formData.title)}</span>{(hoveredFileId === f._id) && (<PopupMenuPubFiles file={f} isOpen={true} openDownloadModal={downloadFile} setHoveredFileId={setHoveredFileId} risk={true} typeDoc={"jra"} openProcedurePopup={openPDFUpload} id={f._id} />)}</div>) },
         { id: "version", title: "Version", thClass: "gen-th ibraGenVer", tdClass: "cent-values-gen gen-point", td: (f) => f.formData.version },
         { id: "status", title: "Document Status", thClass: "gen-th ibraGenStatus", tdClass: "cent-values-gen gen-point", td: (f) => getStatus(f.documentStatus) },
         { id: "firstPublishedBy", title: "First Published By", thClass: "gen-th ibraGenPB", tdClass: "cent-values-gen gen-point", td: (f) => f.publisher.username },
@@ -450,7 +479,9 @@ const RiskDocumentsJRA = () => {
                     })()}
                 </div>
             )}
+            {uploadProcedurePDF && (<RiskSignedOffUploadPopup docID={uploadID} onClose={closePDFUpload} refresh={fetchFiles} closeNavigate={closePDFNavigate} type={"jra"} />)}
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
+            <ToastContainer />
         </div >
     );
 };

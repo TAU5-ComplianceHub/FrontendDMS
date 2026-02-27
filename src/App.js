@@ -151,6 +151,32 @@ import StudentProfilePage from './components/OnlineTrainingModule/StudentProfile
 import JRAAttributes from './components/RiskRelated/JRAAttributes';
 import RiskDrafts from './components/RiskRelated/RiskDrafts/RiskDrafts';
 import DDSDrafts from './components/CreatePage/DDSDrafts/DDSDrafts';
+import MigrationPage from './components/SystemAdmin/MigrationPage';
+import TrainingDrafts from './components/TrainingManagement/Drafts/TrainingDrafts';
+import SignedOffProcedures from './components/CreatePage/SignedOffDocuments/SignedOffProcedures';
+import ReviewPageSOProcedure from './components/CreatePage/SignedOffDocuments/ReviewPageSOProcedure';
+import VersionHistorySOProcedure from './components/CreatePage/SignedOffDocuments/VersionHistorySOProcedure';
+import SignedOffStandards from './components/CreatePage/SignedOffDocuments/SignedOffStandards';
+import VersionHistorySOStandard from './components/CreatePage/SignedOffDocuments/VersionHistorySOStandard';
+import ReviewPageSOStandard from './components/CreatePage/SignedOffDocuments/ReviewPageSOStandard';
+import DeletedDocumentsSOStandard from './components/CreatePage/SignedOffDocuments/DeletedDocumentsSOStandard';
+import ReviewPageSOSpecial from './components/CreatePage/SignedOffDocuments/ReviewPageSOSpecial';
+import VersionHistorySOSpecial from './components/CreatePage/SignedOffDocuments/VersionHistorySOSpecial';
+import SignedOffSpecial from './components/CreatePage/SignedOffDocuments/SignedOffSpecial';
+import DeletedDocumentsSOSpecial from './components/CreatePage/SignedOffDocuments/DeletedDocumentsSOSpecial';
+import SignedOffIBRA from './components/RiskRelated/SignedOffDocuments/SignedOffIBRA';
+import ReviewPageSOIBRA from './components/RiskRelated/SignedOffDocuments/ReviewPageSOIBRA';
+import VersionHistorySOIBRA from './components/RiskRelated/SignedOffDocuments/VersionHistorySOIBRA';
+import DeletedDocumentsSOIBRA from './components/RiskRelated/SignedOffDocuments/DeletedDocumentsSOIBRA';
+import DeletedDocumentsSOBLRA from './components/RiskRelated/SignedOffDocuments/DeletedDocumentsSOBLRA';
+import SignedOffBLRA from './components/RiskRelated/SignedOffDocuments/SignedOffBLRA';
+import VersionHistorySOBLRA from './components/RiskRelated/SignedOffDocuments/VersionHistorySOBLRA';
+import ReviewPageSOBLRA from './components/RiskRelated/SignedOffDocuments/ReviewPageSOBLRA';
+import SignedOffJRA from './components/RiskRelated/SignedOffDocuments/SignedOffJRA';
+import DeletedDocumentsSOJRA from './components/RiskRelated/SignedOffDocuments/DeletedDocumentsSOJRA';
+import VersionHistorySOJRA from './components/RiskRelated/SignedOffDocuments/VersionHistorySOJRA';
+import ReviewPageSOJRA from './components/RiskRelated/SignedOffDocuments/ReviewPageSOJRA';
+import DeletedDocumentsSOProcedure from './components/CreatePage/SignedOffDocuments/DeletedDocumentsSOProcedure';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -368,6 +394,32 @@ function App() {
         <Route path="FrontendDMS/myNewTest" element={<JRAAttributes />} />
         <Route path="FrontendDMS/allRiskDrafts" element={<RiskDrafts />} />
         <Route path="FrontendDMS/allDDSDrafts" element={<DDSDrafts />} />
+        <Route path="FrontendDMS/allTMSDrafts" element={<TrainingDrafts />} />
+        <Route path="FrontendDMS/migrationPage" element={<MigrationPage />} />
+        <Route path="FrontendDMS/signedOffProcedures" element={<SignedOffProcedures />} />
+        <Route path='FrontendDMS/deletedSignedOffProcedures' element={<DeletedDocumentsSOProcedure />} />
+        <Route path="FrontendDMS/versionHistorySOProcedures/:id" element={<VersionHistorySOProcedure />} />
+        <Route path="FrontendDMS/reviewSOProcedure/:fileId" element={<ReviewPageSOProcedure />} />
+        <Route path="FrontendDMS/signedOffStandards" element={<SignedOffStandards />} />
+        <Route path='FrontendDMS/deletedSignedOffStandards' element={<DeletedDocumentsSOStandard />} />
+        <Route path="FrontendDMS/versionHistorySOStandards/:id" element={<VersionHistorySOStandard />} />
+        <Route path="FrontendDMS/reviewSOStandards/:fileId/:type" element={<ReviewPageSOStandard />} />
+        <Route path="FrontendDMS/signedOffSpecial" element={<SignedOffSpecial />} />
+        <Route path='FrontendDMS/deletedSignedOffSpecial' element={<DeletedDocumentsSOSpecial />} />
+        <Route path="FrontendDMS/versionHistorySOSpecial/:id" element={<VersionHistorySOSpecial />} />
+        <Route path="FrontendDMS/reviewSOSpecial/:fileId/:type" element={<ReviewPageSOSpecial />} />
+        <Route path="FrontendDMS/signedOffIBRA" element={<SignedOffIBRA />} />
+        <Route path='FrontendDMS/deletedSignedOffIBRA' element={<DeletedDocumentsSOIBRA />} />
+        <Route path="FrontendDMS/versionHistorySOIBRA/:id" element={<VersionHistorySOIBRA />} />
+        <Route path="FrontendDMS/reviewSOIBRA/:fileId/:type" element={<ReviewPageSOIBRA />} />
+        <Route path="FrontendDMS/signedOffBLRA" element={<SignedOffBLRA />} />
+        <Route path='FrontendDMS/deletedSignedOffBLRA' element={<DeletedDocumentsSOBLRA />} />
+        <Route path="FrontendDMS/versionHistorySOBLRA/:id" element={<VersionHistorySOBLRA />} />
+        <Route path="FrontendDMS/reviewSOBLRA/:fileId/:type" element={<ReviewPageSOBLRA />} />
+        <Route path="FrontendDMS/signedOffJRA" element={<SignedOffJRA />} />
+        <Route path='FrontendDMS/deletedSignedOffJRA' element={<DeletedDocumentsSOJRA />} />
+        <Route path="FrontendDMS/versionHistorySOJRA/:id" element={<VersionHistorySOJRA />} />
+        <Route path="FrontendDMS/reviewSOJRA/:fileId/:type" element={<ReviewPageSOJRA />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

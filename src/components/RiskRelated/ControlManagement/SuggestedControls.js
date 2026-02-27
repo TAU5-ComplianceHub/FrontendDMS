@@ -784,6 +784,26 @@ const SuggestedControls = () => {
         setShowPopup(true);
     }, [draftID, controls]);
 
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
+        // Assuming default sort is nr/asc. Change if your default differs.
+        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        return hasColumnFilters || hasSort;
+    }, [activeExcelFilters, sortConfig]);
+
+    const handleClearFilters = () => {
+        setActiveExcelFilters({});
+        setSortConfig({ colId: "nr", direction: "asc" });
+    };
+
+    const getFilterBtnClass = () => {
+        if (showResetButton) {
+            return "top-right-button-control-att-3";
+        }
+
+        return "top-right-button-control-att-2";
+    };
+
     return (
         <div className="risk-control-attributes-container">
             {isSidebarVisible && (
@@ -840,6 +860,18 @@ const SuggestedControls = () => {
                                 onClick={resetColumnWidths}
                             />
                         )}
+
+                        <FontAwesomeIcon
+                            icon={faFilter}
+                            className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                            title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
+                            style={{
+                                cursor: hasActiveFilters ? "pointer" : "default",
+                                color: hasActiveFilters ? "#002060" : "gray",
+                                userSelect: "none"
+                            }}
+                            onDoubleClick={handleClearFilters}
+                        />
 
                         {showColumnSelector && (
                             <div className="column-selector-popup" onMouseDown={e => e.stopPropagation()}>

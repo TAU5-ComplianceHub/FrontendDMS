@@ -460,7 +460,7 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
                                 style={{ marginLeft: "20px" }}
                                 onClick={decline}
                             >
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Decline`)}
+                                Decline
                             </button>
                         </div>
                     </div>

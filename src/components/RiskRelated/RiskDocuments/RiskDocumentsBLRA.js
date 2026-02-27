@@ -10,6 +10,8 @@ import "./RiskDocumentsIBRA.css";
 import PopupMenuPubFiles from "../../PublishedDocuments/PopupMenuPubFiles"
 import TopBar from "../../Notifications/TopBar";
 import DeletePopup from "../../FileInfo/DeletePopup";
+import { ToastContainer } from "react-toastify";
+import RiskSignedOffUploadPopup from "../SignedOffDocuments/RiskSignedOffUploadPopup";
 
 const RiskDocumentsBLRA = () => {
     const [files, setFiles] = useState([]);
@@ -23,6 +25,34 @@ const RiskDocumentsBLRA = () => {
     const [fileToDelete, setFileToDelete] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedFileName, setSelectedFileName] = useState();
+    const [uploadID, setUploadID] = useState("");
+    const [uploadProcedurePDF, setUploadProcedurePDF] = useState(false);
+
+    const openPDFUpload = (rawId) => {
+        console.log("Raw ID received:", rawId);
+
+        // Safely extract the string if it comes through as an object
+        let stringId = rawId;
+        if (typeof rawId === 'object' && rawId !== null) {
+            // Checks for common MongoDB object formats or the file object itself
+            stringId = rawId.$oid || rawId._id || rawId.id || String(rawId);
+        }
+
+        setUploadID(stringId);
+        setUploadProcedurePDF(true);
+    }
+
+    const closePDFUpload = () => {
+        setUploadID("");
+        setUploadProcedurePDF(false);
+    }
+
+    const closePDFNavigate = () => {
+        setUploadID("");
+        setUploadProcedurePDF(false);
+        navigate("/FrontendDMS/signedOffBLRA")
+    }
+
 
     const navigate = useNavigate();
 
@@ -278,9 +308,9 @@ const RiskDocumentsBLRA = () => {
             onCellClick: (file) => setHoveredFileId(hoveredFileId === file._id ? null : file._id),
             td: (file) => (
                 <div className="popup-anchor">
-                    <span>{removeFileExtension(file.formData.title)}</span>
+                    <span>{(file.formData.title)}</span>
                     {(hoveredFileId === file._id) && (
-                        <PopupMenuPubFiles file={file} isOpen={hoveredFileId === file._id} openDownloadModal={downloadFile} setHoveredFileId={setHoveredFileId} risk={true} typeDoc={"blra"} id={file._id} />
+                        <PopupMenuPubFiles file={file} isOpen={hoveredFileId === file._id} openDownloadModal={downloadFile} openProcedurePopup={openPDFUpload} setHoveredFileId={setHoveredFileId} risk={true} typeDoc={"blra"} id={file._id} />
                     )}
                 </div>
             )
@@ -661,7 +691,9 @@ const RiskDocumentsBLRA = () => {
                 </div>
             )}
 
+            {uploadProcedurePDF && (<RiskSignedOffUploadPopup docID={uploadID} onClose={closePDFUpload} refresh={fetchFiles} closeNavigate={closePDFNavigate} type={"blra"} />)}
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
+            <ToastContainer />
         </div >
     );
 };

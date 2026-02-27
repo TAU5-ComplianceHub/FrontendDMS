@@ -13,7 +13,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import LoadDraftPopup from "../CreatePage/LoadDraftPopup";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faMagicWandSparkles } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faCheckCircle, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faMagicWandSparkles } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import BurgerMenu from "../CreatePage/BurgerMenu";
 import SharePage from "../CreatePage/SharePage";
@@ -25,6 +25,7 @@ import SaveAsPopup from "../Popups/SaveAsPopup";
 import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
 import DraftPopup from "../Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 
 const CreatePageStandardsReview = () => {
   const navigate = useNavigate();
@@ -51,6 +52,17 @@ const CreatePageStandardsReview = () => {
   const [loadingAim, setLoadingAim] = useState(false);
   const [loadingScope, setLoadingScope] = useState(false);
   const [draftNote, setDraftNote] = useState(null);
+  const [readOnly, setReadOnly] = useState(false);
+  const [approval, setApproval] = useState(false);
+  const [inApproval, setInApproval] = useState(false);
+
+  const openApproval = () => {
+    setApproval(true);
+  }
+
+  const closeApproval = () => {
+    setApproval(false);
+  }
 
   const openDraftNote = () => {
     setDraftNote(true);
@@ -272,7 +284,7 @@ const CreatePageStandardsReview = () => {
         }
       })
     } else {
-      handleGeneratePDF();  // Call your function when the form is valid
+      openApproval();
     }
   };
 
@@ -284,25 +296,57 @@ const CreatePageStandardsReview = () => {
 
   const getNewAzureFileName = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/standard/getFile/${fileID}`);
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/fileGenDocs/standard/getFile/${fileID}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch file");
+
       const storedData = await response.json();
-      setAzureFN(storedData.files.azureFileName || "");
+      setAzureFN(storedData.files?.azureFileName || "");
+
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error("Error loading data:", error);
     }
   };
 
   const loadData = async (fileID) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/standard/getFile/${fileID}`);
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/fileGenDocs/standard/getFile/${fileID}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch file");
+
       const data = await response.json();
-      const storedData = data.files;
+      const storedData = data.files || {};
+      const readOnly = data.readOnly || false;
       // Update your states as needed:
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
       setUserIDs(storedData.userIDs || []);
       setFormData(storedData.formData || {});
       setFormData(prev => ({ ...prev }));
+      setInApproval(Boolean(data.statusApproval));
+      setReadOnly(readOnly);
       setTitleSet(true);
       setAzureFN(storedData.azureFileName || "");
     } catch (error) {
@@ -772,6 +816,98 @@ const CreatePageStandardsReview = () => {
     });
   };
 
+  const handlePublishApprovalFlow = async (approversValue) => {
+    const dataToStore = {
+      draftID: fileID,
+      approvers: approversValue
+    };
+
+    setLoading(true);
+    saveData(fileID);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/start-approval-stand-published`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+      const data = await response.json();
+
+      toast.success(`Standard Publishing Approval Started.`, {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+
+      if (!data.currentApprover) {
+        setReadOnly(true)
+      }
+
+      setInApproval(data.approvalStatus);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setLoading(false);
+    }
+  };
+
+  const handleApproveClick = () => {
+    const newErrors = validateForm();
+    setErrors(newErrors);
+
+
+    approveDraft();
+  };
+
+  const approveDraft = async () => {
+    const dataToStore = {
+      draftID: fileID
+    };
+
+    setLoading(true);
+    saveData(fileID);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/approve-published-stand`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+      const data = await response.json();
+
+      toast.success(`Standard Successfully Approved.`, {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+
+      setReadOnly(true);
+      setLoading(false);
+
+      if (data.fullyApproved) {
+        await handleGeneratePDF()
+      }
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setLoading(false);
+    }
+  };
+
   const sendUpdatedFormData = async (dataToStore, documentName) => {
     setLoading(true);
 
@@ -889,11 +1025,11 @@ const CreatePageStandardsReview = () => {
               <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
             </div>
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
-            </div>
+            </div>)}
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={openSaveAs} title="Save As">
                 {/* base floppy-disk, full size */}
                 <FontAwesomeIcon icon={faSave} />
@@ -904,21 +1040,23 @@ const CreatePageStandardsReview = () => {
                   color="gray"   /* or whatever contrast you need */
                 />
               </span>
-            </div>
+            </div>)}
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faRotateLeft} onClick={undoLastChange} title="Undo" />
-            </div>
+            </div>)}
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
-            </div>
+            </div>)}
 
-            {canIn(access, "DDS", ["systemAdmin", "contributor"]) && (
-              <div className="burger-menu-icon-risk-create-page-1">
-                <FontAwesomeIcon icon={faUpload} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" onClick={handleClick} />
-              </div>
-            )}
+            {!readOnly && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick} title="Publish" />
+            </div>)}
+
+            {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+            </div>)}
           </div>
 
           {/* This div creates the space in the middle */}
@@ -929,6 +1067,12 @@ const CreatePageStandardsReview = () => {
         </div>
 
         <div className={`scrollable-box`}>
+          {(readOnly && inApproval) && (<div className="input-row">
+            <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+              The draft is in the approval process and needs to be approved.
+            </div>
+          </div>)}
+
           <div className="input-row">
             <div className={`input-box-title ${errors.title ? "error-create" : ""}`}>
               <h3 className="font-fam-labels">Document Title <span className="required-field">*</span></h3>
@@ -939,6 +1083,7 @@ const CreatePageStandardsReview = () => {
                   name="title"
                   className="font-fam title-input"
                   value={formData.title}
+                  readOnly={readOnly}
                   onChange={handleInputChange}
                   placeholder="Title of your document (e.g. Working at Heights)"
                 />
@@ -958,31 +1103,37 @@ const CreatePageStandardsReview = () => {
                 className="aim-textarea font-fam expanding-textarea"
                 value={formData.aim}
                 onChange={handleInputChange}
+                readOnly={readOnly}
                 rows="5"   // Adjust the number of rows for initial height
                 placeholder="Insert the aim of the document here..." // Optional placeholder text
               />
-              {loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
-                <FontAwesomeIcon
-                  icon={faMagicWandSparkles}
-                  className="aim-textarea-icon-ibra"
-                  title="AI Rewrite"
-                  style={{ fontSize: "15px" }}
-                  onClick={() => AiRewriteAim()}
-                />
-              )}
 
-              <FontAwesomeIcon
-                icon={faRotateLeft}
-                className="aim-textarea-icon-ibra-undo"
-                title="Undo AI Rewrite"
-                onClick={() => undoAiRewrite('aim')}
-                style={{
-                  marginLeft: '8px',
-                  opacity: rewriteHistory.aim.length ? 1 : 0.3,
-                  cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
-                  fontSize: "15px"
-                }}
-              />
+              {!readOnly && (
+                <>
+                  {loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
+                    <FontAwesomeIcon
+                      icon={faMagicWandSparkles}
+                      className="aim-textarea-icon-ibra"
+                      title="AI Rewrite"
+                      style={{ fontSize: "15px" }}
+                      onClick={() => AiRewriteAim()}
+                    />
+                  )}
+
+                  <FontAwesomeIcon
+                    icon={faRotateLeft}
+                    className="aim-textarea-icon-ibra-undo"
+                    title="Undo AI Rewrite"
+                    onClick={() => undoAiRewrite('aim')}
+                    style={{
+                      marginLeft: '8px',
+                      opacity: rewriteHistory.aim.length ? 1 : 0.3,
+                      cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
+                      fontSize: "15px"
+                    }}
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -995,6 +1146,7 @@ const CreatePageStandardsReview = () => {
                 className="aim-textarea font-fam expanding-textarea"
                 value={formData.scope}
                 onChange={handleInputChange}
+                readOnly={readOnly}
 
                 onFocus={() => {
                   setErrors(prev => ({
@@ -1006,39 +1158,44 @@ const CreatePageStandardsReview = () => {
                 placeholder="Insert the scope of the document" // Optional placeholder text
               />
 
-              {loadingScope ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />)
-                : (
-                  <FontAwesomeIcon
-                    icon={faMagicWandSparkles}
-                    className="aim-textarea-icon-ibra"
-                    title="AI Rewrite"
-                    style={{ fontSize: "15px" }}
-                    onClick={() => AiRewriteScope()}
-                  />
-                )}
+              {!readOnly && (
+                <>
+                  {
+                    loadingScope ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />)
+                      : (
+                        <FontAwesomeIcon
+                          icon={faMagicWandSparkles}
+                          className="aim-textarea-icon-ibra"
+                          title="AI Rewrite"
+                          style={{ fontSize: "15px" }}
+                          onClick={() => AiRewriteScope()}
+                        />
+                      )}
 
-              <FontAwesomeIcon
-                icon={faRotateLeft}
-                className="aim-textarea-icon-ibra-undo"
-                title="Undo AI Rewrite"
-                onClick={() => undoAiRewrite('scope')}
-                style={{
-                  marginLeft: '8px',
-                  opacity: rewriteHistory.scope.length ? 1 : 0.3,
-                  cursor: rewriteHistory.scope.length ? 'pointer' : 'not-allowed',
-                  fontSize: "15px"
-                }}
-              />
+                  <FontAwesomeIcon
+                    icon={faRotateLeft}
+                    className="aim-textarea-icon-ibra-undo"
+                    title="Undo AI Rewrite"
+                    onClick={() => undoAiRewrite('scope')}
+                    style={{
+                      marginLeft: '8px',
+                      opacity: rewriteHistory.scope.length ? 1 : 0.3,
+                      cursor: rewriteHistory.scope.length ? 'pointer' : 'not-allowed',
+                      fontSize: "15px"
+                    }}
+                  />
+                </>
+              )}
             </div>
           </div>
 
-          <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
-          <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
-          <StandardsTable formData={formData} setFormData={setFormData} error={errors.standard} setErrors={setErrors} />
-          <ChapterTable formData={formData} setFormData={setFormData} />
-          <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
-          <SupportingDocumentTable formData={formData} setFormData={setFormData} />
-          <PicturesTable picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+          <AbbreviationTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
+          <TermTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
+          <StandardsTable readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.standard} setErrors={setErrors} />
+          <ChapterTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+          <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+          <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+          <PicturesTable readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
 
           <div className="input-row">
             <div className={`input-box-3 ${errors.reviewDate ? "error-create" : ""}`}>
@@ -1049,6 +1206,7 @@ const CreatePageStandardsReview = () => {
                 className="aim-textarea cent-create font-fam"
                 value={formData.reviewDate}
                 onChange={handleInputChange}
+                readOnly={readOnly}
                 placeholder="Insert the review period in months" // Optional placeholder text
               />
             </div>
@@ -1062,6 +1220,7 @@ const CreatePageStandardsReview = () => {
                 name="aim"
                 className="aim-textarea font-fam"
                 value={change}
+                readOnly={readOnly}
                 onChange={(e) => setChange(e.target.value)}
                 rows="4"   // Adjust the number of rows for initial height
                 placeholder="Insert the reason for the document update..." // Optional placeholder text
@@ -1090,6 +1249,7 @@ const CreatePageStandardsReview = () => {
         </div>
         {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={type} userID={userID} create={false} standard={true} />)}
         {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
+        {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       </div>
       <ToastContainer />
     </div>

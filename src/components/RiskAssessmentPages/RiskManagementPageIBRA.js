@@ -10,7 +10,7 @@ import ReferenceTable from "../CreatePage/ReferenceTable";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretLeft, faCaretRight, faInfo, faCalendarDays, faDownload } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretLeft, faCaretRight, faInfo, faCalendarDays, faDownload, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import TopBarDD from "../Notifications/TopBarDD";
 import AttendanceTable from "../RiskRelated/AttendanceTable";
@@ -36,6 +36,8 @@ import ControlPopupNote from "../Popups/ControlPopupNote";
 import UnusedControlsPopup from "../RiskRelated/UnusedControlsPopup";
 import ImportControlChanges from "../RiskRelated/ImportControlChanges";
 import ControlChangesPopup from "../RiskRelated/ControlManagement/ControlChangesPopup";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup"
+import UpdatedControlsAvailable from "../RiskRelated/ControlManagement/UpdatedControlsAvailable";
 
 const RiskManagementPageIBRA = () => {
     const navigate = useNavigate();
@@ -82,6 +84,20 @@ const RiskManagementPageIBRA = () => {
     const [controlsUpdatableLatest, setControlsUpdatableLatest] = useState([]);
     const [importSelections, setImportSelections] = useState({});
     const [highlightedRows, setHighlightedRows] = useState([]);
+    const [approval, setApproval] = useState(false);
+    const [inApproval, setInApproval] = useState(false);
+    const [unusedRelevantControlsHighlight, setUnusedRelevantControlsHighlight] = useState([]);
+    const [updatedControlsPopup, setUpdatedControlsPopup] = useState(false);
+    const shownUpdatedControlsForDraftRef = useRef(null);
+    const justLoadedDraftRef = useRef(false);
+
+    const openApproval = () => {
+        setApproval(true);
+    }
+
+    const closeApproval = () => {
+        setApproval(false);
+    }
 
     const openWorkflow = () => {
         setShowWorkflow(true);
@@ -418,9 +434,7 @@ const RiskManagementPageIBRA = () => {
                 }
             });
         } else {
-            if (riskType === "IBRA") {
-                handleIBRAPublish();  // Call your function when the form is valid
-            }
+            openApproval();
         }
     };
 
@@ -523,10 +537,10 @@ const RiskManagementPageIBRA = () => {
             });
 
             const { response: newText } = await response.json();
-            setLoadingScopeI(true);
+            setLoadingScopeI(false);
             setFormData(fd => ({ ...fd, scopeInclusions: newText }));
         } catch (error) {
-            setLoadingScopeI(true);
+            setLoadingScopeI(false);
             console.error('Error saving data:', error);
         }
     }
@@ -670,6 +684,9 @@ const RiskManagementPageIBRA = () => {
             console.log(`[Migration] Auto-generated ${normalized.relevantControls.length} relevant controls for old draft.`);
         }
 
+        normalized.execSummaryGen = normalized.execSummaryGen ?? "";
+        normalized.execSummary = normalized.execSummary ?? "";
+
         return normalized;
     }
 
@@ -701,7 +718,7 @@ const RiskManagementPageIBRA = () => {
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
             setUserIDs(storedData.userIDs || []);
-            setLockUser(storedData.lockOwner.username);
+            setLockUser(storedData.lockOwner?.username);
 
             const raw = storedData.formData || {};
             const patched = normalizeIbraFormData(raw);
@@ -713,10 +730,13 @@ const RiskManagementPageIBRA = () => {
 
             setReadOnly(readOnly);
             setOwner(isOwner)
+            setInApproval(Boolean(data.statusApproval));
 
             requestAnimationFrame(() => {
                 scrollableRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
             });
+
+            justLoadedDraftRef.current = true;
         } catch (error) {
             console.error('Error loading data:', error);
         }
@@ -1523,7 +1543,10 @@ const RiskManagementPageIBRA = () => {
 
     const cancelGenerateUnused = () => {
         setUnusedPopup(false);
-    }
+
+        const unused = getUnusedControls();
+        setUnusedRelevantControlsHighlight(unused.map(n => n.toLowerCase()));
+    };
 
     // Send data to backend to generate a Word document
     const handleGenerateIBRADocument = async () => {
@@ -1692,6 +1715,107 @@ const RiskManagementPageIBRA = () => {
             setTimeout(() => {
                 navigate('/FrontendDMS/generatedIBRADocs'); // Redirect to the generated file info page
             }, 1000);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
+    const handlePublishApprovalFlow = async (approversValue) => {
+        const dataToStore = {
+            draftID: loadedIDRef.current,
+            approvers: approversValue
+        };
+
+        setLoading(true);
+        updateData(userIDsRef.current);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/start-approval-ibra-draft`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`IBRA Publishing Approval Started.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            if (!data.currentApprover) {
+                setReadOnly(true)
+            }
+
+            setInApproval(data.approvalStatus);
+
+            setLoading(false);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
+    const handleApproveClick = () => {
+        const newErrors = validateForm();
+        setErrors(newErrors);
+
+        if (Object.keys(newErrors).length > 0) {
+            toast.error("Please fill in all required fields marked by a *", {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+        } else {
+            approveDraft();  // Call your function when the form is valid
+        }
+    };
+
+    const approveDraft = async () => {
+        const dataToStore = {
+            draftID: loadedIDRef.current
+        };
+
+        setLoading(true);
+        updateData(userIDsRef.current);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/approve-draft-ibra`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`IBRA Successfully Approved.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            setReadOnly(true);
+            setLoading(false);
+
+            if (data.fullyApproved) {
+                handleIBRAPublish()
+            }
         } catch (error) {
             console.error("Error generating document:", error);
             setLoading(false);
@@ -2063,7 +2187,7 @@ const RiskManagementPageIBRA = () => {
 
                 const normalizeVal = (v) => (v == null ? "" : String(v).trim());
                 const normalizeKey = (v) => normalizeVal(v).toLowerCase();
-                const fieldsToCompare = ["description", "critical", "act", "activation", "hierarchy", "cons", "quality", "performance", "category"];
+                const fieldsToCompare = ["description", "critical", "act", "activation", "hierarchy", "cons", "quality", "performance"];
 
                 // 2. Build Lookup Maps
                 // mapIdToLatest: Points ANY version ID (old or new) to the Latest Control Object
@@ -2228,6 +2352,14 @@ const RiskManagementPageIBRA = () => {
                     setControlsUpdatableLatest(latestList);
                     setImportSelections(defaultSelections);
 
+                    if (
+                        justLoadedDraftRef.current &&
+                        shownUpdatedControlsForDraftRef.current !== draftId
+                    ) {
+                        shownUpdatedControlsForDraftRef.current = draftId;
+                        setUpdatedControlsPopup(true);
+                        justLoadedDraftRef.current = false;
+                    }
                 } else {
                     setDiffsToImport([]);
                     setControlsUpdatableCurrent([]);
@@ -2495,6 +2627,70 @@ const RiskManagementPageIBRA = () => {
         }, 2000);
     };
 
+
+    const getUnusedControls = () => {
+        const relevant = formData.relevantControls || [];
+        if (relevant.length === 0) return [];
+
+        const definedControlNames = relevant
+            .map(r => (r?.control ?? "").toString().trim())
+            .filter(Boolean);
+
+        const usedControlNames = new Set();
+        (formData.ibra || []).forEach(row => {
+            if (Array.isArray(row.controls)) {
+                row.controls.forEach(c => {
+                    const name = typeof c === "string" ? c : c?.control;
+                    if (name) usedControlNames.add(String(name).trim());
+                });
+            }
+        });
+
+        return definedControlNames.filter(name => !usedControlNames.has(name));
+    };
+
+    useEffect(() => {
+        if (!unusedRelevantControlsHighlight?.length) return;
+
+        const relevant = formData.relevantControls || [];
+        const ibraRows = formData.ibra || [];
+
+        // Collect all used controls from IBRA
+        const usedControlNames = new Set();
+
+        ibraRows.forEach(row => {
+            if (Array.isArray(row.controls)) {
+                row.controls.forEach(c => {
+                    const name = typeof c === "string" ? c : c?.control;
+                    if (name) {
+                        usedControlNames.add(String(name).trim().toLowerCase());
+                    }
+                });
+            }
+        });
+
+        // Remove any highlighted control that is now used
+        const updatedHighlights = unusedRelevantControlsHighlight.filter(
+            ctrlName => !usedControlNames.has(ctrlName.toLowerCase())
+        );
+
+        if (updatedHighlights.length !== unusedRelevantControlsHighlight.length) {
+            setUnusedRelevantControlsHighlight(updatedHighlights);
+        }
+
+    }, [formData.ibra, unusedRelevantControlsHighlight]);
+
+    const closeUpdatedControlsPopup = () => {
+        setUpdatedControlsPopup(false);
+        justLoadedDraftRef.current = false;
+    };
+
+    const importUpdatedControlsFromDraftLoad = () => {
+        setUpdatedControlsPopup(false);
+        justLoadedDraftRef.current = false;
+        openImportPopup(); // same function used by Fetch Controls button
+    };
+
     return (
         <div className="risk-create-container">
             {isSidebarVisible && (
@@ -2523,6 +2719,15 @@ const RiskManagementPageIBRA = () => {
                                 <div className="button-content">
                                     <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
                                     <span className="button-text">Ready for Approval</span>
+                                </div>
+                            </button>
+                        )}
+
+                        {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
+                            <button className="but-um" onClick={() => navigate('/FrontendDMS/signedOffIBRA')}>
+                                <div className="button-content">
+                                    <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
+                                    <span className="button-text">Signed Off</span>
                                 </div>
                             </button>
                         )}
@@ -2599,13 +2804,15 @@ const RiskManagementPageIBRA = () => {
                             </div>
                         )}
 
-                        {(canIn(access, "RMS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
-                            <div className="burger-menu-icon-risk-create-page-1">
-                                <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
-                            </div>
-                        )}
+                        {!readOnly && !inApproval && owner && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
+                        </div>)}
 
-                        {(!readOnly && owner) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {inApproval && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        </div>)}
+
+                        {(!readOnly && owner && !inApproval) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon
                                 icon={faDownload}
                                 title={importIconTitle}
@@ -2627,9 +2834,15 @@ const RiskManagementPageIBRA = () => {
                 </div>
 
                 <div className={`scrollable-box-risk-create`} ref={scrollableRef}>
-                    {readOnly && (<div className="input-row">
+                    {(readOnly && !inApproval) && (<div className="input-row">
                         <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
                             The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
+                        </div>
+                    </div>)}
+
+                    {(readOnly && inApproval) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the approval process and needs to be approved.
                         </div>
                     </div>)}
 
@@ -2921,6 +3134,7 @@ const RiskManagementPageIBRA = () => {
                         globalControls={allSystemControls}
                         onControlRename={handleControlRename}
                         isCollapsed={formData.isRelevantControlsCollapsed}
+                        highlightedControlNames={unusedRelevantControlsHighlight}
                     />
 
                     <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
@@ -2984,6 +3198,14 @@ const RiskManagementPageIBRA = () => {
             {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
             {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
             {importPopup && (<ControlChangesPopup importNew={importNew} newData={controlsUpdatableLatest} prevData={controlsUpdatableCurrent} onClose={handleImportCancel} />)}
+            {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+            {updatedControlsPopup && owner && !inApproval && hasControlUpdates && (
+                <UpdatedControlsAvailable
+                    close={closeUpdatedControlsPopup}
+                    importControls={importUpdatedControlsFromDraftLoad}
+                    loading={loading}
+                />
+            )}
         </div>
     );
 };

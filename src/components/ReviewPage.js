@@ -20,11 +20,12 @@ import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import LoadDraftPopup from "./CreatePage/LoadDraftPopup";
 import SaveAsPopup from "./Popups/SaveAsPopup";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faRotateRight, faSave, faPen, faUpload } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faCheckCircle, faRotateLeft, faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faRotateRight, faSave, faPen, faUpload } from '@fortawesome/free-solid-svg-icons';
 import TopBarDD from "./Notifications/TopBarDD";
 import SupportingDocumentTable from "./RiskRelated/SupportingDocumentTable";
 import DraftPopup from "./Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../utils/auth";
+import ApproversPopup from "./VisitorsInduction/InductionCreation/ApproversPopup";
 
 const ReviewPage = () => {
     const navigate = useNavigate();
@@ -55,6 +56,17 @@ const ReviewPage = () => {
     const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
     const [draftNote, setDraftNote] = useState(null);
     const procedureTableRef = useRef(null);
+    const [readOnly, setReadOnly] = useState(false);
+    const [approval, setApproval] = useState(false);
+    const [inApproval, setInApproval] = useState(false);
+
+    const openApproval = () => {
+        setApproval(true);
+    }
+
+    const closeApproval = () => {
+        setApproval(false);
+    }
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -154,11 +166,26 @@ const ReviewPage = () => {
 
     const getNewAzureFileName = async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api//fileGenDocs/getFile/${fileID}`);
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/fileGenDocs//getFile/${fileID}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch file");
+
             const storedData = await response.json();
-            setAzureFN(storedData.files.azureFileName || "");
+            setAzureFN(storedData.files?.azureFileName || "");
+
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error("Error loading data:", error);
         }
     };
 
@@ -339,15 +366,31 @@ const ReviewPage = () => {
                 }
             })
         } else {
-            handleGeneratePDF();  // Call your function when the form is valid
+            openApproval();
         }
     };
 
     const loadData = async (fileID) => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/getFile/${fileID}`);
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/fileGenDocs/getFile/${fileID}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            if (!response.ok) throw new Error("Failed to fetch file");
+
             const data = await response.json();
-            const storedData = data.files;
+            const storedData = data.files || {};
+            const readOnly = data.readOnly || false;
+
             // Update your states as needed:
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
@@ -356,6 +399,8 @@ const ReviewPage = () => {
             setUsedEquipment(storedData.usedEquipment || []);
             setUsedMobileMachines(storedData.usedMobileMachine || []);
             setUsedMaterials(storedData.usedMaterials || []);
+            setInApproval(Boolean(data.statusApproval));
+            setReadOnly(readOnly);
             const rawForm = storedData.formData || {};
             const normalizedForm = {
                 ...rawForm,
@@ -850,6 +895,99 @@ const ReviewPage = () => {
         });
     };
 
+
+    const handlePublishApprovalFlow = async (approversValue) => {
+        const dataToStore = {
+            draftID: fileID,
+            approvers: approversValue
+        };
+
+        setLoading(true);
+        saveData(fileID);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/start-approval-proc-published`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`Procedure Publishing Approval Started.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            if (!data.currentApprover) {
+                setReadOnly(true)
+            }
+
+            setInApproval(data.approvalStatus);
+
+            setLoading(false);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
+    const handleApproveClick = () => {
+        const newErrors = validateForm();
+        setErrors(newErrors);
+
+
+        approveDraft();
+    };
+
+    const approveDraft = async () => {
+        const dataToStore = {
+            draftID: fileID
+        };
+
+        setLoading(true);
+        saveData(fileID);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/approve-published-proc`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`Procedure Successfully Approved.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            setReadOnly(true);
+            setLoading(false);
+
+            if (data.fullyApproved) {
+                await handleGeneratePDF()
+            }
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
     const sendUpdatedFormData = async (dataToStore, documentName) => {
         setLoading(true);
 
@@ -976,11 +1114,11 @@ const ReviewPage = () => {
                             <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
                         </div>
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={openSaveAs} title="Save As">
                                 {/* base floppy-disk, full size */}
                                 <FontAwesomeIcon icon={faSave} />
@@ -991,21 +1129,23 @@ const ReviewPage = () => {
                                     color="gray"   /* or whatever contrast you need */
                                 />
                             </span>
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faRotateLeft} onClick={undoLastChange} title="Undo" />
-                        </div>
+                        </div>)}
 
-                        <div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
-                        </div>
+                        </div>)}
 
-                        {canIn(access, "DDS", ["systemAdmin", "contributor"]) && (
-                            <div className="burger-menu-icon-risk-create-page-1">
-                                <FontAwesomeIcon icon={faUpload} onClick={handleClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
-                            </div>
-                        )}
+                        {!readOnly && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick} title="Publish" />
+                        </div>)}
+
+                        {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        </div>)}
                     </div>
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
@@ -1015,6 +1155,12 @@ const ReviewPage = () => {
                 </div>
 
                 <div className={`scrollable-box`}>
+                    {(readOnly && inApproval) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the approval process and needs to be approved.
+                        </div>
+                    </div>)}
+
                     <div className="input-row">
                         <div className={`review-page-input-box-title ${errors.title ? "error-create" : ""}`}>
                             <h3 className="font-fam-labels">Document Title <span className="required-field">*</span></h3>
@@ -1023,13 +1169,13 @@ const ReviewPage = () => {
                                     name="title"
                                     className="font-fam title-input-review-page"
                                     value={formData.title + " " + formData.documentType}
-                                    readOnly
+                                    readOnly={readOnly}
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <DocumentSignaturesTable rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
+                    <DocumentSignaturesTable readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
 
                     <div className="input-row">
                         <div className={`input-box-aim-cp ${errors.aim ? "error-create" : ""}`}>
@@ -1039,6 +1185,7 @@ const ReviewPage = () => {
                                 name="aim"
                                 className="aim-textarea font-fam"
                                 value={formData.aim}
+                                readOnly={readOnly}
                                 onChange={handleInputChange}
                                 rows="5"   // Adjust the number of rows for initial height
                                 placeholder="Insert the aim of the document here..." // Optional placeholder text
@@ -1055,6 +1202,7 @@ const ReviewPage = () => {
                                 name="scope"
                                 className="aim-textarea font-fam expanding-textarea"
                                 value={formData.scope}
+                                readOnly={readOnly}
                                 onChange={handleInputChange}
                                 rows="5"   // Adjust the number of rows for initial height
                                 placeholder="Insert the scope of the document" // Optional placeholder text
@@ -1062,17 +1210,17 @@ const ReviewPage = () => {
                         </div>
                     </div>
 
-                    <PPETable formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
-                    <HandToolTable formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
-                    <EquipmentTable formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
-                    <MobileMachineTable formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
-                    <MaterialsTable formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
-                    <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
-                    <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
-                    <ProcedureTable ref={procedureTableRef} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
-                    <ChapterTable formData={formData} setFormData={setFormData} />
-                    <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
-                    <SupportingDocumentTable formData={formData} setFormData={setFormData} />
+                    <PPETable readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
+                    <HandToolTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
+                    <EquipmentTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
+                    <MobileMachineTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
+                    <MaterialsTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
+                    <AbbreviationTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
+                    <TermTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
+                    <ProcedureTable readOnly={readOnly} ref={procedureTableRef} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
+                    <ChapterTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+                    <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
 
                     <div className={`input-row`} style={{ marginTop: "10px" }}>
                         <div className={`input-box-3-review ${errors.reviewDate ? "error-create" : ""}`}>
@@ -1080,6 +1228,7 @@ const ReviewPage = () => {
                             <input
                                 type="number"
                                 name="reviewDate"
+                                readOnly={readOnly}
                                 className="aim-textarea cent-create font-fam"
                                 value={formData.reviewDate}
                                 onChange={handleInputChange}
@@ -1088,7 +1237,7 @@ const ReviewPage = () => {
                         </div>
                     </div>
 
-                    <PicturesTable picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+                    <PicturesTable readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
 
                     <div className="input-row">
                         <div className={`input-box-aim-cp ${errors.change ? "error-create" : ""}`}>
@@ -1096,6 +1245,7 @@ const ReviewPage = () => {
                             <textarea
                                 spellcheck="true"
                                 name="aim"
+                                readOnly={readOnly}
                                 className="aim-textarea font-fam"
                                 value={change}
                                 onChange={(e) => setChange(e.target.value)}
@@ -1128,6 +1278,7 @@ const ReviewPage = () => {
                 </div>
             </div>
             <ToastContainer />
+            {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
         </div>
     );
 };

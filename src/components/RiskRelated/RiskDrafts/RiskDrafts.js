@@ -106,7 +106,7 @@ const RiskDrafts = () => {
         const q = query.trim().toLowerCase();
 
         return drafts.filter(d => {
-            const matchesQuery = !q || (d?.formData?.courseTitle || '').toLowerCase().includes(q);
+            const matchesQuery = !q || (d?.formData?.title || '').toLowerCase().includes(q);
 
             // Excel Filters
             let excelMatch = true;
@@ -221,8 +221,11 @@ const RiskDrafts = () => {
         const th = e.target.closest("th");
         const rect = th.getBoundingClientRect();
 
-        const allValues = Array.from(new Set(drafts.map(d => getRawValue(d, colId)))).sort();
+        // Use cross-filtering helper here
+        const allValues = getAvailableOptions(colId);
         const currentFilter = activeExcelFilters[colId];
+
+        // If there's an active filter, use it. Otherwise, default to all available cross-filtered values.
         const initialSelected = currentFilter ? new Set(currentFilter) : new Set(allValues);
 
         setExcelSelected(initialSelected);
@@ -287,6 +290,28 @@ const RiskDrafts = () => {
 
     const getFilterBtnClass = () => {
         return "top-right-button-control-att";
+    };
+
+    // Helper to calculate available options for a column (Cross-Filtering)
+    const getAvailableOptions = (targetColId) => {
+        const q = query.trim().toLowerCase();
+        let filtered = drafts;
+
+        // 1. Apply the main table search query
+        if (q) {
+            filtered = filtered.filter(d => (d?.formData?.title || '').toLowerCase().includes(q));
+        }
+
+        // 2. Apply all Excel filters EXCEPT the target column
+        for (const [colId, selectedSet] of Object.entries(activeExcelFilters)) {
+            if (colId === targetColId) continue;
+            if (!selectedSet) continue;
+
+            filtered = filtered.filter(d => selectedSet.has(getRawValue(d, colId)));
+        }
+
+        // Return unique, sorted options
+        return Array.from(new Set(filtered.map(d => getRawValue(d, targetColId)))).sort();
     };
 
     return (
@@ -372,7 +397,7 @@ const RiskDrafts = () => {
                                             {(sortBy === "name" || activeExcelFilters["name"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
                                         </th>
                                         <th className="gen-th ibraGenPB" style={{ width: "15%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("draftType", e)}>
-                                            Draft Type
+                                            Module
                                             {(sortBy === "draftType" || activeExcelFilters["draftType"]) && <FontAwesomeIcon icon={faFilter} className="th-filter-icon" />}
                                         </th>
                                         <th className="gen-th ibraGenVer" style={{ width: "15%", cursor: "pointer" }} onClick={(e) => openExcelFilterPopup("createdBy", e)}>
@@ -394,22 +419,22 @@ const RiskDrafts = () => {
                                     {!isLoading && drafts.length > 0 && filteredDrafts.length > 0 && (
                                         displayDrafts
                                             .map((item, index) => (
-                                                <tr key={item._id} style={{ backgroundColor: item.approvalState ? "#7EAC89" : "transparent", fontSize: "15px", cursor: "default" }} className="load-draft-td">
-                                                    <td style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial", textAlign: "center" }}>
+                                                <tr key={item._id} style={{ backgroundColor: item.approvalState ? "" : "transparent", fontSize: "15px", cursor: "default" }} className="load-draft-td">
+                                                    <td style={{ color: item.approvalState ? "black" : "black", fontFamily: "Arial", textAlign: "center" }}>
                                                         {index + 1}
                                                     </td>
-                                                    <td style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial" }}>{`${item.formData.title}`}</td>
+                                                    <td style={{ color: item.approvalState ? "black" : "black", fontFamily: "Arial" }}>{`${item.formData.title}`}</td>
 
-                                                    <td className="cent-draft-class" style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial" }}>
+                                                    <td className="cent-draft-class" style={{ color: item.approvalState ? "black" : "black", fontFamily: "Arial" }}>
                                                         {item.draftType}
                                                     </td>
-                                                    <td className="cent-draft-class" style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial" }}>
+                                                    <td className="cent-draft-class" style={{ color: item.approvalState ? "black" : "black", fontFamily: "Arial" }}>
                                                         {item.creator?.username || "Unknown"}
                                                     </td>
-                                                    <td style={{ color: item.approvalState ? "white" : "black", textAlign: "center", fontFamily: "Arial" }}>
+                                                    <td style={{ color: item.approvalState ? "black" : "black", textAlign: "center", fontFamily: "Arial" }}>
                                                         {formatDateTime(item.dateCreated)}
                                                     </td>
-                                                    <td style={{ color: item.approvalState ? "white" : "black", textAlign: "center", fontFamily: "Arial" }}>
+                                                    <td style={{ color: item.approvalState ? "black" : "black", textAlign: "center", fontFamily: "Arial" }}>
                                                         {item.lockActive ? "Active" : item.dateUpdated ? formatDateTime(item.dateUpdated) : "Not Updated Yet"}
                                                     </td>
                                                     <td className="load-draft-delete" >
@@ -418,7 +443,7 @@ const RiskDrafts = () => {
                                                             style={{ width: "100%" }}
                                                             onClick={(e) => { e.stopPropagation(); transferOwnership(item._id, item.formData.title, item?.creator?.username, item?.creator?._id, item.draftType, item) }}
                                                         >
-                                                            <FontAwesomeIcon icon={faEdit} title="Manage Ownership" style={{ color: item.approvalState ? "white" : "black" }} />
+                                                            <FontAwesomeIcon icon={faEdit} title="Manage Ownership" style={{ color: item.approvalState ? "black" : "black" }} />
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -465,42 +490,116 @@ const RiskDrafts = () => {
                         <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "asc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "asc")}>Sort A to Z</button>
                         <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "desc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "desc")}>Sort Z to A</button>
                     </div>
+
                     <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+
                     {(() => {
                         const colId = excelFilter.colId;
-                        const allValues = Array.from(new Set(drafts.map(d => getRawValue(d, colId)))).sort();
-                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
-                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
 
-                        const allSelected =
-                            allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                        // Grab context-aware values for this column
+                        const allValues = getAvailableOptions(colId);
+
+                        // Filter items down by the popup's search bar
+                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
+
+                        // Check if all *currently visible* items are selected
+                        const isAllVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
 
                         const toggleAll = (checked) => {
-                            setExcelSelected(() => {
-                                if (checked) return new Set(allValues); // select everything
-                                return new Set();                      // clear everything
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) {
+                                    visibleValues.forEach(v => next.add(v)); // Select all visible
+                                } else {
+                                    visibleValues.forEach(v => next.delete(v)); // Deselect all visible
+                                }
+                                return next;
                             });
                         };
 
-                        const toggleValue = (v) => setExcelSelected(prev => { const next = new Set(prev); if (next.has(v)) next.delete(v); else next.add(v); return next; });
+                        const toggleValue = (v) => setExcelSelected(prev => {
+                            const next = new Set(prev);
+                            if (next.has(v)) next.delete(v);
+                            else next.add(v);
+                            return next;
+                        });
 
                         const onOk = () => {
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
-                            setActiveExcelFilters(prev => { const next = { ...prev }; if (isAllSelected) delete next[colId]; else next[colId] = excelSelected; return next; });
+                            let finalSelection = new Set(excelSelected);
+
+                            // If the user typed a search, ONLY apply changes to the visible items
+                            // This drops any hidden items from the selection.
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+
+                            const selectedArr = Array.from(finalSelection);
+
+                            // Check if this is a "Select All" (Reset) scenario
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
+
+                            setActiveExcelFilters(prev => {
+                                const next = { ...prev };
+                                if (isTotalReset) {
+                                    delete next[colId]; // Clear filter entirely
+                                } else {
+                                    next[colId] = finalSelection; // Save targeted selection
+                                }
+                                return next;
+                            });
+
+                            setExcelFilter(prev => ({ ...prev, open: false }));
+                        };
+
+                        const onCancel = () => {
                             setExcelFilter(prev => ({ ...prev, open: false }));
                         };
 
                         return (
                             <>
                                 <div className="excel-filter-list">
-                                    <label className="excel-filter-item"><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={allSelected} onChange={(e) => toggleAll(e.target.checked)} /></span><span className="excel-filter-text">(Select All)</span></label>
+                                    <label className="excel-filter-item">
+                                        <span className="excel-filter-checkbox">
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-excel-attend"
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
+                                            />
+                                        </span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
+                                    </label>
+
                                     {visibleValues.map(v => (
-                                        <label className="excel-filter-item" key={String(v)}><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={excelSelected.has(v)} onChange={() => toggleValue(v)} /></span><span className="excel-filter-text">{v}</span></label>
+                                        <label className="excel-filter-item" key={String(v)}>
+                                            <span className="excel-filter-checkbox">
+                                                <input
+                                                    type="checkbox"
+                                                    className="checkbox-excel-attend"
+                                                    checked={excelSelected.has(v)}
+                                                    onChange={() => toggleValue(v)}
+                                                />
+                                            </span>
+                                            <span className="excel-filter-text">{v}</span>
+                                        </label>
                                     ))}
+
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="excel-filter-actions">
                                     <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
-                                    <button type="button" className="excel-filter-btn-cnc" onClick={() => setExcelFilter(prev => ({ ...prev, open: false }))}>Cancel</button>
+                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
                                 </div>
                             </>
                         );

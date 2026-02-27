@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PopupMenuPubFiles.css";
 
-const PopupMenuPubFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, type, risk = false, typeDoc = "", id = null }) => {
+const PopupMenuPubFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, type, risk = false, typeDoc = "", id = null, openProcedurePopup }) => {
     const navigate = useNavigate();
     let route;
     let verRoute;
@@ -69,6 +69,18 @@ const PopupMenuPubFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, 
                     )}
                     <ul>
                         <li onClick={() => navigate(verRoute)}>Version History</li>
+                    </ul>
+                    <ul>
+                        <li onClick={() => {
+                            let safeId = file._id;
+                            if (typeof file._id === 'object' && file._id !== null) {
+                                safeId = file._id.$oid || file._id.toString();
+                            }
+
+                            console.log("2. Safe ID being sent:", safeId);
+                            openProcedurePopup(safeId);
+                        }}>
+                            Upload Signed Off Version</li>
                     </ul>
                 </div>
             )}

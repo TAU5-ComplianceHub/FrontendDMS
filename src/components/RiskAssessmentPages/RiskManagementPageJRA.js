@@ -10,7 +10,7 @@ import ReferenceTable from "../CreatePage/ReferenceTable";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faQuestionCircle, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faTeeth, faTriangleCircleSquare, faTriangleExclamation, faUserTie, faHardHat, faMagicWandSparkles, faCircle, faPen, faSave, faArrowLeft, faArrowUp, faCaretLeft, faCaretRight, faHelicopter, faInfo, faCalendarDays } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretRight, faCaretLeft, faInfo, faCalendarDays, faDownload, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import TopBarDD from "../Notifications/TopBarDD";
 import AttendanceTable from "../RiskRelated/AttendanceTable";
@@ -36,6 +36,7 @@ import DraftPopup from "../Popups/DraftPopup";
 import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 
 const RiskManagementPageJRA = () => {
     const navigate = useNavigate();
@@ -73,6 +74,16 @@ const RiskManagementPageJRA = () => {
     const [lockUser, setLockUser] = useState(null);
     const scrollableRef = useRef(null);
     const [owner, setOwner] = useState(false);
+    const [approval, setApproval] = useState(false);
+    const [inApproval, setInApproval] = useState(false);
+
+    const openApproval = () => {
+        setApproval(true);
+    }
+
+    const closeApproval = () => {
+        setApproval(false);
+    }
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -372,7 +383,7 @@ const RiskManagementPageJRA = () => {
             return;
         }
 
-        handleJRAPublish();
+        openApproval();
     }
 
     const loadData = async (loadID) => {
@@ -408,7 +419,8 @@ const RiskManagementPageJRA = () => {
             setUsedMobileMachines(storedData.usedMobileMachine || []);
             setUsedMaterials(storedData.usedMaterials || []);
             setUserIDs(storedData.userIDs || []);
-            setLockUser(storedData.lockOwner.username);
+            setLockUser(storedData.lockOwner?.username);
+            setInApproval(Boolean(data.statusApproval));
 
             setFormData(storedData.formData || {});
             setFormData(prev => ({ ...prev }));
@@ -1215,6 +1227,107 @@ const RiskManagementPageJRA = () => {
         }
     };
 
+    const handlePublishApprovalFlow = async (approversValue) => {
+        const dataToStore = {
+            draftID: loadedIDRef.current,
+            approvers: approversValue
+        };
+
+        setLoading(true);
+        updateData(userIDsRef.current);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/start-approval-jra-draft`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`JRA Publishing Approval Started.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            if (!data.currentApprover) {
+                setReadOnly(true)
+            }
+
+            setInApproval(data.approvalStatus);
+
+            setLoading(false);
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
+    const handleApproveClick = () => {
+        const newErrors = validateForm();
+        setErrors(newErrors);
+
+        if (Object.keys(newErrors).length > 0) {
+            toast.error("Please fill in all required fields marked by a *", {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+        } else {
+            approveDraft();  // Call your function when the form is valid
+        }
+    };
+
+    const approveDraft = async () => {
+        const dataToStore = {
+            draftID: loadedIDRef.current
+        };
+
+        setLoading(true);
+        updateData(userIDsRef.current);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/approve-draft-jra`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate document");
+            const data = await response.json();
+
+            toast.success(`JRA Successfully Approved.`, {
+                closeButton: true,
+                autoClose: 800, // 1.5 seconds
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            setReadOnly(true);
+            setLoading(false);
+
+            if (data.fullyApproved) {
+                handleJRAPublish()
+            }
+        } catch (error) {
+            console.error("Error generating document:", error);
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (riskId === "new") {
             return;
@@ -1252,6 +1365,15 @@ const RiskManagementPageJRA = () => {
                                 <div className="button-content">
                                     <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
                                     <span className="button-text">Ready for Approval</span>
+                                </div>
+                            </button>
+                        )}
+
+                        {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
+                            <button className="but-um" onClick={() => navigate('/FrontendDMS/signedOffJRA')}>
+                                <div className="button-content">
+                                    <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
+                                    <span className="button-text">Signed Off</span>
                                 </div>
                             </button>
                         )}
@@ -1328,11 +1450,13 @@ const RiskManagementPageJRA = () => {
                             </div>
                         )}
 
-                        {(canIn(access, "RMS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
-                            <div className="burger-menu-icon-risk-create-page-1">
-                                <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
-                            </div>
-                        )}
+                        {!readOnly && !inApproval && owner && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
+                        </div>)}
+
+                        {inApproval && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        </div>)}
                     </div>
 
                     {isSaveMenuOpen && (<SavePopup isOpen={isSaveMenuOpen} closeSaveMenu={closeSaveMenu} save={handleSave} openSaveAs={openSaveAs} />)}
@@ -1345,9 +1469,15 @@ const RiskManagementPageJRA = () => {
                 </div>
 
                 <div className={`scrollable-box-risk-create`} ref={scrollableRef}>
-                    {readOnly && (<div className="input-row">
+                    {(readOnly && !inApproval) && (<div className="input-row">
                         <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
                             The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
+                        </div>
+                    </div>)}
+
+                    {(readOnly && inApproval) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the approval process and needs to be approved.
                         </div>
                     </div>)}
 
@@ -1482,6 +1612,7 @@ const RiskManagementPageJRA = () => {
             {generatePopup && (<GenerateDraftPopup deleteDraft={handleGenerateJRADocument} closeModal={closeGenerate} cancel={cancelGenerate} />)}
             {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
             {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
+            {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
         </div>
     );
 };

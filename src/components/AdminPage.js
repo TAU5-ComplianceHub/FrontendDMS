@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getCurrentUser, can, isAdmin } from "../utils/auth";
+import { getCurrentUser, can, isAdmin, canIn } from "../utils/auth";
 import { jwtDecode } from 'jwt-decode';
 import "./UserManagement.css";
 import "./AdminPage.css";
@@ -37,12 +37,14 @@ import ImportSiteInfo from "./UploadPage/ImportSiteInfo";
 import ImportRiskSiteInfo from "./RiskRelated/ImportRiskSiteInfo";
 import TopBar from "./Notifications/TopBar";
 import { saveAs } from "file-saver";
+import MigrateOwnership from "./FileInfo/MigrateOwnership";
 
 const AdminPage = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [count, setCount] = useState([]);
     const access = getCurrentUser();
     const [importSI, setImportSI] = useState(false);
+    const [migrate, setMigrate] = useState(false);
     const navigate = useNavigate();
 
     const exportSID = async () => {
@@ -85,6 +87,14 @@ const AdminPage = () => {
 
     const closeImportSI = () => {
         setImportSI(false);
+    };
+
+    const openMigrate = () => {
+        setMigrate(true);
+    };
+
+    const closeMigrate = () => {
+        setMigrate(!migrate);
     };
 
     const TOTAL_SLOTS = 12;
@@ -172,8 +182,18 @@ const AdminPage = () => {
                             </div>
                         </>
                     )}
+
+                    {canIn(access, "DMS", "systemAdmin") && <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/migrationPage")} >
+                        <>
+                            <div className="icon-dept">
+                                <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} className={"icon-dept"} />
+                            </div>
+                            <h3 className="document-title-fi-home">Migrate Documents</h3>
+                        </>
+                    </div>}
                 </div>
             </div>
+            {migrate && (<MigrateOwnership onClose={closeMigrate} />)}
             <ToastContainer />
         </div>
     );

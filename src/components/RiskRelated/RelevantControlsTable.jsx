@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import RelevantControlsSelectionPopup from "./RelevantControlsSelectionPopup";
 import ApplicableControlHelp from "./RiskInfo/ApplicableControlHelp";
 
-const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false, globalControls = [], isCollapsed }) => {
+const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false, globalControls = [], isCollapsed, highlightedControlNames }) => {
     const [isPopupOpen, setIsPopupOpen] = useState(false);
     const [help, setHelp] = useState(false);
 
@@ -126,6 +126,8 @@ const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false
         return { ...prev, ibra: nextIBRA, cea: nextCEA };
     };
 
+    const highlightedSet = new Set((highlightedControlNames || []).map(norm));
+
     return (
         <div className="input-row">
             {/* Added relative positioning to ensure the button stays in the corner */}
@@ -166,7 +168,9 @@ const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false
                                 </thead>
                                 <tbody>
                                     {sortedRelevantControls.map((row, index) => (
-                                        <tr key={row.id}>
+                                        <tr key={row.id}
+                                            style={highlightedSet.has(norm(row.control)) ? { backgroundColor: "#ffcccc" } : undefined}
+                                        >
                                             <td className="refCent" style={{ fontSize: "14px" }}>{index + 1}</td>
                                             <td className="refCent" style={{ fontSize: "14px", textAlign: "left", fontWeight: "normal" }}>
                                                 {row.control}

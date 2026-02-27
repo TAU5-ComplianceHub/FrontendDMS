@@ -8,7 +8,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import LoadDraftPopup from "../CreatePage/LoadDraftPopup";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faMagicWandSparkles, faCalendarDays, faX } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faCheckCircle, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faMagicWandSparkles, faCalendarDays, faX } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import SharePage from "../CreatePage/SharePage";
 import TopBarDD from "../Notifications/TopBarDD";
@@ -23,6 +23,7 @@ import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
 import DraftPopup from "../Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 
 const CreatePageSIReview = () => {
   const navigate = useNavigate();
@@ -57,6 +58,17 @@ const CreatePageSIReview = () => {
   const [azureFN, setAzureFN] = useState("");
   const fileID = useParams().fileId;
   const [draftNote, setDraftNote] = useState(null);
+  const [readOnly, setReadOnly] = useState(false);
+  const [approval, setApproval] = useState(false);
+  const [inApproval, setInApproval] = useState(false);
+
+  const openApproval = () => {
+    setApproval(true);
+  }
+
+  const closeApproval = () => {
+    setApproval(false);
+  }
 
   const openDraftNote = () => {
     setDraftNote(true);
@@ -465,7 +477,7 @@ const CreatePageSIReview = () => {
         }
       })
     } else {
-      handleGeneratePDF();  // Call your function when the form is valid
+      openApproval();
     }
   };
 
@@ -477,25 +489,57 @@ const CreatePageSIReview = () => {
 
   const getNewAzureFileName = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/special/getFile/${fileID}`);
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/fileGenDocs/special/getFile/${fileID}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch file");
+
       const storedData = await response.json();
-      setAzureFN(storedData.files.azureFileName || "");
+      setAzureFN(storedData.files?.azureFileName || "");
+
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error("Error loading data:", error);
     }
   };
 
   const loadData = async (fileID) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/special/getFile/${fileID}`);
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/fileGenDocs/special/getFile/${fileID}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch file");
+
       const data = await response.json();
-      const storedData = data.files;
+      const storedData = data.files || {};
+      const readOnly = data.readOnly || false;
       // Update your states as needed:
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
       setUserIDs(storedData.userIDs || []);
       setFormData(storedData.formData || {});
       setFormData(prev => ({ ...prev }));
+      setInApproval(Boolean(data.statusApproval));
+      setReadOnly(readOnly);
       setTitleSet(true);
       setAzureFN(storedData.azureFileName || "");
     } catch (error) {
@@ -860,6 +904,98 @@ const CreatePageSIReview = () => {
     });
   };
 
+  const handlePublishApprovalFlow = async (approversValue) => {
+    const dataToStore = {
+      draftID: fileID,
+      approvers: approversValue
+    };
+
+    setLoading(true);
+    saveData(fileID);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/start-approval-special-published`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+      const data = await response.json();
+
+      toast.success(`Special Instruction Publishing Approval Started.`, {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+
+      if (!data.currentApprover) {
+        setReadOnly(true)
+      }
+
+      setInApproval(data.approvalStatus);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setLoading(false);
+    }
+  };
+
+  const handleApproveClick = () => {
+    const newErrors = validateForm();
+    setErrors(newErrors);
+
+
+    approveDraft();
+  };
+
+  const approveDraft = async () => {
+    const dataToStore = {
+      draftID: fileID
+    };
+
+    setLoading(true);
+    saveData(fileID);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/approve-published-special`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+      const data = await response.json();
+
+      toast.success(`Special Instruction Successfully Approved.`, {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+
+      setReadOnly(true);
+      setLoading(false);
+
+      if (data.fullyApproved) {
+        await handleGeneratePDF()
+      }
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setLoading(false);
+    }
+  };
+
   const sendUpdatedFormData = async (dataToStore, documentName) => {
     setLoading(true);
 
@@ -977,11 +1113,11 @@ const CreatePageSIReview = () => {
               <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
             </div>
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
-            </div>
+            </div>)}
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={openSaveAs} title="Save As">
                 {/* base floppy-disk, full size */}
                 <FontAwesomeIcon icon={faSave} />
@@ -992,21 +1128,23 @@ const CreatePageSIReview = () => {
                   color="gray"   /* or whatever contrast you need */
                 />
               </span>
-            </div>
+            </div>)}
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faRotateLeft} onClick={undoLastChange} title="Undo" />
-            </div>
+            </div>)}
 
-            <div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
-            </div>
+            </div>)}
 
-            {canIn(access, "DDS", ["systemAdmin", "contributor"]) && (
-              <div className="burger-menu-icon-risk-create-page-1">
-                <FontAwesomeIcon icon={faUpload} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" onClick={handleClick} />
-              </div>
-            )}
+            {!readOnly && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick} title="Publish" />
+            </div>)}
+
+            {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+            </div>)}
           </div>
 
           {/* This div creates the space in the middle */}
@@ -1017,6 +1155,12 @@ const CreatePageSIReview = () => {
         </div>
 
         <div className={`scrollable-box`}>
+          {(readOnly && inApproval) && (<div className="input-row">
+            <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+              The draft is in the approval process and needs to be approved.
+            </div>
+          </div>)}
+
           <div className="input-row">
             <div className={`input-box-title ${errors.title ? "error-create" : ""}`}>
               <h3 className="font-fam-labels">Document Title <span className="required-field">*</span></h3>
@@ -1027,6 +1171,7 @@ const CreatePageSIReview = () => {
                   name="title"
                   className="font-fam title-input"
                   value={formData.title}
+                  readOnly={readOnly}
                   onChange={handleInputChange}
                   placeholder="Title of your document (e.g., Surface TMM Pre-Use Checklist)"
                 />
@@ -1045,6 +1190,7 @@ const CreatePageSIReview = () => {
                   value={formData.site}
                   onChange={e => handleSiteInput(e.target.value)}
                   onFocus={handleSiteFocus}
+                  readOnly={readOnly}
                   ref={sitesInputRef}
                   autoComplete="off"
                   className="special-intruction-input special-intruction-row-input"
@@ -1066,6 +1212,7 @@ const CreatePageSIReview = () => {
                       onChange={(val) => handleDateChange(val?.format("YYYY-MM-DD"))}
                       highlightToday={false}
                       editable={false}
+                      readOnly={readOnly}
                       inputClass="special-intruction-input-date-half"
                       placeholder="YYYY-MM-DD"
                       hideIcon={false}
@@ -1092,6 +1239,7 @@ const CreatePageSIReview = () => {
                       inputClass="special-intruction-input-date-half"
                       placeholder="YYYY-MM-DD"
                       hideIcon={false}
+                      readOnly={readOnly}
                       style={{ width: "100%" }}
                       minDate={formData.dateConducted}
                       onOpenPickNewDate={false}
@@ -1134,6 +1282,7 @@ const CreatePageSIReview = () => {
                   <input
                     type="text"
                     name="directee"
+                    readOnly={readOnly}
                     value={formData.directee || ""}
                     onChange={e => handleDirecteeInput(e.target.value)}
                     onFocus={handleDirecteeFocus}
@@ -1152,6 +1301,7 @@ const CreatePageSIReview = () => {
                 <input
                   type="text"
                   name="directed"
+                  readOnly={readOnly}
                   value={formData.directed || ""}
                   onChange={handleInputChange}
                   onFocus={() => setErrors(prev => ({
@@ -1166,7 +1316,7 @@ const CreatePageSIReview = () => {
             </div>
           </div>
 
-          <DocumentSignaturesTableSI rows={formData.rows} handleRowChange={handleRowChange} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
+          <DocumentSignaturesTableSI readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
 
           <div className="input-row" style={{ position: 'relative' }}>
             <div className={`input-box-aim-cp ${errors.aim ? "error-create" : ""}`}>
@@ -1176,6 +1326,7 @@ const CreatePageSIReview = () => {
                 name="aim"
                 className="aim-textarea-si font-fam"
                 value={formData.aim}
+                readOnly={readOnly}
                 onChange={handleInputChange}
                 onFocus={() => setErrors(prev => ({
                   ...prev,
@@ -1185,36 +1336,41 @@ const CreatePageSIReview = () => {
                 placeholder="Insert the purpose of this document and include any relevant background information regarding the topic." // Optional placeholder text
               />
 
-              {loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-si spin-animation" />) : (
-                <FontAwesomeIcon
-                  icon={faMagicWandSparkles}
-                  className="aim-textarea-icon-ibra"
-                  title="AI Rewrite"
-                  style={{ fontSize: "15px" }}
-                  onClick={() => AiRewriteAim()}
-                />
-              )}
+              {!readOnly && (
+                <>
+                  {
+                    loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-si spin-animation" />) : (
+                      <FontAwesomeIcon
+                        icon={faMagicWandSparkles}
+                        className="aim-textarea-icon-ibra"
+                        title="AI Rewrite"
+                        style={{ fontSize: "15px" }}
+                        onClick={() => AiRewriteAim()}
+                      />
+                    )}
 
-              <FontAwesomeIcon
-                icon={faRotateLeft}
-                className="aim-textarea-icon-si-undo"
-                title="Undo AI Rewrite"
-                style={{
-                  marginLeft: '8px',
-                  opacity: rewriteHistory.aim.length ? 1 : 0.3,
-                  cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
-                  fontSize: "15px"
-                }}
-                onClick={() => undoAiRewrite("aim")}
-              />
+                  <FontAwesomeIcon
+                    icon={faRotateLeft}
+                    className="aim-textarea-icon-si-undo"
+                    title="Undo AI Rewrite"
+                    style={{
+                      marginLeft: '8px',
+                      opacity: rewriteHistory.aim.length ? 1 : 0.3,
+                      cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
+                      fontSize: "15px"
+                    }}
+                    onClick={() => undoAiRewrite("aim")}
+                  />
+                </>
+              )}
             </div>
           </div>
 
-          <SpecialInstructionsTable formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} />
-          <ChapterTable formData={formData} setFormData={setFormData} />
-          <AbbreviationTableSI formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} si={true} />
-          <TermTableSI formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} si={true} />
-          <ReferenceTableSpecialInstructions formData={formData} setFormData={setFormData} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
+          <SpecialInstructionsTable readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} />
+          <ChapterTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+          <AbbreviationTableSI readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} si={true} />
+          <TermTableSI readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} si={true} />
+          <ReferenceTableSpecialInstructions readOnly={readOnly} formData={formData} setFormData={setFormData} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
 
           <div className="input-row">
             <div className={`input-box-aim-cp ${errors.change ? "error-create" : ""}`}>
@@ -1224,6 +1380,7 @@ const CreatePageSIReview = () => {
                 name="aim"
                 className="aim-textarea font-fam"
                 value={change}
+                readOnly={readOnly}
                 onChange={(e) => setChange(e.target.value)}
                 rows="4"   // Adjust the number of rows for initial height
                 placeholder="Insert the reason for the document update..." // Optional placeholder text
@@ -1251,7 +1408,7 @@ const CreatePageSIReview = () => {
           </div>
         </div>
       </div>
-      {showSiteDropdown && filteredSites.length > 0 && (
+      {showSiteDropdown && !readOnly && filteredSites.length > 0 && (
         <ul
           className="floating-dropdown"
           style={{
@@ -1273,7 +1430,7 @@ const CreatePageSIReview = () => {
         </ul>
       )}
 
-      {showNamesDropdown && filteredNames.length > 0 && (
+      {showNamesDropdown && !readOnly && filteredNames.length > 0 && (
         <ul
           className="floating-dropdown"
           style={{
@@ -1296,6 +1453,7 @@ const CreatePageSIReview = () => {
       )}
       {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={type} userID={userID} create={false} special={true} />)}
       {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
+      {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       <ToastContainer />
     </div>
   );

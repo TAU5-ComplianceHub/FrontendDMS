@@ -1872,7 +1872,7 @@ const BLRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
 
                                                 // Nr column (with your arrow-icon logic)
                                                 if (colId === "nr") {
-                                                    const isFlagged = !!row.mainFlag || !!row.subFlag || !!row.ownerFlag || !!row.oddsFlag || !!row.riskRankFlag || !!row.maxConsequenceFlag || !!row.controlFlag || !!row.hazardFlag || !!row.sourceFlag || !!row.ueFlag;
+                                                    const isFlagged = !!row.mainFlag || !!row.subFlag || !!row.ownerFlag || !!row.oddsFlag || !!row.riskRankFlag || !!row.maxConsequenceFlag || !!row.controlFlag || !!row.hazardFlag || !!row.sourceFlag || !!row.ueFlag || !!row.additionalFlag;
 
                                                     return (
                                                         <td

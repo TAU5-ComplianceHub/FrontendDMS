@@ -8,7 +8,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import LoadDraftPopup from "../CreatePage/LoadDraftPopup";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faMagicWandSparkles, faInfo, faCalendarDays, faX } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faMagicWandSparkles, faInfo, faCalendarDays, faX, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import SharePage from "../CreatePage/SharePage";
 import TopBarDD from "../Notifications/TopBarDD";
@@ -24,6 +24,7 @@ import DraftPopup from "../Popups/DraftPopup";
 import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
+import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 
 const CreatePageSI = () => {
   const navigate = useNavigate();
@@ -62,6 +63,16 @@ const CreatePageSI = () => {
   const [lockUser, setLockUser] = useState(null);
   const scrollBoxRef = useRef(null);
   const [owner, setOwner] = useState(false);
+  const [approval, setApproval] = useState(false);
+  const [inApproval, setInApproval] = useState(false);
+
+  const openApproval = () => {
+    setApproval(true);
+  }
+
+  const closeApproval = () => {
+    setApproval(false);
+  }
 
   const openWorkflow = () => {
     setShowWorkflow(true);
@@ -620,7 +631,7 @@ const CreatePageSI = () => {
         }
       });
     } else {
-      handlePublish();  // Call your function when the form is valid
+      openApproval();
     }
   };
 
@@ -654,7 +665,7 @@ const CreatePageSI = () => {
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
       setUserIDs(storedData.userIDs || []);
-      setLockUser(storedData.lockOwner.username);
+      setLockUser(storedData.lockOwner?.username);
       setFormData(storedData.formData || {});
       setFormData(prev => ({ ...prev }));
       setTitleSet(true);
@@ -662,7 +673,7 @@ const CreatePageSI = () => {
 
       setReadOnly(readOnly);
       setOwner(isOwner)
-      console.log(readOnly);
+      setInApproval(Boolean(data.statusApproval));
 
       requestAnimationFrame(() => {
         scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1090,6 +1101,109 @@ const CreatePageSI = () => {
     }
   };
 
+
+
+  const handlePublishApprovalFlow = async (approversValue) => {
+    const dataToStore = {
+      draftID: loadedIDRef.current,
+      approvers: approversValue
+    };
+
+    setLoading(true);
+    updateData(userIDsRef.current);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/start-approval-special-draft`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+      const data = await response.json();
+
+      toast.success(`Special Instruction Publishing Approval Started.`, {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+
+      if (!data.currentApprover) {
+        setReadOnly(true)
+      }
+
+      setInApproval(data.approvalStatus);
+
+      setLoading(false);
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setLoading(false);
+    }
+  };
+
+  const handleApproveClick = () => {
+    const newErrors = validateForm();
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      toast.error("Please fill in all required fields marked by a *", {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+    } else {
+      approveDraft();  // Call your function when the form is valid
+    }
+  };
+
+  const approveDraft = async () => {
+    const dataToStore = {
+      draftID: loadedIDRef.current
+    };
+
+    setLoading(true);
+    updateData(userIDsRef.current);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/approve-draft-special`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+      const data = await response.json();
+
+      toast.success(`Special Instruction Successfully Approved.`, {
+        closeButton: true,
+        autoClose: 800, // 1.5 seconds
+        style: {
+          textAlign: 'center'
+        }
+      });
+
+      setReadOnly(true);
+      setLoading(false);
+
+      if (data.fullyApproved) {
+        handlePublish()
+      }
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (draftId === "new") {
       return;
@@ -1126,6 +1240,14 @@ const CreatePageSI = () => {
                 <div className="button-content">
                   <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
                   <span className="button-text">Ready for Approval</span>
+                </div>
+              </button>
+            )}
+            {canIn(access, "DDS", ["systemAdmin", "contributor"]) && (
+              <button className="but-um" onClick={() => navigate('/FrontendDMS/signedOffSpecial')}>
+                <div className="button-content">
+                  <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
+                  <span className="button-text">Signed Off</span>
                 </div>
               </button>
             )}
@@ -1198,11 +1320,13 @@ const CreatePageSI = () => {
               </div>
             )}
 
-            {(canIn(access, "DDS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
-              <div className="burger-menu-icon-risk-create-page-1">
-                <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
-              </div>
-            )}
+            {!readOnly && !inApproval && owner && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
+            </div>)}
+
+            {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+            </div>)}
 
             {(localStorage.getItem("draftData")) && (
               <div className="burger-menu-icon-risk-create-page-1" onClick={() => loadOfflineData()}>
@@ -1219,9 +1343,15 @@ const CreatePageSI = () => {
         </div>
 
         <div className={`scrollable-box`} ref={scrollBoxRef}>
-          {readOnly && (<div className="input-row">
+          {(readOnly && !inApproval) && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
               The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
+            </div>
+          </div>)}
+
+          {(readOnly && inApproval) && (<div className="input-row">
+            <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+              The draft is in the approval process and needs to be approved.
             </div>
           </div>)}
 
@@ -1506,6 +1636,7 @@ const CreatePageSI = () => {
       {generatePopup && (<GenerateDraftPopup deleteDraft={handleGeneratePDF} closeModal={closeGenerate} cancel={cancelGenerate} />)}
       {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
       {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
+      {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       <ToastContainer />
     </div>
   );
