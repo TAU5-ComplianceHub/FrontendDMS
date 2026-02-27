@@ -4,7 +4,7 @@ import { jwtDecode } from "jwt-decode";
 import "./RiskHomePage.css";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCog, faCogs, faHardHat, faListCheck, faNetworkWired, faChevronLeft, faChevronRight, faArrowsRotate, faUserTie, faExclamationTriangle, faTriangleExclamation, faArrowLeft, faCaretLeft, faCaretRight } from '@fortawesome/free-solid-svg-icons';
+import { faCog, faCogs, faHardHat, faListCheck, faNetworkWired, faChevronLeft, faChevronRight, faArrowsRotate, faUserTie, faExclamationTriangle, faTriangleExclamation, faArrowLeft, faCaretLeft, faCaretRight, faCircle } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "../Notifications/TopBar";
 import TopBarDD from "../Notifications/TopBarDD";
 import { getCurrentUser, canIn } from "../../utils/auth";
@@ -116,6 +116,14 @@ const RiskHomePage = () => {
                             <h3 className="document-title-risk-home">JRA<br /></h3>
                         </>
                     </div>
+                    {false && canIn(access, "RMS", ["systemAdmin"]) && (<div className={`document-card-risk-home`} onClick={() => navigate("/FrontendDMS/allRiskDrafts")}>
+                        <>
+                            <div className="icon-risk">
+                                <img src={`${process.env.PUBLIC_URL}/migrate2.svg`} alt="Control Attributes" className="icon-risk" />
+                            </div>
+                            <h3 className="document-title-risk-home">All System Drafts<br /></h3>
+                        </>
+                    </div>)}
                 </div>
             </div>
             <ToastContainer />

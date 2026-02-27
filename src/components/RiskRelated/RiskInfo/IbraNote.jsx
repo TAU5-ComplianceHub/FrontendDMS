@@ -13,7 +13,7 @@ const IbraNote = ({ setClose, text }) => {
 
                 <div className="note-table-group">
                     <label className="note-header">Note Attached for Unwanted Event</label>
-                    <span className="note-text">
+                    <span className="note-text" style={{ whiteSpace: "pre-wrap" }}>
                         {text}
                     </span>
                 </div>

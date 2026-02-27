@@ -322,18 +322,13 @@ const OnlineTrainingPublished = () => {
         }
 
         // 2. Excel Column Filters
-        // We use original index for 'nr' filter value
-        current = current.filter((row, originalIndex) => {
-            for (const [colId, selectedValues] of Object.entries(activeExcelFilters)) {
-                if (!selectedValues || !Array.isArray(selectedValues)) continue;
-
-                const cellValues = getFilterValuesForCell(row, colId, originalIndex);
-                // If any of the cell's values match one of the selected checkboxes, keep row
-                const match = cellValues.some(v => selectedValues.includes(v));
-                if (!match) return false;
-            }
-            return true;
-        });
+        for (const [colId, selectedValues] of Object.entries(activeExcelFilters)) {
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+            current = current.filter(row => {
+                const cellValues = getFilterValuesForCell(row, colId);
+                return cellValues.some(v => selectedValues.includes(v));
+            });
+        }
 
         // 3. Sorting
         const { colId, direction } = sortConfig;
@@ -687,6 +682,33 @@ const OnlineTrainingPublished = () => {
         return "top-right-button-control-att-2";
     };
 
+    const getAvailableOptions = (colId) => {
+        let current = files; // Assuming 'files' is your data state
+
+        // 1. Global Search
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            // Adjust field names (e.g., 'title', 'name') based on your actual data structure
+            current = current.filter(row =>
+                (row.formData.courseTitle || "").toLowerCase().includes(q)
+            );
+        }
+
+        // 2. Other Column Filters
+        for (const [filterColId, selectedValues] of Object.entries(activeExcelFilters)) {
+            if (filterColId === colId) continue;
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+            current = current.filter(row => {
+                const cellValues = getFilterValuesForCell(row, filterColId);
+                return cellValues.some(v => selectedValues.includes(v));
+            });
+        }
+
+        return Array.from(
+            new Set(current.flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+    };
+
     return (
         <div className="gen-file-info-container">
             {isSidebarVisible && (
@@ -955,15 +977,21 @@ const OnlineTrainingPublished = () => {
 
                     {(() => {
                         const colId = excelFilter.colId;
-                        const allValues = Array.from(
-                            new Set((files || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
-                        ).sort((a, b) => String(a).localeCompare(String(b)));
-
+                        const allValues = getAvailableOptions(colId);
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
-                        const allVisibleSelected =
+                        const isAllVisibleSelected =
                             visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) visibleValues.forEach(v => next.add(v));
+                                else visibleValues.forEach(v => next.delete(v));
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -974,23 +1002,22 @@ const OnlineTrainingPublished = () => {
                             });
                         };
 
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
-                                return next;
-                            });
-                        };
-
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+                            const selectedArr = Array.from(finalSelection);
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
+
                             setActiveExcelFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId];
+                                if (isTotalReset) delete next[colId];
                                 else next[colId] = selectedArr;
                                 return next;
                             });
@@ -1009,13 +1036,14 @@ const OnlineTrainingPublished = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
-
                                     {visibleValues.map(v => (
                                         <label className="excel-filter-item" key={String(v)}>
                                             <span className="excel-filter-checkbox">
@@ -1029,8 +1057,12 @@ const OnlineTrainingPublished = () => {
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
-
                                 <div className="excel-filter-actions">
                                     <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
                                     <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>

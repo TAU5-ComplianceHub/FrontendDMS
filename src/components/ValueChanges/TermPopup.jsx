@@ -124,12 +124,13 @@ const TermPopup = ({ isOpen, onClose, userID, setTermData, onAdd }) => {
 
                         <div className="term-popup-group">
                             <label className="term-popup-label">Term</label>
-                            <input
+                            <textarea
                                 spellcheck="true"
                                 type="text"
                                 value={term}
                                 onChange={(e) => setTerm(e.target.value)}
-                                className="term-popup-input"
+                                className="term-popup-text-area"
+                                style={{ resize: "none", minHeight: "18px" }}
                                 required
                                 placeholder="Insert term here"
                             />

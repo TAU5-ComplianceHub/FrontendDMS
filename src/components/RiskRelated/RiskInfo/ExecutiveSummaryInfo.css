@@ -116,3 +116,34 @@
     width: 70%;
     text-align: center;
 }
+
+.popup-content-app-controls {
+    background: #f2f2f2;
+    padding: 20px;
+    width: 1000px;
+    /* Ensure the popup does not stretch vertically */
+    overflow: hidden;
+    /* Prevent the popup content from scrolling */
+    display: flex;
+    flex-direction: column;
+    border-radius: 10px;
+}
+
+.popup-table-wrapper-app-controls {
+    overflow-y: auto;
+    height: 100%;
+    width: 97%;
+    /* You can adjust the width as needed */
+    background-color: transparent;
+    /* Space between table and buttons */
+    position: relative;
+    /* Ensures the table is positioned correctly */
+    display: flex;
+    /* Enable flexbox rsr centering the table inside */
+    justify-content: center;
+    /* Centers the table horizontally */
+    align-items: center;
+    /* Centers the table vertically */
+    display: block;
+    white-space: pre-line;
+}

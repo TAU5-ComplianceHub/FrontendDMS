@@ -149,6 +149,8 @@ import SuggestedControls from './components/RiskRelated/ControlManagement/Sugges
 import ControlVersionHistory from './components/RiskRelated/ControlVersionHistory';
 import StudentProfilePage from './components/OnlineTrainingModule/StudentProfile/StudentProfilePage';
 import JRAAttributes from './components/RiskRelated/JRAAttributes';
+import RiskDrafts from './components/RiskRelated/RiskDrafts/RiskDrafts';
+import DDSDrafts from './components/CreatePage/DDSDrafts/DDSDrafts';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -364,6 +366,8 @@ function App() {
         <Route path="FrontendDMS/controlsHistory/:id" element={<ControlVersionHistory />} />
         <Route path="FrontendDMS/myStudentProfile" element={<StudentProfilePage />} />
         <Route path="FrontendDMS/myNewTest" element={<JRAAttributes />} />
+        <Route path="FrontendDMS/allRiskDrafts" element={<RiskDrafts />} />
+        <Route path="FrontendDMS/allDDSDrafts" element={<DDSDrafts />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

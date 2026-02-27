@@ -6,6 +6,14 @@
     z-index: 9999;
 }
 
+.notifications-modal-container-home {
+    position: absolute;
+    top: 100px;
+    /* Adjust based on bell icon position */
+    right: 30px;
+    z-index: 9999;
+}
+
 .notifications-modal-box {
     background: white;
     border-radius: 8px;

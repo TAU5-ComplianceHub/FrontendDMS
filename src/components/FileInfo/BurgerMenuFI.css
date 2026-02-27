@@ -5,6 +5,13 @@
     z-index: 1000;
 }
 
+.burger-menu-container-home-page {
+    position: absolute;
+    top: 50px;
+    right: 80px;
+    z-index: 1000;
+}
+
 .menu-content-FI {
     position: absolute;
     top: 55px;

@@ -8,7 +8,7 @@ const ImportControlChanges = ({ closeModal, generate, cancel }) => {
                 </div>
 
                 <div className="generate-incompletedraft-group">
-                    <div className="generate-incompletedraft-text">{`Some of the controls used in the Risk Assessment have been updated in the system, do you want to import the changes to this Risk Assessment?`}</div>
+                    <div className="generate-incompletedraft-text">{`Do you want to import the updated controls into this Risk Assessment?`}</div>
                 </div>
 
                 <div className="generate-incompletedraft-buttons">

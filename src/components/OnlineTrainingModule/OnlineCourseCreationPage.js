@@ -53,6 +53,7 @@ const OnlineCourseCreationPage = () => {
   const [readOnly, setReadOnly] = useState(false);
   const [approval, setApproval] = useState(false);
   const [inApproval, setInApproval] = useState(false);
+  const [owner, setOwner] = useState(false);
 
   const openApproval = () => {
     setApproval(true);
@@ -694,6 +695,7 @@ const OnlineCourseCreationPage = () => {
         supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : [],
         resources: Array.isArray(rawForm.resources) ? rawForm.resources : [] // ✅ ADD
       };
+      const isOwner = storedData.isOwner || false;
 
       // IMPORTANT: hydrate media previews for any saved files
       revokeAllObjectUrls(); // clear any previous draft's object URLs
@@ -705,6 +707,7 @@ const OnlineCourseCreationPage = () => {
       setLoadedID(loadID);
       setReadOnly(storedData.readOnly);
       setInApproval(storedData.statusApproval);
+      setOwner(isOwner)
 
       setTimeout(() => {
         setLoadingDraft(false);
@@ -1132,11 +1135,11 @@ const OnlineCourseCreationPage = () => {
                   <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
                 </div>
 
-                <div className="burger-menu-icon-risk-create-page-1">
+                {owner && (<div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faShareNodes} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" onClick={openShare} />
-                </div>
+                </div>)}
 
-                {!inApproval && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                {!inApproval && owner && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
                 </div>)}
 

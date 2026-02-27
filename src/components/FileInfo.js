@@ -191,7 +191,7 @@ const FileInfo = () => {
       new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
     ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
 
-    const existing = columnFilters?.[colId]?.selected;
+    const existing = columnFilters?.[colId];
     const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
 
     setExcelSelected(initialSelected);
@@ -477,15 +477,14 @@ const FileInfo = () => {
 
 
     // 3. Excel Column Filters (Handles Dates & Status formatting internally via getFilterValuesForCell)
-    for (const [colId, filterObj] of Object.entries(columnFilters)) {
-      const selected = filterObj?.selected;
-      if (!selected || !Array.isArray(selected)) continue;
+    // 3. Excel Column Filters
+    for (const [colId, selectedValues] of Object.entries(columnFilters)) {
+      // Direct array access (matches ControlAttributes.js)
+      if (!selectedValues || !Array.isArray(selectedValues)) continue;
 
       current = current.filter(row => {
-        // We use getFilterValuesForCell here, so the row data is formatted (e.g. "in_review" becomes "In Review")
-        // before comparison. This matches the values the user selected in the popup.
         const cellValues = getFilterValuesForCell(row, colId);
-        return cellValues.some(v => selected.includes(v));
+        return cellValues.some(v => selectedValues.includes(v));
       });
     }
 
@@ -579,6 +578,41 @@ const FileInfo = () => {
 
   const getFilterBtnClass = () => {
     return "top-right-button-control-att";
+  };
+
+  const getAvailableOptions = (colId) => {
+    // Start with all files
+    let filtered = files;
+
+    // 1. Apply Global Search
+    if (searchQuery) {
+      const lowerQ = searchQuery.toLowerCase();
+      filtered = filtered.filter(c => c.fileName.toLowerCase().includes(lowerQ));
+    }
+
+    // --- NEW: Apply Sidebar Filters (So options match what is potentially visible) ---
+    if (selectedType.length > 0) filtered = filtered.filter(f => selectedType.includes(f.documentType));
+    if (selectedDiscipline.length > 0) filtered = filtered.filter(f => selectedDiscipline.includes(f.discipline));
+    if (selectedStatus.length > 0) filtered = filtered.filter(f => selectedStatus.includes(f.status));
+    // --------------------------------------------------------------------------------
+
+    // 2. Apply filters from ALL OTHER active columns
+    for (const [filterColId, selectedValues] of Object.entries(columnFilters)) {
+      if (filterColId === colId) continue;
+      if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+      filtered = filtered.filter((row) => {
+        const cellValues = getFilterValuesForCell(row, filterColId);
+        return cellValues.some(v => selectedValues.includes(v));
+      });
+    }
+
+    // 3. Extract unique values
+    const uniqueValues = Array.from(
+      new Set(filtered.flatMap((r) => getFilterValuesForCell(r, colId)))
+    ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+    return uniqueValues;
   };
 
   if (error) {
@@ -834,16 +868,26 @@ const FileInfo = () => {
           {(() => {
             const colId = excelFilter.colId;
 
-            const allValues = Array.from(
-              new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
-            ).sort((a, b) => String(a).localeCompare(String(b)));
+            const allValues = getAvailableOptions(colId);
 
             const visibleValues = allValues.filter(v =>
               String(v).toLowerCase().includes(excelSearch.toLowerCase())
             );
 
-            const allVisibleSelected =
+            const isAllVisibleSelected =
               visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+            const toggleAll = (checked) => {
+              setExcelSelected(prev => {
+                const next = new Set(prev);
+                if (checked) {
+                  visibleValues.forEach(v => next.add(v));
+                } else {
+                  visibleValues.forEach(v => next.delete(v));
+                }
+                return next;
+              });
+            };
 
             const toggleValue = (v) => {
               setExcelSelected(prev => {
@@ -854,25 +898,27 @@ const FileInfo = () => {
               });
             };
 
-            const toggleAllVisible = (checked) => {
-              setExcelSelected(prev => {
-                const next = new Set(prev);
-                visibleValues.forEach(v => {
-                  if (checked) next.add(v);
-                  else next.delete(v);
-                });
-                return next;
-              });
-            };
-
             const onOk = () => {
-              const selectedArr = Array.from(excelSelected);
-              const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+              let finalSelection = new Set(excelSelected);
+              if (excelSearch.trim() !== "") {
+                const visibleSet = new Set(visibleValues);
+                finalSelection = new Set(
+                  Array.from(excelSelected).filter(v => visibleSet.has(v))
+                );
+              }
+
+              const selectedArr = Array.from(finalSelection);
+              const isTotalReset = allValues.length > 0 &&
+                allValues.length === selectedArr.length &&
+                selectedArr.every(v => finalSelection.has(v));
 
               setColumnFilters(prev => {
                 const next = { ...prev };
-                if (isAllSelected) delete next[colId];
-                else next[colId] = { selected: selectedArr };
+                if (isTotalReset) {
+                  delete next[colId];
+                } else {
+                  next[colId] = selectedArr;
+                }
                 return next;
               });
 
@@ -891,11 +937,11 @@ const FileInfo = () => {
                       <input
                         type="checkbox"
                         className="checkbox-excel-attend"
-                        checked={allVisibleSelected}
-                        onChange={(e) => toggleAllVisible(e.target.checked)}
+                        checked={isAllVisibleSelected}
+                        onChange={(e) => toggleAll(e.target.checked)}
                       />
                     </span>
-                    <span className="excel-filter-text">(Select All)</span>
+                    {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
                   </label>
 
                   {visibleValues.map(v => (
@@ -911,6 +957,12 @@ const FileInfo = () => {
                       <span className="excel-filter-text">{v}</span>
                     </label>
                   ))}
+
+                  {visibleValues.length === 0 && (
+                    <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                      No matches found
+                    </div>
+                  )}
                 </div>
 
                 <div className="excel-filter-actions">

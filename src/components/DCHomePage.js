@@ -4,10 +4,10 @@ import { jwtDecode } from "jwt-decode";
 import "./DCHomePage.css";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faScaleBalanced, faCertificate, faListOl, faChevronLeft, faChevronRight, faArrowLeft, faCaretLeft, faCaretRight } from '@fortawesome/free-solid-svg-icons';
+import { faScaleBalanced, faCertificate, faListOl, faChevronLeft, faChevronRight, faArrowLeft, faCaretLeft, faCaretRight, faCircle } from '@fortawesome/free-solid-svg-icons';
 import TopBarDD from "./Notifications/TopBarDD";
-import { getCurrentUser, canIn } from "../utils/auth";
 import TopBar from "./Notifications/TopBar";
+import { getCurrentUser, canIn } from "../utils/auth";
 
 const DCHomePage = () => {
     const navigate = useNavigate();
@@ -79,6 +79,14 @@ const DCHomePage = () => {
                             <h3 className="document-title-dc-home">Special Instructions</h3>
                         </>
                     </div>
+                    {false && canIn(access, "DDS", ["systemAdmin"]) && (<div className={`document-card-risk-home`} onClick={() => navigate("/FrontendDMS/allDDSDrafts")}>
+                        <>
+                            <div className="icon-risk">
+                                <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} alt="Control Attributes" className="icon-risk" />
+                            </div>
+                            <h3 className="document-title-risk-home">All System Drafts<br /></h3>
+                        </>
+                    </div>)}
                 </div>
             </div>
             <ToastContainer />

@@ -726,6 +726,7 @@ const RiskReviewPageIBRA = () => {
             { changeVersion: "1", change: "New Document.", changeDate: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) }
         ],
         relevantControls: [],
+        isRelevantControlsCollapsed: false,
     });
 
     useEffect(() => {
@@ -2073,6 +2074,7 @@ const RiskReviewPageIBRA = () => {
                         setFormData={setFormData}
                         globalControls={allSystemControls}
                         onControlRename={handleControlRename}
+                        isCollapsed={formData.isRelevantControlsCollapsed}
                     />
 
                     <AbbreviationTableRisk risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />

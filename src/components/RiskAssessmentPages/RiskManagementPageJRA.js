@@ -72,6 +72,7 @@ const RiskManagementPageJRA = () => {
     const [readOnly, setReadOnly] = useState(false);
     const [lockUser, setLockUser] = useState(null);
     const scrollableRef = useRef(null);
+    const [owner, setOwner] = useState(false);
 
     const openDraftNote = () => {
         setDraftNote(true);
@@ -397,6 +398,7 @@ const RiskManagementPageJRA = () => {
 
             const storedData = data.draft || {};
             const readOnly = data.readOnly || false;
+            const isOwner = data.isOwner || false;
 
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
@@ -414,6 +416,7 @@ const RiskManagementPageJRA = () => {
             loadedIDRef.current = loadID;
 
             setReadOnly(readOnly);
+            setOwner(isOwner)
 
             requestAnimationFrame(() => {
                 scrollableRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1319,13 +1322,13 @@ const RiskManagementPageJRA = () => {
                             </div>
                         )}
 
-                        {!readOnly && (
+                        {(!readOnly && owner) && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <FontAwesomeIcon icon={faShareNodes} onClick={openShare} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" />
                             </div>
                         )}
 
-                        {(canIn(access, "RMS", ["systemAdmin", "contributor"]) && !readOnly) && (
+                        {(canIn(access, "RMS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
                             </div>

@@ -1,11 +1,41 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlusCircle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlusCircle, faInfoCircle, faChevronDown, faChevronRight, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 import { v4 as uuidv4 } from "uuid";
 import RelevantControlsSelectionPopup from "./RelevantControlsSelectionPopup";
+import ApplicableControlHelp from "./RiskInfo/ApplicableControlHelp";
 
-const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false, globalControls = [] }) => {
+const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false, globalControls = [], isCollapsed }) => {
     const [isPopupOpen, setIsPopupOpen] = useState(false);
+    const [help, setHelp] = useState(false);
+
+    // Initialize local state using the prop (defaults to false if undefined)
+    const [collapsed, setCollapsed] = useState(!!isCollapsed);
+
+    const openHelp = () => {
+        setHelp(true);
+    }
+
+    const closeHelp = () => {
+        setHelp(false);
+    }
+
+    // Toggle logic: updates local state immediately, then updates parent FormData
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+
+        setFormData(prev => ({
+            ...prev,
+            isRelevantControlsCollapsed: newState
+        }));
+    };
+
+    useEffect(() => {
+        if (isCollapsed !== undefined) {
+            setCollapsed(isCollapsed);
+        }
+    }, [isCollapsed]);
 
     // Toggle the popup visibility
     const togglePopup = () => {
@@ -98,66 +128,90 @@ const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false
 
     return (
         <div className="input-row">
-            <div className="input-box-ref">
+            {/* Added relative positioning to ensure the button stays in the corner */}
+            <div className="input-box-ref" style={{ position: "relative" }}>
+                <button
+                    className="top-left-button-refs"
+                    title="Information"
+                >
+                    <FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelp} className="icon-um-search" />
+                </button>
+
+                {/* Collapse Button placed in top-left using your existing class pattern */}
+                <button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>
+
                 <h3 className="font-fam-labels">
                     Applicable Controls <span className="required-field">*</span>
                 </h3>
 
-                {/* TABLE SECTION */}
-                {relevantControls && relevantControls.length > 0 && (
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header" style={{ backgroundColor: "#002060", color: "white" }}>
-                            <tr>
-                                <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
-                                <th className="refColCen refRef" style={{ width: "90%" }}>Control Name</th>
-                                {!readOnly && <th className="refColCen refBut" style={{ width: "5%" }}>Action</th>}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedRelevantControls.map((row, index) => (
-                                <tr key={row.id}>
-                                    <td className="refCent" style={{ fontSize: "14px" }}>{index + 1}</td>
-                                    <td className="refCent" style={{ fontSize: "14px", textAlign: "left", fontWeight: "normal" }}>
-                                        {row.control}
-                                    </td>
-                                    {!readOnly && (
-                                        <td className="ref-but-row procCent">
-                                            <button
-                                                className="remove-row-button"
-                                                onClick={() => removeControl(row.id)}
-                                                title="Remove Control"
-                                            >
-                                                <FontAwesomeIcon icon={faTrash} />
-                                            </button>
-                                        </td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-
-                {/* BUTTON LOGIC */}
-                {!readOnly && (
+                {/* Only render table and buttons if NOT collapsed */}
+                {!collapsed && (
                     <>
-                        {relevantControls.length === 0 ? (
-                            <button
-                                className="add-row-button-ref"
-                                onClick={togglePopup}
-                            >
-                                Select
-                            </button>
-                        ) : (
-                            <button
-                                className="add-row-button-pic-plus"
-                                onClick={togglePopup}
-                            >
-                                <FontAwesomeIcon icon={faPlusCircle} title="Select More Controls" />
-                            </button>
+                        {relevantControls && relevantControls.length > 0 && (
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header" style={{ backgroundColor: "#002060", color: "white" }}>
+                                    <tr>
+                                        <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
+                                        <th className="refColCen refRef" style={{ width: "90%" }}>Control Name</th>
+                                        {!readOnly && <th className="refColCen refBut" style={{ width: "5%" }}>Action</th>}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {sortedRelevantControls.map((row, index) => (
+                                        <tr key={row.id}>
+                                            <td className="refCent" style={{ fontSize: "14px" }}>{index + 1}</td>
+                                            <td className="refCent" style={{ fontSize: "14px", textAlign: "left", fontWeight: "normal" }}>
+                                                {row.control}
+                                            </td>
+                                            {!readOnly && (
+                                                <td className="ref-but-row procCent">
+                                                    <button
+                                                        className="remove-row-button"
+                                                        onClick={() => removeControl(row.id)}
+                                                        title="Remove Control"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+
+                        {!readOnly && (
+                            <>
+                                {relevantControls.length === 0 ? (
+                                    <button
+                                        className="add-row-button-ref"
+                                        onClick={togglePopup}
+                                    >
+                                        Select
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="add-row-button-pic-plus"
+                                        onClick={togglePopup}
+                                    >
+                                        <FontAwesomeIcon icon={faPlusCircle} title="Select More Controls" />
+                                    </button>
+                                )}
+                            </>
                         )}
                     </>
                 )}
             </div>
+
+            {help && (<ApplicableControlHelp setClose={closeHelp} />)}
 
             {/* POPUP COMPONENT */}
             {isPopupOpen && (

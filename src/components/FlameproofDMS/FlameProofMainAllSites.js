@@ -391,7 +391,7 @@ const FlameProofMainAllSites = () => {
       new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))
     ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
 
-    const existing = filters?.[colId]?.selected;
+    const existing = filters?.[colId];
     const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
 
     setExcelSelected(initialSelected);
@@ -482,12 +482,11 @@ const FlameProofMainAllSites = () => {
     if (selectedStatus.length > 0) current = current.filter(f => selectedStatus.includes(f.complianceStatus));
 
     // 3. Excel Column Filters (New)
-    for (const [colId, filterObj] of Object.entries(filters)) {
-      const selected = filterObj?.selected;
-      if (!selected || !Array.isArray(selected)) continue;
+    for (const [colId, selectedValues] of Object.entries(filters)) {
+      if (!selectedValues || !Array.isArray(selectedValues)) continue;
       current = current.filter(row => {
         const cellValues = getFilterValuesForCell(row, colId);
-        return cellValues.some(v => selected.includes(v));
+        return cellValues.some(v => selectedValues.includes(v));
       });
     }
 
@@ -520,7 +519,7 @@ const FlameProofMainAllSites = () => {
 
   // Render Header Helper
   const renderHeader = (colId, title) => {
-    const isFiltered = filters[colId]?.selected?.length > 0;
+    const isFiltered = Array.isArray(filters[colId]);
     const isSorted = sortConfig.colId === colId;
 
     return (
@@ -574,6 +573,36 @@ const FlameProofMainAllSites = () => {
 
   const getFilterBtnClass = () => {
     return "top-right-button-control-att-2";
+  };
+
+  // Add this helper
+  const getAvailableOptions = (colId) => {
+    let current = files;
+
+    // 1. Search Query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      current = current.filter(file => (
+        file.assetNr.toLowerCase().includes(q) ||
+        file.operationalArea.toLowerCase().includes(q) ||
+        file.assetOwner.toLowerCase().includes(q) ||
+        file.departmentHead.toLowerCase().includes(q)
+      ));
+    }
+
+    // 3. Other Column Filters
+    for (const [filterColId, selectedValues] of Object.entries(filters)) {
+      if (filterColId === colId) continue;
+      if (!selectedValues || !Array.isArray(selectedValues)) continue;
+      current = current.filter(row => {
+        const cellValues = getFilterValuesForCell(row, filterColId);
+        return cellValues.some(v => selectedValues.includes(v));
+      });
+    }
+
+    return Array.from(
+      new Set(current.flatMap(r => getFilterValuesForCell(r, colId)))
+    ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
   };
 
   return (
@@ -768,33 +797,140 @@ const FlameProofMainAllSites = () => {
 
       {/* --- EXCEL FILTER POPUP (From IBRATable) --- */}
       {excelFilter.open && (
-        <div className="excel-filter-popup" ref={excelPopupRef} style={{ position: "fixed", top: excelFilter.pos.top, left: excelFilter.pos.left, width: excelFilter.pos.width, zIndex: 9999 }} onWheel={handleInnerScrollWheel}>
+        <div
+          className="excel-filter-popup"
+          ref={excelPopupRef}
+          style={{
+            position: "fixed",
+            top: excelFilter.pos.top,
+            left: excelFilter.pos.left,
+            width: excelFilter.pos.width,
+            zIndex: 9999,
+          }}
+          onWheel={(e) => e.stopPropagation()}
+        >
           <div className="excel-filter-sortbar">
-            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "asc")}>Sort A to Z</button>
-            <button type="button" className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`} onClick={() => toggleSort(excelFilter.colId, "desc")}>Sort Z to A</button>
+            <button
+              type="button"
+              className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                sortConfig.direction === "asc" ? "active" : ""
+                }`}
+              onClick={() => toggleSort(excelFilter.colId, "asc")}
+            >
+              Sort A to Z
+            </button>
+
+            <button
+              type="button"
+              className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                sortConfig.direction === "desc" ? "active" : ""
+                }`}
+              onClick={() => toggleSort(excelFilter.colId, "desc")}
+            >
+              Sort Z to A
+            </button>
           </div>
-          <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
+
+          <input
+            type="text"
+            className="excel-filter-search"
+            placeholder="Search"
+            value={excelSearch}
+            onChange={(e) => setExcelSearch(e.target.value)}
+          />
+
           {(() => {
             const colId = excelFilter.colId;
-            const allValues = Array.from(new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId)))).sort((a, b) => String(a).localeCompare(String(b)));
-            const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
-            const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
-            const toggleValue = (v) => { setExcelSelected(prev => { const next = new Set(prev); if (next.has(v)) next.delete(v); else next.add(v); return next; }); };
-            const toggleAllVisible = (checked) => { setExcelSelected(prev => { const next = new Set(prev); visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); }); return next; }); };
+            const allValues = getAvailableOptions(colId);
+            const visibleValues = allValues.filter(v =>
+              String(v).toLowerCase().includes(excelSearch.toLowerCase())
+            );
+            const isAllVisibleSelected =
+              visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+            const toggleAll = (checked) => {
+              setExcelSelected(prev => {
+                const next = new Set(prev);
+                if (checked) visibleValues.forEach(v => next.add(v));
+                else visibleValues.forEach(v => next.delete(v));
+                return next;
+              });
+            };
+
+            const toggleValue = (v) => {
+              setExcelSelected(prev => {
+                const next = new Set(prev);
+                if (next.has(v)) next.delete(v);
+                else next.add(v);
+                return next;
+              });
+            };
+
             const onOk = () => {
-              const selectedArr = Array.from(excelSelected);
-              const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
-              setFilters(prev => { const next = { ...prev }; if (isAllSelected) delete next[colId]; else next[colId] = { selected: selectedArr }; return next; });
+              let finalSelection = new Set(excelSelected);
+              if (excelSearch.trim() !== "") {
+                const visibleSet = new Set(visibleValues);
+                finalSelection = new Set(
+                  Array.from(excelSelected).filter(v => visibleSet.has(v))
+                );
+              }
+              const selectedArr = Array.from(finalSelection);
+              const isTotalReset = allValues.length > 0 &&
+                allValues.length === selectedArr.length &&
+                selectedArr.every(v => finalSelection.has(v));
+
+              setFilters(prev => {
+                const next = { ...prev };
+                if (isTotalReset) delete next[colId];
+                else next[colId] = selectedArr;
+                return next;
+              });
               setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
             };
-            const onCancel = () => { setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } }); };
+
+            const onCancel = () => {
+              setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+            };
+
             return (
               <>
                 <div className="excel-filter-list">
-                  <label className="excel-filter-item"><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={allVisibleSelected} onChange={(e) => toggleAllVisible(e.target.checked)} /></span><span className="excel-filter-text">(Select All)</span></label>
-                  {visibleValues.map(v => (<label className="excel-filter-item" key={String(v)}><span className="excel-filter-checkbox"><input type="checkbox" className="checkbox-excel-attend" checked={excelSelected.has(v)} onChange={() => toggleValue(v)} /></span><span className="excel-filter-text">{v}</span></label>))}
+                  <label className="excel-filter-item">
+                    <span className="excel-filter-checkbox">
+                      <input
+                        type="checkbox"
+                        className="checkbox-excel-attend"
+                        checked={isAllVisibleSelected}
+                        onChange={(e) => toggleAll(e.target.checked)}
+                      />
+                    </span>
+                    <span className="excel-filter-text">
+                      {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                    </span>
+                  </label>
+                  {visibleValues.map(v => (
+                    <label className="excel-filter-item" key={String(v)}>
+                      <span className="excel-filter-checkbox">
+                        <input
+                          type="checkbox"
+                          className="checkbox-excel-attend"
+                          checked={excelSelected.has(v)}
+                          onChange={() => toggleValue(v)}
+                        />
+                      </span>
+                      <span className="excel-filter-text">{v}</span>
+                    </label>
+                  ))}
+                  {visibleValues.length === 0 && (
+                    <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                      No matches found
+                    </div>
+                  )}
                 </div>
-                <div className="excel-filter-actions"><button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button><button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button></div>
+                <div className="excel-filter-actions">
+                  <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                  <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                </div>
               </>
             );
           })()}

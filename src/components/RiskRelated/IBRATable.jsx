@@ -215,8 +215,10 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         // 1) Apply filtering
         current = current.filter(row => {
             for (const [colId, filterObj] of Object.entries(filters)) {
-                const selected = filterObj?.selected;
-                if (!selected || !Array.isArray(selected)) continue;
+                const selected = Array.isArray(filterObj)
+                    ? filterObj
+                    : filterObj?.selected;
+                if (!Array.isArray(selected) || selected.length === 0) continue;
 
                 const cellValues = getFilterValuesForCell(row, colId);
                 const match = cellValues.some(v => selected.includes(v));
@@ -394,6 +396,32 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     const handleDragOver = (e, rowId) => {
         e.preventDefault();
         setDragOverRowId(rowId);
+
+        const container = tableWrapperRef.current;
+        const tr = e.target.closest('tr');
+
+        if (container && tr) {
+            const containerRect = container.getBoundingClientRect();
+            const trRect = tr.getBoundingClientRect();
+
+            // Get the sticky header height so we don't scroll the row underneath it
+            const header = container.querySelector('thead');
+            const headerHeight = header ? header.offsetHeight : 0;
+
+            // Define the "Ceiling": The visual top of the scrollable area
+            const stickyCeiling = containerRect.top + headerHeight;
+
+            // Check if the top of the row is above the ceiling (hidden)
+            if (trRect.top < stickyCeiling) {
+                // Calculate EXACTLY how much is hidden
+                const hiddenAmount = stickyCeiling - trRect.top;
+
+                // Scroll up by that exact amount + a tiny 2px buffer for visibility
+                // This snaps the row into view instantly and stops scrolling because 
+                // on the next frame, (trRect.top < stickyCeiling) will be false.
+                container.scrollTop -= (hiddenAmount + 2);
+            }
+        }
     };
 
     const handleDragLeave = (e) => {
@@ -1220,15 +1248,12 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         const th = e.target.closest("th");
         const rect = th.getBoundingClientRect();
 
-        // Build unique values across ALL rows for this column
-        const values = Array.from(
-            new Set(
-                (rows || []).flatMap(r => getFilterValuesForCell(r, colId))
-            )
-        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+        // CHANGE: Use the helper to get context-aware values
+        const values = getAvailableOptions(colId);
 
-        const existing = filters?.[colId]?.selected;
-        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+        const existing = filters[colId];
+        // Handle both array format (new) and object format (old)
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : (existing?.selected || values));
 
         setExcelSelected(initialSelected);
         setExcelSearch("");
@@ -1325,6 +1350,27 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         }
 
         return "top-right-button-ibra4";
+    };
+
+    const getAvailableOptions = (colId) => {
+        let filtered = rows;
+
+        for (const [filterColId, selectedValues] of Object.entries(filters)) {
+            // Skip the current column to show all potential options for this column
+            if (filterColId === colId) continue;
+
+            const selected = Array.isArray(selectedValues) ? selectedValues : selectedValues?.selected;
+            if (!Array.isArray(selected)) continue;
+
+            filtered = filtered.filter(row => {
+                const cellValues = getFilterValuesForCell(row, filterColId);
+                return cellValues.some(v => selected.includes(v));
+            });
+        }
+
+        return Array.from(
+            new Set(filtered.flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
     };
 
     return (
@@ -1761,9 +1807,6 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
 
                                                 if (colId === "main") {
                                                     if (!isFirst) return null;
-
-                                                    const isFlagged = !!row.mainFlag || !!row.subFlag || !!row.ownerFlag || !!row.oddsFlag || !!row.riskRankFlag || !!row.maxConsequenceFlag || !!row.controlFlag || !!row.hazardFlag || !!row.sourceFlag || !!row.ueFlag;
-
                                                     return (
                                                         <td
                                                             key={idx}
@@ -1771,16 +1814,6 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                                             className={`${colClass} ibra-main-cell correct-wrap-ibra`}
                                                             style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
                                                         >
-                                                            {isFlagged && (<span
-                                                                className={
-                                                                    "ibra-main-flag-icon" +
-                                                                    (isFlagged ? " active" : "")
-                                                                }
-                                                                title={isFlagged ? "Unflag main area" : "Flag main area"}
-                                                            >
-                                                                <FontAwesomeIcon icon={faFlag} />
-                                                            </span>)}
-
                                                             {/* Main text */}
                                                             {cellData}
                                                         </td>
@@ -1940,13 +1973,24 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
 
                                                 // Nr column (with your arrow-icon logic)
                                                 if (colId === "nr") {
+                                                    const isFlagged = !!row.mainFlag || !!row.subFlag || !!row.ownerFlag || !!row.oddsFlag || !!row.riskRankFlag || !!row.maxConsequenceFlag || !!row.controlFlag || !!row.hazardFlag || !!row.sourceFlag || !!row.ueFlag;
+
                                                     return (
                                                         <td
                                                             key={idx}
                                                             className={`${colClass} correct-wrap-ibra`}
                                                             rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, alignItems: 'center', gap: '0px', whiteSpace: "pre-wrap" }}
+                                                            style={{ ...commonCellStyle, alignItems: 'center', gap: '0px', whiteSpace: "pre-wrap", position: "relative" }}
                                                         >
+                                                            {isFlagged && (<span
+                                                                className={
+                                                                    "ibra-main-flag-icon" +
+                                                                    (isFlagged ? " active" : "")
+                                                                }
+                                                                title={isFlagged ? "Unflag main area" : "Flag main area"}
+                                                            >
+                                                                <FontAwesomeIcon icon={faFlag} />
+                                                            </span>)}
                                                             <span>{cellData}</span>
                                                             {!readOnly && (<FontAwesomeIcon
                                                                 icon={faArrowsUpDown}
@@ -2137,7 +2181,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                         width: excelFilter.pos.width,
                         zIndex: 9999,
                     }}
-                    onWheel={handleInnerScrollWheel} // you already have this helper
+                    onWheel={(e) => e.stopPropagation()}
                 >
                     <div className="excel-filter-sortbar">
                         <button
@@ -2172,16 +2216,27 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                     {(() => {
                         const colId = excelFilter.colId;
 
-                        const allValues = Array.from(
-                            new Set((rows || []).flatMap(r => getFilterValuesForCell(r, colId)))
-                        ).sort((a, b) => String(a).localeCompare(String(b)));
+                        // Use the helper to get values that respect other active filters
+                        const allValues = getAvailableOptions(colId);
 
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
 
-                        const allVisibleSelected =
+                        const isAllVisibleSelected =
                             visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) {
+                                    visibleValues.forEach(v => next.add(v));
+                                } else {
+                                    visibleValues.forEach(v => next.delete(v));
+                                }
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -2192,25 +2247,32 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                             });
                         };
 
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
-                                return next;
-                            });
-                        };
-
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+
+                            // If searching, only apply changes to the visible items
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+
+                            const selectedArr = Array.from(finalSelection);
+
+                            // Check if this is a "Select All" (Reset) scenario
+                            // i.e., if the selected items match the available items exactly
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
 
                             setFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId];
-                                else next[colId] = { selected: selectedArr };
+                                if (isTotalReset) {
+                                    delete next[colId];
+                                } else {
+                                    next[colId] = selectedArr;
+                                }
                                 return next;
                             });
 
@@ -2229,11 +2291,13 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
 
                                     {visibleValues.map(v => (
@@ -2249,6 +2313,12 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="excel-filter-actions">

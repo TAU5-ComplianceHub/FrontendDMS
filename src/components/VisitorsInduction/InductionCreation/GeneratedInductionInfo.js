@@ -912,8 +912,16 @@ const GeneratedInductionInfo = () => {
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
-                        const allVisibleSelected =
-                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const allSelected =
+                            allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(() => {
+                                if (checked) return new Set(allValues); // select everything
+                                return new Set();                      // clear everything
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -959,8 +967,8 @@ const GeneratedInductionInfo = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={allSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
                                         <span className="excel-filter-text">(Select All)</span>

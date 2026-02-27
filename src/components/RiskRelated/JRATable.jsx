@@ -163,6 +163,27 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         });
     };
 
+    // --- NEW: Helper to get options filtered by OTHER columns ---
+    const getAvailableOptions = (colId) => {
+        let filtered = formData.jra || [];
+
+        for (const [filterColId, selectedValues] of Object.entries(filters)) {
+            if (filterColId === colId) continue;
+
+            const selected = Array.isArray(selectedValues) ? selectedValues : selectedValues?.selected;
+            if (!Array.isArray(selected)) continue;
+
+            filtered = filtered.filter(row => {
+                const cellValues = getFilterValuesForCell(row, filterColId);
+                return cellValues.some(v => selected.includes(v));
+            });
+        }
+
+        return Array.from(
+            new Set(filtered.flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+    };
+
     // --- Open Filter Popup ---
     function openExcelFilterPopup(colId, e) {
         if (colId === "action") return;
@@ -170,15 +191,12 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         const th = e.target.closest("th");
         const rect = th.getBoundingClientRect();
 
-        // Collect all unique values for this column across ALL rows
-        const values = Array.from(
-            new Set(
-                (formData.jra || []).flatMap(r => getFilterValuesForCell(r, colId))
-            )
-        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+        // CHANGE: Use helper for context-aware values
+        const values = getAvailableOptions(colId);
 
-        const existing = filters?.[colId]?.selected;
-        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
+        const existing = filters?.[colId];
+        // Handle both array and object formats
+        const initialSelected = new Set(existing && Array.isArray(existing) ? existing : (existing?.selected || values));
 
         setExcelSelected(initialSelected);
         setExcelSearch("");
@@ -339,6 +357,30 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         setDragOverRowId(rowId);
+
+        const container = tableWrapperRef.current;
+        const tr = e.target.closest('tr');
+
+        if (container && tr) {
+            const containerRect = container.getBoundingClientRect();
+            const trRect = tr.getBoundingClientRect();
+
+            // Get the sticky header height so we don't scroll the row underneath it
+            const header = container.querySelector('thead');
+            const headerHeight = header ? header.offsetHeight : 0;
+
+            // Define the "Ceiling": The visual top of the scrollable area
+            const stickyCeiling = containerRect.top + headerHeight;
+
+            // Check if the top of the row is above the ceiling (hidden)
+            if (trRect.top < stickyCeiling) {
+                // Calculate EXACTLY how much is hidden
+                const hiddenAmount = stickyCeiling - trRect.top;
+
+                // Scroll up by that exact amount + a tiny 2px buffer for visibility
+                container.scrollTop -= (hiddenAmount + 2);
+            }
+        }
     };
 
     const handleDragLeave = () => {
@@ -377,17 +419,28 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         setArmedDragRow(null);
     };
 
-    const handleDuplicateRow = (rowIndex) => {
+    const handleDuplicateRow = (targetRowId) => {
         setFormData(prev => {
+            // Find the actual index in the source data
+            const rowIndex = prev.jra.findIndex(r => r.id === targetRowId);
+
+            if (rowIndex === -1) return prev;
+
             const newJra = [...prev.jra];
             const rowCopy = JSON.parse(JSON.stringify(newJra[rowIndex]));
+
+            // Assign new IDs
             rowCopy.id = uuidv4();
             rowCopy.jraBody = rowCopy.jraBody.map(body => ({
                 ...body,
                 idBody: uuidv4()
             }));
+
             newJra.splice(rowIndex + 1, 0, rowCopy);
+
+            // Renumber
             newJra.forEach((r, idx) => { r.nr = idx + 1; });
+
             return { ...prev, jra: newJra };
         });
     };
@@ -406,14 +459,14 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
     const closeTaskExecutionHelp = () => setHelpTaskExecution(false);
     const closeGo_noGo = () => setGo_noGO(false);
 
-    // --- Filtered Rows Logic ---
     const filteredRows = useMemo(() => {
         let current = [...formData.jra];
 
         // 1. Filtering
         current = current.filter(row => {
             for (const [colId, filterObj] of Object.entries(filters)) {
-                const selected = filterObj?.selected;
+                // CHANGE: Support both array (new) and object (old) formats
+                const selected = Array.isArray(filterObj) ? filterObj : filterObj?.selected;
                 if (!selected || !Array.isArray(selected)) continue;
 
                 // Get values for this row/column
@@ -441,9 +494,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         const colId = sortConfig?.colId || "nr";
 
         if (colId === "nr") {
-            const order = initialOrderRef.current;
-            current.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-            // Renumber visually
             current.forEach((r, i) => (r.nr = i + 1));
             return current;
         }
@@ -463,8 +513,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         }
 
         current.sort((a, b) => {
-            // For sorting nested data, we typically use the first value or a concatenation. 
-            // Here we use the first value found in getFilterValuesForCell (which returns sorted array)
             const valsA = getFilterValuesForCell(a, colId);
             const valsB = getFilterValuesForCell(b, colId);
 
@@ -520,18 +568,24 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         });
     };
 
-    const insertMainRow = (afterIndex) => {
+    const insertMainRow = (targetRowId) => {
         setFormData(prev => {
+            // Find the actual index of this row in the source data
+            const afterIndex = prev.jra.findIndex(r => r.id === targetRowId);
+
+            // Safety check
+            if (afterIndex === -1) return prev;
+
             const newEntry = {
                 id: uuidv4(),
-                nr: null,
+                nr: null, // will be recalculated
                 main: "",
                 rowFlagged: false,
                 jraBody: [{
                     idBody: uuidv4(),
                     subStepFlagged: false,
                     hazards: [{ hazard: "Work Execution", flagged: false }],
-                    UE: [{ ue: "Non-adherence...", flagged: false }],
+                    UE: [{ ue: "Non-adherence to task step requirements / specifications", flagged: false }],
                     sub: [{ task: "" }],
                     taskExecution: [{ R: "" }],
                     controls: [{ control: "" }],
@@ -1262,7 +1316,15 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
                                                     if (colId === "nr" && bodyIdx === 0) {
                                                         return (
-                                                            <td key={colIdx} rowSpan={rowCount} className={cls} style={commonCellStyle}>
+                                                            <td key={colIdx} rowSpan={rowCount} className={cls} style={{ ...commonCellStyle, position: "relative" }}>
+                                                                {getRowFlagStatus(row) && (<span
+                                                                    className={
+                                                                        "ibra-main-flag-icon" +
+                                                                        (getRowFlagStatus(row) ? " active" : "")
+                                                                    }
+                                                                >
+                                                                    <FontAwesomeIcon icon={faFlag} />
+                                                                </span>)}
                                                                 <span>{row.nr}</span>
                                                                 {!readOnly && (<FontAwesomeIcon
                                                                     icon={faArrowsUpDown}
@@ -1296,15 +1358,6 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                                 style={commonCellStyle}
                                                             >
                                                                 <div className="main-cell-content">
-                                                                    {getRowFlagStatus(row) && (<span
-                                                                        className={
-                                                                            "ibra-main-flag-icon" +
-                                                                            (getRowFlagStatus(row) ? " active" : "")
-                                                                        }
-                                                                        title={getRowFlagStatus(row) ? "Unflag main area" : "Flag main area"}
-                                                                    >
-                                                                        <FontAwesomeIcon icon={faFlag} />
-                                                                    </span>)}
                                                                     <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{row.main}</div>
                                                                 </div>
                                                                 {!readOnly && (<>
@@ -1312,7 +1365,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                                         type="button"
                                                                         className="insert-mainrow-button"
                                                                         title="Add Main Step Here"
-                                                                        onClick={() => insertMainRow(rowIndex)}
+                                                                        onClick={() => insertMainRow(row.id)}
                                                                     >
                                                                         <FontAwesomeIcon icon={faPlus} />
                                                                     </button>
@@ -1330,7 +1383,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                                         type="button"
                                                                         className="duplicate-mainrow-button"
                                                                         title="Duplicate Main Step"
-                                                                        onClick={() => handleDuplicateRow(rowIndex)}
+                                                                        onClick={() => handleDuplicateRow(row.id)}
                                                                     >
                                                                         <FontAwesomeIcon icon={faCopy} />
                                                                     </button>
@@ -1347,7 +1400,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                                                     style={{ marginBottom: "0px", fontSize: "15px" }}
                                                                     className="insert-row-button-sig-risk font-fam"
                                                                     title="Add sub & control here"
-                                                                    onClick={() => insertMainRow(rowIndex)}
+                                                                    onClick={() => insertMainRow(row.id)}
                                                                 />
 
                                                                 {bodyIdx !== 0 && (
@@ -1527,6 +1580,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
             </div>
 
             {/* Excel-style Filter Popup */}
+            {/* Excel-style Filter Popup */}
             {excelFilter.open && (
                 <div
                     className="excel-filter-popup"
@@ -1572,16 +1626,28 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
 
                     {(() => {
                         const colId = excelFilter.colId;
-                        const allValues = Array.from(
-                            new Set((formData.jra || []).flatMap(r => getFilterValuesForCell(r, colId)))
-                        ).sort((a, b) => String(a).localeCompare(String(b)));
+
+                        // CHANGE: Use helper to get context-aware options
+                        const allValues = getAvailableOptions(colId);
 
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
 
-                        const allVisibleSelected =
+                        const isAllVisibleSelected =
                             visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) {
+                                    visibleValues.forEach(v => next.add(v));
+                                } else {
+                                    visibleValues.forEach(v => next.delete(v));
+                                }
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -1592,25 +1658,31 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                             });
                         };
 
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
-                                return next;
-                            });
-                        };
-
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+
+                            // If searching, only apply changes to the visible items
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+
+                            const selectedArr = Array.from(finalSelection);
+
+                            // Check if this is a "Select All" (Reset) scenario
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
 
                             setFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId];
-                                else next[colId] = { selected: selectedArr };
+                                if (isTotalReset) {
+                                    delete next[colId];
+                                } else {
+                                    next[colId] = selectedArr; // Save as simple array
+                                }
                                 return next;
                             });
 
@@ -1629,11 +1701,13 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
 
                                     {visibleValues.map(v => (
@@ -1649,6 +1723,12 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="excel-filter-actions">

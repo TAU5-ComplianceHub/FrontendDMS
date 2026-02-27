@@ -7,20 +7,14 @@ const FilterFileName = ({ access, canIn, onHeaderClick, sortConfig, excelFilters
 
     // Helper to determine if we should show an icon
     const getIcon = (colId) => {
-        // 1. Is there an active filter?
-        const isFiltered = excelFilters[colId]?.selected?.length > 0;
+        const isFiltered = Array.isArray(excelFilters?.[colId]); // key exists = filter active
 
-        // 2. Is this column currently sorted?
-        const isSorted = sortConfig.colId === colId;
-        const direction = sortConfig.direction;
-
-        // If neither, return null (No icon shown "already")
+        const isSorted = sortConfig?.colId === colId;
         if (!isFiltered && !isSorted) return null;
 
         return (
             <span style={{ marginLeft: "10px" }} className="active-filter-icon">
-                {/* Show filter icon if filtered */}
-                {(isFiltered || isSorted) && <FontAwesomeIcon icon={faFilter} style={{ marginRight: isSorted ? "4px" : "0" }} />}
+                <FontAwesomeIcon icon={faFilter} />
             </span>
         );
     };

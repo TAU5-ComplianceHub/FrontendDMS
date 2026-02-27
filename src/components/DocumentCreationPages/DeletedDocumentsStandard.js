@@ -237,13 +237,14 @@ const DeletedDocumentsStandard = () => {
         }
 
         // 2. Excel Column Filters
-        current = current.filter(row => {
-            for (const [colId, filterObj] of Object.entries(filters)) {
-                const selected = filterObj?.selected;
-                if (!selected || !Array.isArray(selected)) continue;
-                const cellValues = getFilterValuesForCell(row, colId);
-                const match = cellValues.some(v => selected.includes(v));
-                if (!match) return false;
+        current = current.filter((r, i) => {
+            for (const [c, s] of Object.entries(filters)) {
+                if (!Array.isArray(s)) continue;
+
+                // If user applied with nothing selected: show NO rows
+                if (s.length === 0) return false;
+
+                if (!getFilterValuesForCell(r, c, i).some(v => s.includes(v))) return false;
             }
             return true;
         });
@@ -302,6 +303,38 @@ const DeletedDocumentsStandard = () => {
 
     const getFilterBtnClass = () => {
         return "top-right-button-control-att";
+    };
+
+    // --- NEW: Helper to get options filtered by OTHER columns ---
+    const getAvailableOptions = (colId) => {
+        // Start with all files
+        let filtered = files;
+
+        // 1. Apply Global Search
+        if (searchQuery) {
+            const lowerQ = searchQuery.toLowerCase();
+            // Matching the logic in processedFiles (assuming fileName or formData.title)
+            filtered = filtered.filter(f =>
+                (f.fileName || f.formData?.title || "").toLowerCase().includes(lowerQ)
+            );
+        }
+
+        // 2. Apply filters from ALL OTHER active columns
+        for (const [filterColId, selectedValues] of Object.entries(filters)) {
+            if (filterColId === colId) continue; // Don't filter a column by itself
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+            filtered = filtered.filter((row, index) => {
+                const cellValues = getFilterValuesForCell(row, filterColId, index);
+                // Keep row if ANY of its cell values match the selection
+                return cellValues.some(v => selectedValues.includes(v));
+            });
+        }
+
+        // 3. Extract unique values for the requested column from the filtered subset
+        return Array.from(
+            new Set(filtered.flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
     };
 
     if (error) return <div>Error: {error}</div>;
@@ -448,23 +481,30 @@ const DeletedDocumentsStandard = () => {
                         width: excelFilter.pos.width,
                         zIndex: 9999,
                     }}
+                    onWheel={(e) => e.stopPropagation()}
                 >
                     <div className="excel-filter-sortbar">
                         <button
                             type="button"
-                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "asc" ? "active" : ""}`}
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "asc" ? "active" : ""
+                                }`}
                             onClick={() => toggleSort(excelFilter.colId, "asc")}
                         >
                             Sort A to Z
                         </button>
+
                         <button
                             type="button"
-                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId && sortConfig.direction === "desc" ? "active" : ""}`}
+                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                sortConfig.direction === "desc" ? "active" : ""
+                                }`}
                             onClick={() => toggleSort(excelFilter.colId, "desc")}
                         >
                             Sort Z to A
                         </button>
                     </div>
+
                     <input
                         type="text"
                         className="excel-filter-search"
@@ -472,37 +512,72 @@ const DeletedDocumentsStandard = () => {
                         value={excelSearch}
                         onChange={(e) => setExcelSearch(e.target.value)}
                     />
+
                     {(() => {
                         const colId = excelFilter.colId;
-                        const allValues = Array.from(new Set((files || []).flatMap(r => getFilterValuesForCell(r, colId))))
-                            .sort((a, b) => String(a).localeCompare(String(b)));
-                        const visibleValues = allValues.filter(v => String(v).toLowerCase().includes(excelSearch.toLowerCase()));
-                        const allVisibleSelected = visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        // Use the new helper to get context-aware options
+                        const allValues = getAvailableOptions(colId);
+
+                        const visibleValues = allValues.filter(v =>
+                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                        );
+
+                        const isAllVisibleSelected =
+                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) {
+                                    visibleValues.forEach(v => next.add(v));
+                                } else {
+                                    visibleValues.forEach(v => next.delete(v));
+                                }
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
                                 const next = new Set(prev);
-                                if (next.has(v)) next.delete(v); else next.add(v);
+                                if (next.has(v)) next.delete(v);
+                                else next.add(v);
                                 return next;
                             });
                         };
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => { if (checked) next.add(v); else next.delete(v); });
-                                return next;
-                            });
-                        };
+
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+
+                            // If searching, only apply changes to the visible items
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+
+                            const selectedArr = Array.from(finalSelection);
+
+                            // Check if this is a "Select All" (Reset) scenario
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
+
                             setFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId]; else next[colId] = { selected: selectedArr };
+                                if (isTotalReset) {
+                                    delete next[colId];
+                                } else {
+                                    next[colId] = selectedArr;
+                                }
                                 return next;
                             });
+
                             setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
                         };
+
                         const onCancel = () => {
                             setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
                         };
@@ -515,12 +590,15 @@ const DeletedDocumentsStandard = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
+
                                     {visibleValues.map(v => (
                                         <label className="excel-filter-item" key={String(v)}>
                                             <span className="excel-filter-checkbox">
@@ -534,6 +612,12 @@ const DeletedDocumentsStandard = () => {
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="excel-filter-actions">
                                     <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>

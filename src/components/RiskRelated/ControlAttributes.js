@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck, faX } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck, faX, faCalendarAlt, faClock, faClockRotateLeft } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../Notifications/TopBar";
@@ -33,6 +33,11 @@ const ControlAttributes = () => {
     const [categoryChanges, setCategoryChanges] = useState({});
     const [searchQuery, setSearchQuery] = useState("");
     const [categories, setCategories] = useState([]);
+    const [showRecentChanges, setShowRecentChanges] = useState(false);
+
+    const toggleRecentChanges = () => {
+        setShowRecentChanges(prev => !prev);
+    };
 
     const clearSearch = () => {
         setSearchQuery("");
@@ -65,6 +70,17 @@ const ControlAttributes = () => {
     const [excelSelected, setExcelSelected] = useState(new Set());
     const excelPopupRef = useRef(null);
     const [activeControlMenuId, setActiveControlMenuId] = useState(null);
+
+    const formatUpdatedAt = (dateString) => {
+        if (!dateString) return "-";
+        const d = new Date(dateString);
+        if (Number.isNaN(d.getTime())) return "-";
+
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
 
     const handleControlRowClick = (row) => (e) => {
         if (drag.current.moved) return;
@@ -378,7 +394,7 @@ const ControlAttributes = () => {
     };
 
     const fetchControls = async () => {
-        const route = `/api/riskInfo/controls`;
+        const route = `/api/riskInfo/controlsWithDates`;
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`);
             if (!response.ok) {
@@ -432,9 +448,41 @@ const ControlAttributes = () => {
         // Add category handler
         if (colId === "category") return [row.category ? String(row.category).trim() : "No Category"];
         if (colId === "critical") return [row.critical ? String(row.critical).trim() : "-"];
+        if (colId === "updatedAt") return [formatUpdatedAt(row?.updatedAt)];
 
         const val = row[colId];
         return [val ? String(val).trim() : "-"];
+    };
+
+    // --- NEW: Helper to get options filtered by OTHER columns ---
+    const getAvailableOptions = (colId) => {
+        // Start with all controls
+        let filtered = controls;
+
+        // 1. Apply Global Search (if you want options to respect the top search bar)
+        if (searchQuery) {
+            const lowerQ = searchQuery.toLowerCase();
+            filtered = filtered.filter(c => c.control.toLowerCase().includes(lowerQ));
+        }
+
+        // 2. Apply filters from ALL OTHER active columns
+        for (const [filterColId, selectedValues] of Object.entries(activeExcelFilters)) {
+            if (filterColId === colId) continue; // Don't filter a column by itself
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+            filtered = filtered.filter((row, index) => {
+                const cellValues = getFilterValuesForCell(row, filterColId, index);
+                // Keep row if ANY of its cell values match the selection
+                return cellValues.some(v => selectedValues.includes(v));
+            });
+        }
+
+        // 3. Extract unique values for the requested column from the filtered subset
+        const uniqueValues = Array.from(
+            new Set(filtered.flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        return uniqueValues;
     };
 
     const openExcelFilterPopup = (colId, e) => {
@@ -443,12 +491,8 @@ const ControlAttributes = () => {
         const th = e.target.closest("th");
         const rect = th.getBoundingClientRect();
 
-        // Build unique values across ALL rows
-        const values = Array.from(
-            new Set(
-                (controls || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i))
-            )
-        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+        // CHANGED: Use the helper to get cross-filtered values
+        const values = getAvailableOptions(colId);
 
         const existing = activeExcelFilters[colId];
         const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
@@ -544,6 +588,7 @@ const ControlAttributes = () => {
         { id: "quality", title: "Control Quality" },
         { id: "cons", title: "Main Consequence Addressed" },
         { id: "category", title: "Category" }, // New Column Added
+        { id: "updatedAt", title: "Date Updated" },
         { id: "action", title: "Action" },
     ];
 
@@ -557,6 +602,7 @@ const ControlAttributes = () => {
         "hierarchy",
         "cons",
         "category", // Default to show
+        "updatedAt",
         "action",
     ]);
 
@@ -628,6 +674,7 @@ const ControlAttributes = () => {
         quality: 120,
         cons: 150,
         category: 180, // Default width for Category
+        updatedAt: 200,
         action: 80,
     });
 
@@ -643,6 +690,7 @@ const ControlAttributes = () => {
         quality: 120,
         cons: 150,
         category: 180,
+        updatedAt: 200,
         action: 80,
     });
 
@@ -658,6 +706,7 @@ const ControlAttributes = () => {
         quality: { min: 100, max: 250 },
         cons: { min: 120, max: 300 },
         category: { min: 100, max: 300 }, // Limits for category
+        updatedAt: { min: 160, max: 320 },
         action: { min: 80, max: 80 },
     };
 
@@ -985,6 +1034,14 @@ const ControlAttributes = () => {
         return "top-right-button-control-att-3";
     };
 
+    const getDatesBtnClass = () => {
+        if (showResetButton) {
+            return "top-right-button-control-att-5";
+        }
+
+        return "top-right-button-control-att-4";
+    };
+
     return (
         <div className="risk-control-attributes-container">
             {isSidebarVisible && (
@@ -1071,6 +1128,18 @@ const ControlAttributes = () => {
                             title="Show / Hide Columns"
                             className="top-right-button-control-att-2"
                             onClick={() => setShowColumnSelector(prev => !prev)}
+                        />
+
+                        <FontAwesomeIcon
+                            icon={faClock}
+                            title="Highlight Changes from Last 30 Days"
+                            className={getDatesBtnClass()}
+                            onClick={toggleRecentChanges}
+                            style={{
+                                cursor: "pointer",
+                                color: showRecentChanges ? "#002060" : "gray",
+                                userSelect: "none"
+                            }}
                         />
 
                         <FontAwesomeIcon
@@ -1206,6 +1275,34 @@ const ControlAttributes = () => {
                                         </th>
                                     )}
 
+                                    {showColumns.includes("updatedAt") && (
+                                        <th
+                                            className="risk-control-attributes-category"
+                                            rowSpan={2}
+                                            style={{
+                                                position: "relative",
+                                                width: columnWidths.updatedAt ? `${columnWidths.updatedAt}px` : undefined,
+                                                minWidth: columnSizeLimits.updatedAt?.min,
+                                                maxWidth: columnSizeLimits.updatedAt?.max,
+                                                cursor: "pointer",
+                                                zIndex: 2,
+                                                textAlign: "center",
+                                                borderLeft: "1px solid white",
+                                            }}
+                                            onClick={(e) => {
+                                                if (isResizingRef.current) return;
+                                                if (e.target.classList.contains("rca-col-resizer")) return;
+                                                openExcelFilterPopup("updatedAt", e);
+                                            }}
+                                        >
+                                            <span>Updated At</span>
+                                            {(activeExcelFilters["updatedAt"] || sortConfig.colId === "updatedAt") && (
+                                                <FontAwesomeIcon icon={faFilter} className="th-filter-icon" style={{ marginLeft: "8px", opacity: 0.8 }} />
+                                            )}
+                                            <div className="rca-col-resizer" onMouseDown={(e) => startColumnResize(e, "updatedAt")} />
+                                        </th>
+                                    )}
+
                                     {showColumns.includes("action") && (
                                         <th
                                             className="risk-control-attributes-action"
@@ -1233,6 +1330,8 @@ const ControlAttributes = () => {
                                     {availableColumns.map(col => {
                                         if (col.id === "action") return null; // Handled in rowSpan above
                                         if (col.id === "category") return null; // Skip category here
+                                        if (col.id === "updatedAt") return null;
+
                                         if (!showColumns.includes(col.id)) return null;
 
                                         // Map to current CSS classes
@@ -1301,10 +1400,15 @@ const ControlAttributes = () => {
                                     const originalVal = row.category || "";
                                     const isDirty = currentVal !== undefined && currentVal !== originalVal;
                                     const displayVal = currentVal !== undefined ? currentVal : originalVal;
+                                    const isRecent =
+                                        showRecentChanges &&
+                                        row.updatedAt &&
+                                        (Date.now() - new Date(row.updatedAt).getTime()) <
+                                        30 * 24 * 60 * 60 * 1000;
 
                                     return (
                                         <tr
-                                            className="table-scroll-wrapper-attributes-controls"
+                                            className={`table-scroll-wrapper-attributes-controls ${isRecent ? "recent-control-row" : ""}`}
                                             key={row._id ?? index}
                                             onClick={handleControlRowClick(row)}
                                         >
@@ -1375,7 +1479,6 @@ const ControlAttributes = () => {
                                                 </td>
                                             )}
 
-
                                             {false && showColumns.includes("category") && (
                                                 <td style={{ fontSize: "14px", padding: "4px" }}>
                                                     <div className="category-input-container" style={{ display: "flex", alignItems: "center", gap: "2px", width: "100%", height: "100%" }}>
@@ -1424,6 +1527,12 @@ const ControlAttributes = () => {
                                                             </button>
                                                         )}
                                                     </div>
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("updatedAt") && (
+                                                <td style={{ fontSize: "14px", textAlign: "center" }}>
+                                                    {formatUpdatedAt(row?.updatedAt)}
                                                 </td>
                                             )}
 
@@ -1494,16 +1603,26 @@ const ControlAttributes = () => {
                     {(() => {
                         const colId = excelFilter.colId;
 
-                        const allValues = Array.from(
-                            new Set((controls || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
-                        ).sort((a, b) => String(a).localeCompare(String(b)));
+                        const allValues = getAvailableOptions(colId);
 
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
 
-                        const allVisibleSelected =
+                        const isAllVisibleSelected =
                             visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) {
+                                    visibleValues.forEach(v => next.add(v));
+                                } else {
+                                    visibleValues.forEach(v => next.delete(v));
+                                }
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -1514,25 +1633,27 @@ const ControlAttributes = () => {
                             });
                         };
 
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
-                                return next;
-                            });
-                        };
-
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+
+                            const selectedArr = Array.from(finalSelection);
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
 
                             setActiveExcelFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId];
-                                else next[colId] = selectedArr;
+                                if (isTotalReset) {
+                                    delete next[colId];
+                                } else {
+                                    next[colId] = selectedArr;
+                                }
                                 return next;
                             });
 
@@ -1551,11 +1672,13 @@ const ControlAttributes = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
 
                                     {visibleValues.map(v => (
@@ -1571,6 +1694,12 @@ const ControlAttributes = () => {
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="excel-filter-actions">

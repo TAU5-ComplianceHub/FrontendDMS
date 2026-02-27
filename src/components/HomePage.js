@@ -1,17 +1,53 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGraduationCap, faClipboardList, faFileAlt, faFolderOpen, faFileSignature, faCertificate, faCircle } from "@fortawesome/free-solid-svg-icons";
+import { faGraduationCap, faClipboardList, faFileAlt, faFolderOpen, faFileSignature, faCertificate, faCircle, faCircleInfo, faGear, faBell, faCircleUser } from "@fortawesome/free-solid-svg-icons";
 import "./HomePage.css";
 import { toast, ToastContainer } from "react-toastify";
 import { jwtDecode } from "jwt-decode";
 import FirstLoginPopup from "./UserManagement/FirstLoginPopup";
 import { isAdmin, getCurrentUser, hasRole } from "../utils/auth";
+import BurgerMenuFI from "./FileInfo/BurgerMenuFI";
+import Notifications from "./Notifications/Notifications";
+import NotificationsHomePage from "./Notifications/NotificationsHomePage";
+import BurgerMenuHomePage from "./FileInfo/BurgerMenuHomePage";
 
 const HomePage = () => {
   const navigate = useNavigate();
   const access = getCurrentUser();
   const [showPopup, setShowPopup] = useState(localStorage.getItem("firstLogin") === "true");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [count, setCount] = useState("");
+  const [profilePic, setProfilePic] = useState(null);
+
+  useEffect(() => {
+    // Load from sessionStorage on mount
+    const cached = sessionStorage.getItem('profilePic') || sessionStorage.getItem('profilePicStudent');
+    setProfilePic(cached || null);
+  }, []);
+
+  const fetchNotificationCount = async () => {
+    const route = `/api/notifications/count`;
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Failed to fetch notification count');
+      }
+      const data = await response.json();
+      setCount(data.notifications);
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotificationCount();
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -56,6 +92,29 @@ const HomePage = () => {
 
   return (
     <div className="homepage-container">
+      <div className="nl-floating-pill">
+        <div className="burger-menu-icon-um notifications-bell-wrapper">
+          <FontAwesomeIcon icon={faBell} onClick={() => setShowNotifications(!showNotifications)} title="Notifications" />
+          {count != 0 && <div className="notifications-badge"></div>}{/* Replace with unread count from backend later */}
+        </div>
+        <div className="burger-menu-icon-um" onClick={() => setIsMenuOpen(!isMenuOpen)} title="My Profile" style={{ cursor: "pointer" }}>
+          {profilePic ? (
+            <img
+              src={profilePic}
+              alt="Profile"
+              style={{
+                width: "28px",          // match icon size
+                height: "28px",
+                borderRadius: "50%",    // circle
+                objectFit: "cover",
+                display: "block"
+              }}
+            />
+          ) : (
+            <FontAwesomeIcon icon={faCircleUser} />
+          )}
+        </div>
+      </div>
       {showPopup && (<FirstLoginPopup onClose={() => setShowPopup(false)} />)}
       <header className="header">
         <img src="CH_Logo.svg" alt="Logo" className="header-logo" />
@@ -79,6 +138,8 @@ const HomePage = () => {
       <button className="logout-button" onClick={handleLogout}>Log Out</button>
       <button className="coming-soon-button" onClick={() => navigate("/FrontendDMS/futureEnhancement")}>Coming Soon</button>
       <ToastContainer />
+      {showNotifications && (<NotificationsHomePage setClose={setShowNotifications} getCount={fetchNotificationCount} />)}
+      {(isMenuOpen) && (<BurgerMenuHomePage isOpen={isMenuOpen} setIsOpen={setIsMenuOpen} />)}
     </div>
   );
 };

@@ -424,8 +424,9 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
         // 1. Apply Filtering
         currentRows = currentRows.filter(row => {
-            for (const [col, filterObj] of Object.entries(filters)) {
-                const selected = filterObj?.selected;
+            for (const [col, filterVal] of Object.entries(filters)) {
+                const selected = Array.isArray(filterVal) ? filterVal : filterVal?.selected;
+
 
                 // if no filter, allow all
                 if (!selected || !Array.isArray(selected)) continue;
@@ -533,6 +534,31 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
     // Calculate the rows to display: always the sorted version
     const rowsToDisplay = filteredRows;
 
+    const getFilterValuesForCell = (row, colId) => {
+        const raw = row?.[colId];
+        const s = raw == null ? "" : String(raw).trim();
+        return s === "" ? [BLANK] : [s];
+    };
+
+    // --- NEW: Helper to get options filtered by OTHER columns ---
+    const getAvailableOptions = (colId) => {
+        let filtered = rows;
+
+        for (const [filterColId, selectedValues] of Object.entries(filters)) {
+            const selected = Array.isArray(selectedValues) ? selectedValues : selectedValues?.selected;
+            if (!Array.isArray(selected)) continue;
+
+            filtered = filtered.filter(row => {
+                const cellValues = getFilterValuesForCell(row, filterColId);
+                return cellValues.some(v => selected.includes(v));
+            });
+        }
+
+        return Array.from(
+            new Set(filtered.flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+    };
+
     function openExcelFilterPopup(colId, e) {
         if (colId === "nr" || colId === "actions") return;
 
@@ -549,7 +575,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         ).sort((a, b) => a.localeCompare(b));
 
         // Preselect: if filter exists use it, else select all
-        const existing = filters?.[colId]?.selected;
+        const existing = filters[colId];
         const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
 
         setExcelSelected(initialSelected);
@@ -1289,7 +1315,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                         // e.g. 'critical' → highlight if "Yes", 'cer' → use getClass(...)
                                         let cellClass = '';
                                         if (columnId === 'critical' && value === 'Yes') {
-                                            cellClass = 'cea-table-page-critical';
+                                            cellClass = '';
                                         } else if (columnId === 'cer') {
                                             cellClass = getClass(value);
                                         }
@@ -1321,15 +1347,16 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
                 {excelFilter.open && (
                     <div
-                        ref={excelPopupRef}
                         className="excel-filter-popup"
+                        ref={excelPopupRef}
                         style={{
                             position: "fixed",
                             top: excelFilter.pos.top,
                             left: excelFilter.pos.left,
                             width: excelFilter.pos.width,
-                            zIndex: 10000
+                            zIndex: 9999,
                         }}
+                        onWheel={(e) => e.stopPropagation()}
                     >
                         <div className="excel-filter-sortbar">
                             <button
@@ -1363,21 +1390,27 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
                         {(() => {
                             const colId = excelFilter.colId;
-                            const allValues = Array.from(
-                                new Set((rows || []).map(r => {
-                                    const raw = r?.[colId];
-                                    const s = raw == null ? "" : String(raw).trim();
-                                    return s === "" ? BLANK : s;
-                                }))
-                            ).sort((a, b) => a.localeCompare(b));
+
+                            const allValues = getAvailableOptions(colId);
 
                             const visibleValues = allValues.filter(v =>
-                                v.toLowerCase().includes(excelSearch.toLowerCase())
+                                String(v).toLowerCase().includes(excelSearch.toLowerCase())
                             );
 
-                            const allVisibleSelected =
-                                visibleValues.length > 0 &&
-                                visibleValues.every(v => excelSelected.has(v));
+                            const isAllVisibleSelected =
+                                visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                            const toggleAll = (checked) => {
+                                setExcelSelected(prev => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                        visibleValues.forEach(v => next.add(v));
+                                    } else {
+                                        visibleValues.forEach(v => next.delete(v));
+                                    }
+                                    return next;
+                                });
+                            };
 
                             const toggleValue = (v) => {
                                 setExcelSelected(prev => {
@@ -1388,38 +1421,35 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                 });
                             };
 
-                            const toggleAllVisible = (checked) => {
-                                setExcelSelected(prev => {
-                                    const next = new Set(prev);
-                                    visibleValues.forEach(v => {
-                                        if (checked) next.add(v);
-                                        else next.delete(v);
-                                    });
-                                    return next;
-                                });
-                            };
-
                             const onOk = () => {
-                                const selectedArr = Array.from(excelSelected);
+                                let finalSelection = new Set(excelSelected);
+                                if (excelSearch.trim() !== "") {
+                                    const visibleSet = new Set(visibleValues);
+                                    finalSelection = new Set(
+                                        Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                    );
+                                }
 
-                                // If everything is selected, treat as "no filter"
-                                const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                                const selectedArr = Array.from(finalSelection);
+                                const isTotalReset = allValues.length > 0 &&
+                                    allValues.length === selectedArr.length &&
+                                    selectedArr.every(v => finalSelection.has(v));
 
                                 setFilters(prev => {
                                     const next = { ...prev };
-                                    if (isAllSelected) {
+                                    if (isTotalReset) {
                                         delete next[colId];
                                     } else {
-                                        next[colId] = { selected: selectedArr };
+                                        next[colId] = selectedArr;
                                     }
                                     return next;
                                 });
 
-                                setExcelFilter({ open: false, colId: null, pos: { top: 0, left: 0, width: 0 } });
+                                setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
                             };
 
                             const onCancel = () => {
-                                setExcelFilter({ open: false, colId: null, pos: { top: 0, left: 0, width: 0 } });
+                                setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
                             };
 
                             return (
@@ -1430,15 +1460,17 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                                 <input
                                                     type="checkbox"
                                                     className="checkbox-excel-attend"
-                                                    checked={allVisibleSelected}
-                                                    onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                    checked={isAllVisibleSelected}
+                                                    onChange={(e) => toggleAll(e.target.checked)}
                                                 />
                                             </span>
-                                            <span className="excel-filter-text">(Select All)</span>
+                                            <span className="excel-filter-text">
+                                                {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                            </span>
                                         </label>
 
                                         {visibleValues.map(v => (
-                                            <label className="excel-filter-item">
+                                            <label className="excel-filter-item" key={String(v)}>
                                                 <span className="excel-filter-checkbox">
                                                     <input
                                                         type="checkbox"
@@ -1450,24 +1482,17 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                                                 <span className="excel-filter-text">{v}</span>
                                             </label>
                                         ))}
+
+                                        {visibleValues.length === 0 && (
+                                            <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                                No matches found
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="excel-filter-actions">
-                                        <button
-                                            type="button"
-                                            className="excel-filter-btn"
-                                            onClick={onOk}
-                                        >
-                                            Apply
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            className="excel-filter-btn-cnc"
-                                            onClick={onCancel}
-                                        >
-                                            Cancel
-                                        </button>
+                                        <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                        <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
                                     </div>
                                 </>
                             );

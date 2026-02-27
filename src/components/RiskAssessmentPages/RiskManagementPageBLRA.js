@@ -10,7 +10,7 @@ import ReferenceTable from "../CreatePage/ReferenceTable";
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretRight, faCaretLeft, faInfo, faCalendarDays } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faSpinner, faRotateLeft, faFolderOpen, faShareNodes, faUpload, faRotateRight, faChevronLeft, faChevronRight, faInfoCircle, faMagicWandSparkles, faSave, faPen, faArrowLeft, faArrowUp, faCaretRight, faCaretLeft, faInfo, faCalendarDays, faDownload } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import TopBarDD from "../Notifications/TopBarDD";
 import AttendanceTable from "../RiskRelated/AttendanceTable";
@@ -36,6 +36,7 @@ import RelevantControlsTable from "../RiskRelated/RelevantControlsTable";
 import ControlPopupNote from "../Popups/ControlPopupNote";
 import UnusedControlsPopup from "../RiskRelated/UnusedControlsPopup";
 import ImportControlChanges from "../RiskRelated/ImportControlChanges";
+import ControlChangesPopup from "../RiskRelated/ControlManagement/ControlChangesPopup";
 
 const RiskManagementPageBLRA = () => {
     const navigate = useNavigate();
@@ -77,7 +78,11 @@ const RiskManagementPageBLRA = () => {
     const [allSystemControls, setAllSystemControls] = useState([]);
     const [importPopup, setImportPopup] = useState(false);
     const [diffsToImport, setDiffsToImport] = useState([]);
+    const [controlsUpdatableCurrent, setControlsUpdatableCurrent] = useState([]);
+    const [controlsUpdatableLatest, setControlsUpdatableLatest] = useState([]);
+    const [importSelections, setImportSelections] = useState({});
     const [highlightedRows, setHighlightedRows] = useState([]);
+    const [owner, setOwner] = useState(false);
 
     const openWorkflow = () => {
         setShowWorkflow(true);
@@ -684,6 +689,7 @@ const RiskManagementPageBLRA = () => {
 
             const storedData = data.draft || {};
             const readOnly = data.readOnly || false;
+            const isOwner = data.isOwner || false;
 
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
@@ -699,6 +705,7 @@ const RiskManagementPageBLRA = () => {
             loadedIDRef.current = loadID;
 
             setReadOnly(readOnly);
+            setOwner(isOwner)
 
             requestAnimationFrame(() => {
                 scrollableRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -826,6 +833,7 @@ const RiskManagementPageBLRA = () => {
             { changeVersion: "1", change: "New Document.", changeDate: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) }
         ],
         relevantControls: [],
+        isRelevantControlsCollapsed: false,
     });
 
     useEffect(() => {
@@ -2143,11 +2151,93 @@ const RiskManagementPageBLRA = () => {
                 });
 
                 if (diffs.length > 0) {
-                    console.log("System Control Updates Found:", diffs);
                     setDiffsToImport(diffs);
-                    setImportPopup(true);
-                }
 
+                    const fieldsToStore = [
+                        "control",
+                        "uniqueId",
+                        "description",
+                        "critical",
+                        "act",
+                        "activation",
+                        "hierarchy",
+                        "cons",
+                        "quality",
+                        "performance"
+                    ];
+
+                    const currentList = [];
+                    const latestList = [];
+                    const defaultSelections = {};
+
+                    diffs.forEach(d => {
+                        const ceaRow = formData.cea.find(r => r.id === d.ceaRowId);
+                        if (!ceaRow) return;
+
+                        const sys = syncData.find(c => c._id === d.systemLatestId) || null;
+                        if (!sys) return;
+
+                        const currentValues = {};
+                        const latestValues = {};
+
+                        fieldsToStore.forEach(f => {
+                            if (f === "uniqueId") {
+                                currentValues.uniqueId = ceaRow.uniqueId ?? "";
+                                latestValues.uniqueId = sys._id ?? "";
+                            } else if (f === "control") {
+                                currentValues.control = (ceaRow.control ?? "").trim();
+                                latestValues.control = (sys.control ?? "").trim();
+                            } else {
+                                currentValues[f] = ceaRow?.[f] ?? "";
+                                latestValues[f] = sys?.[f] ?? "";
+                            }
+                        });
+
+                        // --- NEW: pull the "who/when" from the latest system control (sys)
+                        // route should return these on each control
+                        const lastUpdatedAt = sys.lastUpdatedAt ?? null;
+                        const lastUpdatedBy = sys.lastUpdatedBy ?? null;
+                        // e.g. { _id, name, email } based on your route
+
+                        currentList.push({
+                            ceaRowId: d.ceaRowId,
+                            control: currentValues.control,
+                            values: currentValues,
+                            mismatches: d.mismatches,
+                            // optional: include here too, if you want to show it even on "current" side
+                            lastUpdatedAt,
+                            lastUpdatedBy,
+                        });
+
+                        latestList.push({
+                            ceaRowId: d.ceaRowId,
+                            control: latestValues.control,
+                            values: latestValues,
+                            mismatches: d.mismatches,
+                            systemLatestId: d.systemLatestId,
+
+                            // --- NEW: store updating user + timestamp for this newer version
+                            lastUpdatedAt,
+                            lastUpdatedBy,
+                        });
+
+                        defaultSelections[d.ceaRowId] = {};
+                        Object.keys(d.mismatches).forEach(field => {
+                            defaultSelections[d.ceaRowId][field] = true;
+                        });
+                    });
+
+                    setControlsUpdatableCurrent(currentList);
+                    setControlsUpdatableLatest(latestList);
+                    setImportSelections(defaultSelections);
+
+                } else {
+                    setDiffsToImport([]);
+                    setControlsUpdatableCurrent([]);
+                    setControlsUpdatableLatest([]);
+                    setImportSelections({});
+                    setImportPopup(false);
+                }
             } catch (error) {
                 console.error("Error checking for control updates:", error);
             }
@@ -2280,8 +2370,130 @@ const RiskManagementPageBLRA = () => {
         }
     }, [allSystemControls, loadedIDRef.current]);
 
+    const hasControlUpdates = diffsToImport.length > 0;
+
+    const importIconTitle = hasControlUpdates
+        ? "Import updated controls"
+        : "No new controls";
+
+    const openImportPopup = () => {
+        if (!hasControlUpdates) return;
+        setImportPopup(true);
+    };
+
     const handleImportCancel = () => {
         setImportPopup(false);
+    };
+
+    const importNew = (selectedRows = []) => {
+        if (!Array.isArray(selectedRows) || selectedRows.length === 0) {
+            toast.info("No controls selected to import.");
+            return;
+        }
+
+        const updatesMap = {};
+        const changedIds = [];
+        const renames = [];
+
+        selectedRows.forEach(row => {
+            if (!row?.ceaRowId || !row?.mismatches) return;
+
+            updatesMap[row.ceaRowId] = row.mismatches;
+            changedIds.push(row.ceaRowId);
+
+            // Rename propagation if the control name changed
+            if (row.mismatches.control) {
+                renames.push({
+                    oldName: row.mismatches.control.cea,
+                    newName: row.mismatches.control.system
+                });
+            }
+        });
+
+        // 1) Update CEA table
+        const updatedCEA = formData.cea.map(ceaRow => {
+            const updates = updatesMap[ceaRow.id];
+            if (!updates) return ceaRow;
+
+            const newRow = { ...ceaRow };
+
+            // Apply all changed fields (excluding uniqueId logic handled below)
+            Object.keys(updates).forEach(field => {
+                if (updates[field]?.system !== undefined) {
+                    newRow[field] = updates[field].system;
+                }
+            });
+
+            // Ensure uniqueId is upgraded to latest system id
+            if (updates.uniqueId) {
+                newRow.uniqueId = updates.uniqueId.system;
+            }
+
+            return newRow;
+        });
+
+        let updatedIBRA = formData.ibra;
+        let updatedRelevant = formData.relevantControls;
+
+        if (renames.length > 0) {
+            renames.forEach(({ oldName, newName }) => {
+                const normOld = (oldName ?? "").trim();
+                const normNew = (newName ?? "").trim();
+
+                updatedIBRA = updatedIBRA.map(r => ({
+                    ...r,
+                    controls: r.controls.map(c => {
+                        const cName = typeof c === "string" ? c : c?.control;
+                        if (cName && cName.trim() === normOld) return normNew;
+                        return c;
+                    })
+                }));
+
+                updatedRelevant = updatedRelevant.map(r => ({
+                    ...r,
+                    control: (r.control ?? "").trim() === normOld ? normNew : r.control
+                }));
+            });
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            cea: updatedCEA,
+            ibra: updatedIBRA,
+            relevantControls: updatedRelevant
+        }));
+
+        // --- NEW: remove imported items from "pending updates" so they do not show again
+        const importedIds = selectedRows.map(r => r.ceaRowId).filter(Boolean);
+        const importedSet = new Set(importedIds);
+
+        // 1) Remove from diffsToImport
+        const remainingDiffs = diffsToImport.filter(d => !importedSet.has(d.ceaRowId));
+        setDiffsToImport(remainingDiffs);
+
+        // 2) Remove from the popup lists
+        setControlsUpdatableCurrent(prev => prev.filter(r => !importedSet.has(r.ceaRowId)));
+        setControlsUpdatableLatest(prev => prev.filter(r => !importedSet.has(r.ceaRowId)));
+
+        // 3) Remove selections for imported rows
+        setImportSelections(prev => {
+            const next = { ...prev };
+            importedIds.forEach(id => delete next[id]);
+            return next;
+        });
+
+        // 4) Close popup only if nothing left to import
+        if (remainingDiffs.length === 0) {
+            setImportPopup(false);
+            toast.success("All control updates imported.", { autoClose: 2000, closeButton: false });
+        } else {
+            toast.success("Selected controls imported.", { autoClose: 2000, closeButton: false });
+        }
+
+        setHighlightedRows(changedIds);
+        setTimeout(() => {
+            handleImportCancel();
+        }, 2000);
     };
 
     return (
@@ -2382,18 +2594,30 @@ const RiskManagementPageBLRA = () => {
                             </div>
                         )}
 
-                        {!readOnly && (
+                        {(!readOnly && owner) && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <FontAwesomeIcon icon={faShareNodes} onClick={openShare} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" />
                             </div>
                         )}
 
-
-                        {(canIn(access, "RMS", ["systemAdmin", "contributor"]) && !readOnly) && (
+                        {(canIn(access, "RMS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
                             </div>
                         )}
+
+                        {(!readOnly && owner) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon
+                                icon={faDownload}
+                                title={importIconTitle}
+                                onClick={openImportPopup}
+                                style={{
+                                    cursor: hasControlUpdates ? "pointer" : "not-allowed",
+                                    opacity: hasControlUpdates ? 1 : 0.4,
+                                    userSelect: "none"
+                                }}
+                            />
+                        </div>)}
                     </div>
 
                     {/* This div creates the space in the middle */}
@@ -2696,6 +2920,7 @@ const RiskManagementPageBLRA = () => {
                         readOnly={readOnly}
                         globalControls={allSystemControls}
                         onControlRename={handleControlRename}
+                        isCollapsed={formData.isRelevantControlsCollapsed}
                     />
 
                     <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
@@ -2732,13 +2957,7 @@ const RiskManagementPageBLRA = () => {
             {helpScope && (<RiskScope setClose={closeHelpScope} />)}
             <ToastContainer />
             {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={riskType} userID={userID} create={false} />)}
-            {importPopup && (
-                <ImportControlChanges
-                    closeModal={handleImportCancel}
-                    generate={handleImportConfirm}
-                    cancel={handleImportCancel}
-                />
-            )}
+
             {showSiteDropdown && filteredSites.length > 0 && (
                 <ul
                     className="floating-dropdown"
@@ -2764,6 +2983,7 @@ const RiskManagementPageBLRA = () => {
             {unusedPopup && (<UnusedControlsPopup generate={handleGenerateUnused} closeModal={closeUnused} cancel={cancelGenerateUnused} />)}
             {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
             {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
+            {importPopup && (<ControlChangesPopup importNew={importNew} newData={controlsUpdatableLatest} prevData={controlsUpdatableCurrent} onClose={handleImportCancel} />)}
         </div>
     );
 };

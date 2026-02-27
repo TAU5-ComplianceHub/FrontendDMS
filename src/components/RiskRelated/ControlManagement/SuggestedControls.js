@@ -198,30 +198,47 @@ const SuggestedControls = () => {
     };
 
     // --- Excel Filtering Logic Helpers ---
-
     const getFilterValuesForCell = (row, colId, index) => {
         if (colId === "nr") return [String(index + 1)];
+        // Add category handler
+        if (colId === "category") return [row.category ? String(row.category).trim() : "No Category"];
+        if (colId === "critical") return [row.critical ? String(row.critical).trim() : "-"];
 
-        let val = row[colId];
+        const val = row[colId];
+        return [val ? String(val).trim() : "-"];
+    };
 
-        // Handle dates for filter dropdowns (simplify to date string)
-        if ((colId === "dateSuggested" || colId === "dateReviewed") && val) {
-            val = new Date(val).toLocaleDateString();
+    // --- NEW: Helper to get options filtered by OTHER columns ---
+    const getAvailableOptions = (colId) => {
+        // Start with all controls
+        let filtered = controls;
+
+        // 2. Apply filters from ALL OTHER active columns
+        for (const [filterColId, selectedValues] of Object.entries(activeExcelFilters)) {
+            if (filterColId === colId) continue; // Don't filter a column by itself
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+
+            filtered = filtered.filter((row, index) => {
+                const cellValues = getFilterValuesForCell(row, filterColId, index);
+                // Keep row if ANY of its cell values match the selection
+                return cellValues.some(v => selectedValues.includes(v));
+            });
         }
 
-        return [val ? String(val).trim() : "-"];
+        // 3. Extract unique values for the requested column from the filtered subset
+        const uniqueValues = Array.from(
+            new Set(filtered.flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+
+        return uniqueValues;
     };
 
     const openExcelFilterPopup = (colId, e) => {
         const th = e.target.closest("th");
         const rect = th.getBoundingClientRect();
 
-        // Build unique values across ALL rows
-        const values = Array.from(
-            new Set(
-                (controls || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i))
-            )
-        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+        // CHANGED: Use the helper to get cross-filtered values
+        const values = getAvailableOptions(colId);
 
         const existing = activeExcelFilters[colId];
         const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
@@ -1145,16 +1162,26 @@ const SuggestedControls = () => {
                     {(() => {
                         const colId = excelFilter.colId;
 
-                        const allValues = Array.from(
-                            new Set((controls || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
-                        ).sort((a, b) => String(a).localeCompare(String(b)));
+                        const allValues = getAvailableOptions(colId);
 
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
 
-                        const allVisibleSelected =
+                        const isAllVisibleSelected =
                             visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) {
+                                    visibleValues.forEach(v => next.add(v));
+                                } else {
+                                    visibleValues.forEach(v => next.delete(v));
+                                }
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -1165,25 +1192,27 @@ const SuggestedControls = () => {
                             });
                         };
 
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
-                                return next;
-                            });
-                        };
-
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+
+                            const selectedArr = Array.from(finalSelection);
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
 
                             setActiveExcelFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId];
-                                else next[colId] = selectedArr;
+                                if (isTotalReset) {
+                                    delete next[colId];
+                                } else {
+                                    next[colId] = selectedArr;
+                                }
                                 return next;
                             });
 
@@ -1202,11 +1231,13 @@ const SuggestedControls = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
 
                                     {visibleValues.map(v => (
@@ -1222,6 +1253,12 @@ const SuggestedControls = () => {
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="excel-filter-actions">

@@ -551,3 +551,7 @@
     border-top: 6px solid #777;
     pointer-events: none;
 }
+
+.recent-control-row {
+    background-color: #fff7cc;
+}

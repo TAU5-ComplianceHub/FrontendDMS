@@ -6,7 +6,7 @@ import { faTrash, faTimes, faBrush, faBroom } from "@fortawesome/free-solid-svg-
 
 const Notifications = ({ setClose, getCount }) => {
     const [notifications, setNotifications] = useState([]);
-    const [selectedPill, setSelectedPill] = useState("Actions");
+    const [selectedPill, setSelectedPill] = useState("Approvals");
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -129,7 +129,7 @@ const Notifications = ({ setClose, getCount }) => {
         try {
             await markAsRead(note._id);
 
-            if (note.type === "Actions") {
+            if (note.type === "Actions" || note.type === "Collabs" || note.type === "Approvals") {
 
                 let targetPath = null;
 
@@ -236,7 +236,7 @@ const Notifications = ({ setClose, getCount }) => {
                     </div>
                 </div>
                 <div className="notifications-pill-bar">
-                    {["Actions", "Admin", "All"].map((pill, idx) => (
+                    {["Approvals", "Collabs", "Updates", "All"].map((pill, idx) => (
                         <div
                             key={idx}
                             className={`notifications-pill ${selectedPill === pill ? 'active' : ''}`}

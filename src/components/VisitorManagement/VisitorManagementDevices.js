@@ -768,25 +768,21 @@ const VisitorManagementDevices = () => {
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
 
-                        const allVisibleSelected =
-                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+                        const allSelected =
+                            allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(() => {
+                                if (checked) return new Set(allValues); // select everything
+                                return new Set();                      // clear everything
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
                                 const next = new Set(prev);
                                 if (next.has(v)) next.delete(v);
                                 else next.add(v);
-                                return next;
-                            });
-                        };
-
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
                                 return next;
                             });
                         };
@@ -817,8 +813,8 @@ const VisitorManagementDevices = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={allSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
                                         <span className="excel-filter-text">(Select All)</span>

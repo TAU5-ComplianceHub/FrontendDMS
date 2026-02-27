@@ -34,6 +34,7 @@ import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 const CreatePage = () => {
   const navigate = useNavigate();
   const access = getCurrentUser();
+  const [owner, setOwner] = useState(false);
   const type = useParams().type;
   const draftId = useParams().id;
   const [isOpenMenu, setIsOpenMenu] = useState(false);
@@ -493,6 +494,7 @@ const CreatePage = () => {
 
       const storedData = data.draft || {};
       const readOnly = data.readOnly || false;
+      const isOwner = data.isOwner || false;
 
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
@@ -517,6 +519,7 @@ const CreatePage = () => {
       loadedIDRef.current = loadID;
 
       setReadOnly(readOnly);
+      setOwner(isOwner)
 
       requestAnimationFrame(() => {
         scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1301,13 +1304,13 @@ const CreatePage = () => {
               </div>
             )}
 
-            {!readOnly && (
+            {(!readOnly && owner) && (
               <div className="burger-menu-icon-risk-create-page-1">
                 <FontAwesomeIcon icon={faShareNodes} onClick={openShare} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" />
               </div>
             )}
 
-            {(canIn(access, "DDS", ["systemAdmin", "contributor"]) && !readOnly) && (
+            {(canIn(access, "DDS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
               <div className="burger-menu-icon-risk-create-page-1">
                 <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
               </div>

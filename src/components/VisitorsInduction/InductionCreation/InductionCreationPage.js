@@ -57,6 +57,7 @@ const InductionCreationPage = () => {
   const [readOnly, setReadOnly] = useState(false);
   const [approval, setApproval] = useState(false);
   const [inApproval, setInApproval] = useState(false);
+  const [owner, setOwner] = useState(false);
 
   const openApproval = () => {
     setApproval(true);
@@ -612,6 +613,7 @@ const InductionCreationPage = () => {
         ...rawForm,
         supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : []
       };
+      const isOwner = storedData.isOwner || false;
 
       // IMPORTANT: hydrate media previews for any saved files
       revokeAllObjectUrls(); // clear any previous draft's object URLs
@@ -623,6 +625,7 @@ const InductionCreationPage = () => {
       setLoadedID(loadID);
       setReadOnly(storedData.readOnly);
       setInApproval(storedData.statusApproval);
+      setOwner(isOwner)
 
       setTimeout(() => {
         setLoadingDraft(false);
@@ -1174,11 +1177,11 @@ const InductionCreationPage = () => {
                   <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
                 </div>
 
-                <div className="burger-menu-icon-risk-create-page-1">
+                {owner && (<div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faShareNodes} onClick={openShare} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" />
-                </div>
+                </div>)}
 
-                {!inApproval && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                {!inApproval && owner && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${(!loadedID) ? "disabled-share" : ""}`} title="Publish" />
                 </div>)}
 

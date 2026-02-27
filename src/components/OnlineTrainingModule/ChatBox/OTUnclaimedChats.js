@@ -129,17 +129,13 @@ const OTUnclaimedChats = () => {
         let current = [...unclaimedChats];
 
         // 1) Apply Filtering
-        current = current.filter(row => {
-            for (const [colId, filterObj] of Object.entries(filters)) {
-                const selected = filterObj?.selected;
-                if (!selected || !Array.isArray(selected)) continue;
-
+        for (const [colId, selectedValues] of Object.entries(filters)) {
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+            current = current.filter(row => {
                 const cellValues = getFilterValuesForCell(row, colId);
-                const match = cellValues.some(v => selected.includes(v));
-                if (!match) return false;
-            }
-            return true;
-        });
+                return cellValues.some(v => selectedValues.includes(v));
+            });
+        }
 
         // 2) Sorting
         const colId = sortConfig?.colId || "nr";
@@ -217,7 +213,7 @@ const OTUnclaimedChats = () => {
             )
         ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
 
-        const existing = filters?.[colId]?.selected;
+        const existing = filters?.[colId];
         const initialSelected = new Set(existing && Array.isArray(existing) ? existing : values);
 
         setExcelSelected(initialSelected);
@@ -335,6 +331,24 @@ const OTUnclaimedChats = () => {
 
     const getFilterBtnClass = () => {
         return "top-right-button-control-att";
+    };
+
+    const getAvailableOptions = (colId) => {
+        let current = unclaimedChats; // Assuming 'files' is your data state
+
+        // 2. Other Column Filters
+        for (const [filterColId, selectedValues] of Object.entries(filters)) {
+            if (filterColId === colId) continue;
+            if (!selectedValues || !Array.isArray(selectedValues)) continue;
+            current = current.filter(row => {
+                const cellValues = getFilterValuesForCell(row, filterColId);
+                return cellValues.some(v => selectedValues.includes(v));
+            });
+        }
+
+        return Array.from(
+            new Set(current.flatMap(r => getFilterValuesForCell(r, colId)))
+        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
     };
 
     return (
@@ -514,7 +528,7 @@ const OTUnclaimedChats = () => {
                         width: excelFilter.pos.width,
                         zIndex: 9999,
                     }}
-                    onWheel={handleInnerScrollWheel}
+                    onWheel={(e) => e.stopPropagation()}
                 >
                     <div className="excel-filter-sortbar">
                         <button
@@ -548,17 +562,21 @@ const OTUnclaimedChats = () => {
 
                     {(() => {
                         const colId = excelFilter.colId;
-
-                        const allValues = Array.from(
-                            new Set((unclaimedChats || []).flatMap(r => getFilterValuesForCell(r, colId)))
-                        ).sort((a, b) => String(a).localeCompare(String(b)));
-
+                        const allValues = getAvailableOptions(colId);
                         const visibleValues = allValues.filter(v =>
                             String(v).toLowerCase().includes(excelSearch.toLowerCase())
                         );
-
-                        const allVisibleSelected =
+                        const isAllVisibleSelected =
                             visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
+
+                        const toggleAll = (checked) => {
+                            setExcelSelected(prev => {
+                                const next = new Set(prev);
+                                if (checked) visibleValues.forEach(v => next.add(v));
+                                else visibleValues.forEach(v => next.delete(v));
+                                return next;
+                            });
+                        };
 
                         const toggleValue = (v) => {
                             setExcelSelected(prev => {
@@ -569,28 +587,25 @@ const OTUnclaimedChats = () => {
                             });
                         };
 
-                        const toggleAllVisible = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                visibleValues.forEach(v => {
-                                    if (checked) next.add(v);
-                                    else next.delete(v);
-                                });
-                                return next;
-                            });
-                        };
-
                         const onOk = () => {
-                            const selectedArr = Array.from(excelSelected);
-                            const isAllSelected = allValues.length > 0 && allValues.every(v => excelSelected.has(v));
+                            let finalSelection = new Set(excelSelected);
+                            if (excelSearch.trim() !== "") {
+                                const visibleSet = new Set(visibleValues);
+                                finalSelection = new Set(
+                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                );
+                            }
+                            const selectedArr = Array.from(finalSelection);
+                            const isTotalReset = allValues.length > 0 &&
+                                allValues.length === selectedArr.length &&
+                                selectedArr.every(v => finalSelection.has(v));
 
                             setFilters(prev => {
                                 const next = { ...prev };
-                                if (isAllSelected) delete next[colId];
-                                else next[colId] = { selected: selectedArr };
+                                if (isTotalReset) delete next[colId];
+                                else next[colId] = selectedArr;
                                 return next;
                             });
-
                             setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
                         };
 
@@ -606,13 +621,14 @@ const OTUnclaimedChats = () => {
                                             <input
                                                 type="checkbox"
                                                 className="checkbox-excel-attend"
-                                                checked={allVisibleSelected}
-                                                onChange={(e) => toggleAllVisible(e.target.checked)}
+                                                checked={isAllVisibleSelected}
+                                                onChange={(e) => toggleAll(e.target.checked)}
                                             />
                                         </span>
-                                        <span className="excel-filter-text">(Select All)</span>
+                                        <span className="excel-filter-text">
+                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                        </span>
                                     </label>
-
                                     {visibleValues.map(v => (
                                         <label className="excel-filter-item" key={String(v)}>
                                             <span className="excel-filter-checkbox">
@@ -626,8 +642,12 @@ const OTUnclaimedChats = () => {
                                             <span className="excel-filter-text">{v}</span>
                                         </label>
                                     ))}
+                                    {visibleValues.length === 0 && (
+                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                            No matches found
+                                        </div>
+                                    )}
                                 </div>
-
                                 <div className="excel-filter-actions">
                                     <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
                                     <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>

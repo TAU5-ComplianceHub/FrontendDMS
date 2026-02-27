@@ -61,6 +61,7 @@ const CreatePageStandards = () => {
   const [readOnly, setReadOnly] = useState(false);
   const [lockUser, setLockUser] = useState(null);
   const scrollBoxRef = useRef(null);
+  const [owner, setOwner] = useState(false);
 
   const openWorkflow = () => {
     setShowWorkflow(true);
@@ -489,6 +490,7 @@ const CreatePageStandards = () => {
 
       const storedData = data.draft || {};
       const readOnly = data.readOnly || false;
+      const isOwner = data.isOwner || false;
 
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
@@ -505,6 +507,7 @@ const CreatePageStandards = () => {
       loadedIDRef.current = loadID;
 
       setReadOnly(readOnly);
+      setOwner(isOwner)
 
       requestAnimationFrame(() => {
         scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1244,13 +1247,13 @@ const CreatePageStandards = () => {
               </div>
             )}
 
-            {!readOnly && (
+            {(!readOnly && owner) && (
               <div className="burger-menu-icon-risk-create-page-1">
                 <FontAwesomeIcon icon={faShareNodes} onClick={openShare} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" />
               </div>
             )}
 
-            {(canIn(access, "DDS", ["systemAdmin", "contributor"]) && !readOnly) && (
+            {(canIn(access, "DDS", ["systemAdmin", "contributor"]) && !readOnly && owner) && (
               <div className="burger-menu-icon-risk-create-page-1">
                 <FontAwesomeIcon icon={faUpload} onClick={handlePubClick} className={`${!loadedID ? "disabled-share" : ""}`} title="Publish" />
               </div>
