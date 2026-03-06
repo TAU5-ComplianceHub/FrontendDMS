@@ -29,7 +29,7 @@ const VersionHistorySOProcedure = () => {
 
     useEffect(() => {
         fetchActivity();
-    }, []);
+    }, [token]);
 
     const openDownloadModal = (fileName, displayName) => {
         setDownloadFileName(fileName);

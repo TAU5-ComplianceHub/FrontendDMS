@@ -196,3 +196,57 @@
     font-weight: bold;
     margin-bottom: 15px;
 }
+
+.approve-popup-decline-button {
+    background: linear-gradient(to bottom,
+            #E6A8A8 0%,
+            /* Lighter shade of CB6F6F */
+            #D17D7D 25%,
+            /* Mid shade */
+            #CB6F6F 50%,
+            /* Given color */
+            #963D3D 75%,
+            /* Darker shade */
+            #5A2020 100%
+            /* Deepest shade */
+        );
+    color: white;
+    border: none;
+    padding: 12px;
+    margin-top: 2px;
+    margin-left: 10px;
+    margin-right: auto;
+    width: 30%;
+    font-size: 16px;
+    font-weight: bolder;
+    font-family: Arial;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.approve-popup-approve-button {
+    background: linear-gradient(to bottom,
+            #B8D4C1 0%,
+            /* Lighter shade of 7EAC89 */
+            #91B299 25%,
+            /* Mid shade */
+            #7EAC89 50%,
+            /* Given color */
+            #5C8766 75%,
+            /* Darker shade */
+            #30503A 100%
+            /* Deepest shade */
+        );
+    color: white;
+    border: none;
+    padding: 12px;
+    margin-top: 2px;
+    margin-left: auto;
+    margin-right: 10px;
+    width: 30%;
+    font-size: 16px;
+    font-weight: bolder;
+    font-family: Arial;
+    cursor: pointer;
+    border-radius: 5px;
+}

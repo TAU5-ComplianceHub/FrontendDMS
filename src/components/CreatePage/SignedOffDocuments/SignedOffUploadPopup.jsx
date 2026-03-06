@@ -85,11 +85,9 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
 
         if (!selectedFile) newErrors.file = true;
         if (!discipline) newErrors.discipline = true;
-        if (!documentType) newErrors.documentType = true;
         if (!owner) newErrors.author = true;
         if (!departmentHead) newErrors.departmentHead = true;
         if (!reviewDate) newErrors.reviewDate = true;
-        if (!status) newErrors.status = true;
         if (!reviewer) newErrors.reviewer = true;
         if (!approver) newErrors.approver = true;
 
@@ -101,7 +99,7 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
             const newErrors = validateForm();
             setErrors(newErrors);
         }
-    }, [selectedFile, discipline, documentType, owner, departmentHead, reviewDate, status, reviewer, approver])
+    }, [selectedFile, discipline, owner, departmentHead, reviewDate, reviewer, approver])
 
     const isFormValid = () => {
         const newErrors = validateForm();
@@ -126,13 +124,29 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
     const handleFileUpload = async (e) => {
         if (!isFormValid()) return;
 
+        let documentUploadType;
+
+        switch (type) {
+            case "procedure":
+                documentUploadType = "Procedure"
+                break;
+
+            case "standard":
+                documentUploadType = "Standard"
+                break;
+
+            case "special":
+                documentUploadType = "Special Instruction"
+                break;
+        }
+
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('departmentHead', departmentHead);
         formData.append('owner', JSON.stringify(owner));
-        formData.append('documentType', documentType);
+        formData.append('documentType', documentUploadType);
         formData.append('discipline', discipline);
-        formData.append('status', status);
+        formData.append('status', "approved");
         formData.append('userID', userID);
         formData.append('reviewDate', reviewDate);
         formData.append('reviewer', reviewer);
@@ -220,7 +234,7 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
     return (
         <div className="upload-file-page-container">
             <div className="upload-file-page-overlay">
-                <div className="upload-file-page-popup-right">
+                <div className="upload-file-signed-off-page-popup-right">
                     <div className="review-date-header">
                         <h2 className="review-date-title">Upload Signed Off Document</h2>
                         <button className="review-date-close" onClick={onClose} title="Close Popup">×</button>
@@ -293,17 +307,6 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
                             </div>
 
                             <div className="upload-file-page-form-row">
-                                <div className={`upload-file-page-form-group ${errors.status ? "error-upload-required-up" : ""}`}>
-                                    <label>Document Status <span className="required-field">*</span></label>
-                                    <div className="upload-file-page-select-container">
-                                        <select value={status} className="upload-file-page-select" onChange={(e) => setStatus(e.target.value)}>
-                                            <option value="">Select Status</option>
-                                            <option value="in_review">In Review</option>
-                                            <option value="in_approval">In Approval</option>
-                                            <option value="approved">Approved</option>
-                                        </select>
-                                    </div>
-                                </div>
                                 <div className={`upload-file-page-form-group ${errors.reviewer ? "error-upload-required-up" : ""}`}>
                                     <label>Document Reviewer <span className="required-field">*</span></label>
                                     <div className="upload-file-page-select-container">
@@ -325,22 +328,6 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
                                             {usersList.sort((a, b) => a.username.localeCompare(b.username)).map((approver, index) => (
                                                 <option key={index} value={approver._id}>
                                                     {approver.username}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="upload-file-page-form-row">
-                                <div className={`upload-file-page-form-group ${errors.documentType ? "error-upload-required-up" : ""}`}>
-                                    <label>Document Type <span className="required-field">*</span></label>
-                                    <div className="upload-file-page-select-container">
-                                        <select value={documentType} className="upload-file-page-select" onChange={(e) => setDocumentType(e.target.value)}>
-                                            <option>Select Document Type</option>
-                                            {docTypes.sort((a, b) => a.localeCompare(b)).map((type, index) => (
-                                                <option key={index} value={type}>
-                                                    {type}
                                                 </option>
                                             ))}
                                         </select>
@@ -370,17 +357,11 @@ const SignedOffUploadPopup = ({ onClose, docID, refresh, closeNavigate, type }) 
                                         />
                                     </div>
                                 </div>
-                                <div className={`upload-file-page-form-group ${errors.reviewDate ? "error-upload-required-up" : ""}`}>
-                                </div>
-                            </div>
-
-                            <div className="upload-file-page-form-row">
-
                             </div>
                         </form>
                     </div>
 
-                    <div className="upload-file-page-form-footer">
+                    <div className="upload-file-signed-off-page-form-footer">
                         <div className="create-user-buttons">
                             <button
                                 className="upload-file-page-upload-button"

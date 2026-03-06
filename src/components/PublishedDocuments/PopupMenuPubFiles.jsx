@@ -70,7 +70,7 @@ const PopupMenuPubFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, 
                     <ul>
                         <li onClick={() => navigate(verRoute)}>Version History</li>
                     </ul>
-                    <ul>
+                    {(file.documentStatus.toLowerCase() !== "in review") && (<ul>
                         <li onClick={() => {
                             let safeId = file._id;
                             if (typeof file._id === 'object' && file._id !== null) {
@@ -81,7 +81,7 @@ const PopupMenuPubFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, 
                             openProcedurePopup(safeId);
                         }}>
                             Upload Signed Off Version</li>
-                    </ul>
+                    </ul>)}
                 </div>
             )}
         </div>

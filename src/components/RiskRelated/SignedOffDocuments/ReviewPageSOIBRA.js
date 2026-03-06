@@ -64,6 +64,7 @@ const ReviewPageSOIBRA = () => {
     const [approval, setApproval] = useState(false);
     const [inApproval, setInApproval] = useState(false);
     const [unusedRelevantControlsHighlight, setUnusedRelevantControlsHighlight] = useState([]);
+    const [inReview, setInReview] = useState(false);
 
     const openApproval = () => {
         setApproval(true);
@@ -261,7 +262,7 @@ const ReviewPageSOIBRA = () => {
                 setUnusedPopup(true);
             }
 
-            openApproval();
+            handlePublishApprovalFlow();
         } catch (err) {
             toast.error("Could not save draft, generation aborted." + err);
         }
@@ -647,6 +648,7 @@ const ReviewPageSOIBRA = () => {
 
             setInApproval(Boolean(data.statusApproval));
             setReadOnly(readOnly);
+            setInReview(Boolean(data.statusReview));
 
             setFormData(prev => ({ ...prev }));
             setTitleSet(true);
@@ -932,6 +934,7 @@ const ReviewPageSOIBRA = () => {
     const usedTermCodesRef = useRef(usedTermCodes);
     const userIDsRef = useRef(userIDs);
     const userIDRef = useRef(userID);
+    const readOnlyRef = useRef(readOnly);
 
     useEffect(() => {
         userIDRef.current = userID;
@@ -954,7 +957,12 @@ const ReviewPageSOIBRA = () => {
     }, [formData]);
 
     useEffect(() => {
+        readOnlyRef.current = readOnly;
+    }, [readOnly]);
+
+    useEffect(() => {
         if (offlineDraft) return;
+        if (readOnlyRef.current) return;
 
         if (!autoSaveInterval.current && formData.title.trim() !== "") {
             console.log("✅ Auto-save interval set");
@@ -975,6 +983,8 @@ const ReviewPageSOIBRA = () => {
     }, [formData.title]);
 
     const autoSaveDraft = () => {
+        if (readOnlyRef.current) return;
+        if (readOnly) return;
         if (formData.title.trim() === "") return; // Don't save without a valid title
         saveData(fileID);
     };
@@ -1521,11 +1531,16 @@ const ReviewPageSOIBRA = () => {
     const handlePublishApprovalFlow = async (approversValue) => {
         const dataToStore = {
             draftID: fileID,
-            approvers: approversValue
+            authorizations: (formDataRef.current?.rows ?? []).map(r => ({
+                auth: r.auth,     // "Author" | "Reviewer" | "Approver" etc
+                name: r.name,     // username
+                pos: r.pos,       // position
+                num: r.num
+            })),
         };
 
         setLoading(true);
-        saveData(fileID);
+        await saveData(fileID);
 
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/start-approval-ibra-signedOff`, {
@@ -1548,10 +1563,16 @@ const ReviewPageSOIBRA = () => {
                 }
             });
 
-            if (!data.currentApprover) {
-                setReadOnly(true)
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
             }
 
+            if (data.readOnly) {
+                setReadOnly(data.readOnly)
+            }
+
+            setInReview(data.reviewState);
             setInApproval(data.approvalStatus);
 
             setLoading(false);
@@ -1574,7 +1595,7 @@ const ReviewPageSOIBRA = () => {
         };
 
         setLoading(true);
-        saveData(fileID);
+        await saveData(fileID);
 
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/approve-signedOff-ibra`, {
@@ -1596,6 +1617,11 @@ const ReviewPageSOIBRA = () => {
                     textAlign: 'center'
                 }
             });
+
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
+            }
 
             setReadOnly(true);
             setLoading(false);
@@ -2009,11 +2035,11 @@ const ReviewPageSOIBRA = () => {
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
                         </div>)}
 
-                        {!readOnly && !inApproval && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && !inReview && !inApproval && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick3} title="Publish" />
                         </div>)}
 
-                        {inApproval && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {(inApproval || inReview) && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
                         </div>)}
 
@@ -2035,6 +2061,12 @@ const ReviewPageSOIBRA = () => {
                     {(readOnly && inApproval) && (<div className="input-row">
                         <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
                             The draft is in the approval process and needs to be approved.
+                        </div>
+                    </div>)}
+
+                    {(readOnly && inReview) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the review process and needs to be reviewed.
                         </div>
                     </div>)}
 

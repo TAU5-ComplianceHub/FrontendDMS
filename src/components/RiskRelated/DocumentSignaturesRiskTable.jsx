@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import axios from "axios";
 import "./DocumentSignaturesRiskTable.css";
 // reuse the floating-dropdown styles
@@ -15,9 +15,8 @@ const DocumentSignaturesRiskTable = ({
   setErrors,
   readOnly = false
 }) => {
-  const [nameLists, setNameLists] = useState([]);
-  const [posLists, setPosLists] = useState([]);
-  const [nameToPositionMap, setNameToPositionMap] = useState({});
+  const [users, setUsers] = useState([]);
+  const [attendees, setAttendees] = useState([]); // users + stakeholders
 
   // floating dropdown state
   const [showNameDropdown, setShowNameDropdown] = useState(null);
@@ -33,38 +32,64 @@ const DocumentSignaturesRiskTable = ({
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await axios.get(`${process.env.REACT_APP_URL}/api/riskInfo/stk`);
-        const data = res.data.stakeholders; // [{ name, position }, …]
+        const [userRes, stkRes] = await Promise.all([
+          axios.get(`${process.env.REACT_APP_URL}/api/user/`),
+          axios.get(`${process.env.REACT_APP_URL}/api/riskInfo/stk`),
+        ]);
 
-        // build name → position map
-        const positionMap = {};
-        data.forEach(({ name, pos }) => {
-          positionMap[name] = pos;
-        });
+        const users = userRes.data.users || [];
+        const stakeholders = stkRes.data.stakeholders || [];
 
-        // unique sorted lists
-        const names = data.map(d => d.name).sort();
-        const positions = Array.from(new Set(data.map(d => d.pos))).sort();
+        const userAttendees = users.map(u => ({
+          kind: "user",
+          id: u._id,
+          name: (u.username ?? "").trim(),
+          pos: (u.designation ?? "").trim(),
+        }));
 
-        // cache in localStorage
-        localStorage.setItem(
-          "cachedStakeholders",
-          JSON.stringify({ names, positions, positionMap })
-        );
+        const stakeholderAttendees = stakeholders.map(s => ({
+          kind: "stakeholder",
+          id: s._id,
+          name: (s.name ?? "").trim(),
+          pos: (s.pos ?? "").trim(),
+        }));
 
-        setNameLists(names);
-        setPosLists(positions);
-        setNameToPositionMap(positionMap);
-      } catch {
-        const cached = localStorage.getItem("cachedStakeholders");
+        const combined = [...userAttendees, ...stakeholderAttendees]
+          .filter(a => a.name)
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+        setUsers(users);          // keep if you still use it elsewhere
+        setAttendees(combined);
+
+        localStorage.setItem("cachedNameLists", JSON.stringify({ users, stakeholders }));
+      } catch (e) {
+        const cached = localStorage.getItem("cachedNameLists");
         if (cached) {
-          const { names, positions, positionMap } = JSON.parse(cached);
-          setNameLists(names);
-          setPosLists(positions);
-          setNameToPositionMap(positionMap);
+          const { users = [], stakeholders = [] } = JSON.parse(cached);
+
+          const combined = [
+            ...users.map(u => ({
+              kind: "user",
+              id: u._id,
+              name: (u.username ?? "").trim(),
+              pos: (u.designation ?? "").trim(),
+            })),
+            ...stakeholders.map(s => ({
+              kind: "stakeholder",
+              id: s._id,
+              name: (s.name ?? "").trim(),
+              pos: (s.pos ?? "").trim(),
+            })),
+          ]
+            .filter(a => a.name)
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+
+          setUsers(users);
+          setAttendees(combined);
         }
       }
     };
+
     fetchData();
   }, []);
 
@@ -95,49 +120,63 @@ const DocumentSignaturesRiskTable = ({
 
   const openNameDropdown = (index) => {
     if (readOnly) return;
-    closeDropdowns();
-    // show all except other selected
-    const opts = nameLists;
-    setFilteredNameOptions(prev => ({ ...prev, [index]: opts }));
-    positionDropdown(nameInputRefs.current[index]);
-    setShowNameDropdown(index);
 
-    setErrors(prev => ({
-      ...prev,
-      signs: false
-    }));
+    const auth = rows[index]?.auth;
+    const usedInCategory = getUsedNamesForAuth(auth, index);
+    const currentName = (rows[index]?.name ?? "").trim();
+    const typed = currentName.toLowerCase();
+
+    const opts = usernameOptions
+      .filter(n => (!usedInCategory.has(n) || n === currentName))
+      .filter(n => n.toLowerCase().includes(typed));
+
+    setFilteredNameOptions(prev => ({ ...prev, [index]: opts }));
+    positionDropdown(nameInputRefs.current[index]); // ✅ positions the floating dropdown
+    setShowNameDropdown(index);
+    setShowPosDropdown(null);
   };
 
   const handleNameInputChange = (index, value) => {
-    // update the name field
+    // update name
     handleRowChange({ target: { value } }, index, "name");
-    // auto-fill pos
-    handleRowChange(
-      { target: { value: nameToPositionMap[value] || "" } },
-      index,
-      "pos"
+
+    // auto-fill position from selected username (exact match)
+    const matched = attendees.find(a => a.name === value);
+    handleRowChange({ target: { value: matched?.pos ?? "" } }, index, "pos");
+
+    setErrors?.(prev => ({ ...prev, signs: false }));
+
+    // filter dropdown results
+    const auth = rows[index]?.auth;
+    const usedInCategory = getUsedNamesForAuth(auth, index);
+    const lower = (value ?? "").toLowerCase();
+
+    const opts = usernameOptions.filter(n =>
+      n.toLowerCase().includes(lower) &&
+      (!usedInCategory.has(n) || n === rows[index].name)
     );
 
-    setErrors(prev => ({
-      ...prev,
-      signs: false
-    }));
-
-    const opts = nameLists
-      .filter(n => n.toLowerCase().includes(value.toLowerCase()));
     setFilteredNameOptions(prev => ({ ...prev, [index]: opts }));
     positionDropdown(nameInputRefs.current[index]);
     setShowNameDropdown(index);
+    setShowPosDropdown(null);
   };
 
   const handleSelectName = (index, name) => {
-    // finalize name & auto-fill pos
+    const auth = rows[index]?.auth;
+    const usedInCategory = getUsedNamesForAuth(auth, index);
+
+    if (name && usedInCategory.has(name)) {
+      setShowNameDropdown(null);
+      return;
+    }
+
+    const matched = attendees.find(a => (a.name ?? "") === name);
+    if (matched?.pos) {
+      handleRowChange({ target: { value: matched.pos } }, index, "pos");
+    }
     handleRowChange({ target: { value: name } }, index, "name");
-    handleRowChange(
-      { target: { value: nameToPositionMap[name] || "" } },
-      index,
-      "pos"
-    );
+
     setShowNameDropdown(null);
   };
 
@@ -146,7 +185,7 @@ const DocumentSignaturesRiskTable = ({
   const openPosDropdown = (index) => {
     if (readOnly) return;
     closeDropdowns();
-    const base = posLists
+    const base = positionOptions
       .filter(p => p?.trim() !== "");
     const opts = base;
     setFilteredPosOptions(prev => ({ ...prev, [index]: opts }));
@@ -161,7 +200,7 @@ const DocumentSignaturesRiskTable = ({
 
   const handlePosInputChange = (index, value) => {
     handleRowChange({ target: { value } }, index, "pos");
-    const opts = posLists
+    const opts = positionOptions
       .filter(p => p.toLowerCase().includes(value.toLowerCase()));
 
     setErrors(prev => ({
@@ -181,7 +220,51 @@ const DocumentSignaturesRiskTable = ({
 
   const closeDropdowns = () => {
     setShowNameDropdown(null);
-    setShowPosDropdown(false);
+    setShowPosDropdown(null);
+  };
+
+  const usernameOptions = useMemo(() => {
+    const list = attendees
+      .map(a => a.name)
+      .filter(Boolean);
+
+    return Array.from(new Set(list)).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [attendees]);
+
+  const userNameOptions = useMemo(() => {
+    const list = users
+      .map(u => (u.username ?? "").trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(list)).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [users]);
+
+  const positionOptions = useMemo(() => {
+    const list = attendees
+      .map(a => (a.pos ?? "").trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(list)).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [attendees]);
+
+  const getUsedNamesForAuth = (auth, excludeIndex) => {
+    const used = new Set();
+
+    rows.forEach((r, i) => {
+      if (i === excludeIndex) return;
+      if ((r?.auth ?? "") !== auth) return;
+
+      const n = (r?.name ?? "").trim();
+      if (n) used.add(n);
+    });
+
+    return used;
   };
 
   useEffect(() => {
@@ -260,16 +343,49 @@ const DocumentSignaturesRiskTable = ({
                   </div>
                 </td>
                 <td>
-                  <input
-                    type="text"
-                    className="table-control font-fam"
-                    style={{ fontSize: "14px" }}
-                    value={row.name}
-                    onFocus={() => openNameDropdown(idx)}
-                    onChange={e => handleNameInputChange(idx, e.target.value)}
-                    ref={el => (nameInputRefs.current[idx] = el)}
-                    readOnly={readOnly}
-                  />
+                  {row.auth === "Approver" || row.auth === "Reviewer" ? (
+
+                    <div className="jra-info-popup-page-select-container">
+                      <select
+                        className="table-control font-fam remove-default-styling"
+                        value={row.name || ""}
+                        onChange={(e) => handleSelectName(idx, e.target.value)}
+                        disabled={readOnly}
+                        style={{ fontSize: "14px" }}
+                      >
+                        <option value="">Select Name</option>
+
+                        {Array.from(
+                          new Set([
+                            ...(userNameOptions || []),        // users only
+                            ...(row.name ? [row.name] : []),   // keep old saved value
+                          ])
+                        )
+                          .filter((name) => {
+                            const usedInCategory = getUsedNamesForAuth(row.auth, idx);
+                            return !usedInCategory.has(name) || name === row.name;
+                          })
+                          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+                          .map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  ) : (
+                    // ✅ KEEP INPUT FOR AUTHOR
+                    <input
+                      className="table-control font-fam"
+                      value={row.name}
+                      style={{ fontSize: "14px" }}
+                      onChange={e => handleNameInputChange(idx, e.target.value)}
+                      onFocus={() => openNameDropdown(idx, true)}
+                      ref={el => (nameInputRefs.current[idx] = el)}
+                      readOnly={readOnly}
+                      placeholder="Insert or Select Name"
+                    />
+                  )}
                 </td>
                 <td>
                   <input

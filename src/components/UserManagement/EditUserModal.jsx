@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
 const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formError, userToEdit, setUserToEdit, current, isAdmin }) => {
     const [departments, setDepartments] = useState([]);
@@ -53,7 +53,81 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
         "Workspace Manager"
     ];
 
-    const [designations, setDesignations] = useState(DESIGNATIONS);
+    const [designations, setDesignations] = useState(DESIGNATIONS); const [filteredDesignations, setFilteredDesignations] = useState([]);
+    const [showDesignationDropdown, setShowDesignationDropdown] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+    const designationInputRef = useRef(null);
+
+    const closeAllDropdowns = () => {
+        setShowDesignationDropdown(false);
+    };
+
+    const updateDropdownPosition = (el) => {
+        if (!el) return;
+
+        const rect = el.getBoundingClientRect();
+        setDropdownPosition({
+            top: rect.bottom + window.scrollY + 5,
+            left: rect.left + window.scrollX,
+            width: rect.width
+        });
+    };
+
+    const handleDesignationInput = (value) => {
+        closeAllDropdowns();
+        setUserToEdit({ ...userToEdit, designation: value });
+
+        const matches = designations.filter((opt) =>
+            opt.toLowerCase().includes(value.toLowerCase())
+        );
+
+        setFilteredDesignations(matches);
+        setShowDesignationDropdown(true);
+        updateDropdownPosition(designationInputRef.current);
+    };
+
+    const handleDesignationFocus = () => {
+        closeAllDropdowns();
+        setFilteredDesignations(designations);
+        setShowDesignationDropdown(true);
+        updateDropdownPosition(designationInputRef.current);
+    };
+
+    const selectDesignationSuggestion = (value) => {
+        setUserToEdit({ ...userToEdit, designation: value });
+        setShowDesignationDropdown(false);
+    };
+
+    useEffect(() => {
+        const popupSelector = '.floating-dropdown';
+
+        const handleClickOutside = (e) => {
+            const outside =
+                !e.target.closest(popupSelector) &&
+                !e.target.closest('input') &&
+                !e.target.closest('textarea');
+
+            if (outside) {
+                closeAllDropdowns();
+            }
+        };
+
+        const handleScroll = (e) => {
+            if (e.target.closest('textarea, input')) return;
+            if (e.target.closest(popupSelector)) return;
+            closeAllDropdowns();
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+            window.removeEventListener('scroll', handleScroll, true);
+        };
+    }, []);
 
     const fetchDepartments = async () => {
         try {
@@ -116,7 +190,7 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                 <form onSubmit={(e) => { e.preventDefault(); updateUser(); }}>
                     <div className="create-user-content">
                         <div className="create-user-group">
-                            <label className="create-user-label" htmlFor="edit-username">Username:</label>
+                            <label className="create-user-label" htmlFor="edit-username">Username: <span className="required-field">*</span></label>
                             <input
                                 type="text"
                                 id="edit-username"
@@ -129,7 +203,7 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                         </div>
 
                         <div className="create-user-group">
-                            <label className="create-user-label" htmlFor="edit-role">Role:</label>
+                            <label className="create-user-label" htmlFor="edit-role">Role: <span className="required-field">*</span></label>
                             <select
                                 id="edit-role"
                                 className={userToEdit?.role === "" ? `create-user-select def-colour` : `create-user-select`}
@@ -142,6 +216,24 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                                 {isAdmin(current) && <option value="admin" className="norm-colour">Admin</option>}
                                 {isAdmin(current) && <option value="standarduser" className="norm-colour">Standard User</option>}
                             </select>
+                        </div>
+
+                        <div className="create-user-group">
+                            <label className="create-user-label" htmlFor="designation">Position <span className="required-field">*</span></label>
+
+                            <div className="uc-info-popup-page-select-container">
+                                <input
+                                    type="text"
+                                    id="designation"
+                                    ref={designationInputRef}
+                                    className={userToEdit?.designation === "" ? `create-user-input def-colour` : `create-user-input`}
+                                    placeholder="Select or type Position"
+                                    value={userToEdit?.designation || ""}
+                                    onChange={(e) => handleDesignationInput(e.target.value)}
+                                    onFocus={handleDesignationFocus}
+                                    autoComplete="off"
+                                />
+                            </div>
                         </div>
 
                         <div className="create-user-group">
@@ -199,26 +291,6 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                                 </select>
                             </div>
                         </div>
-
-                        <div className="create-user-group">
-                            <label className="create-user-label" htmlFor="designation">Designation</label>
-
-                            <div className="uc-info-popup-page-select-container">
-                                <select
-                                    id="designation"
-                                    className={userToEdit.designation === "" ? `create-user-select def-colour` : `create-user-select`}
-                                    value={userToEdit.designation}
-                                    onChange={(e) => setUserToEdit({ ...userToEdit, designation: e.target.value })}
-                                >
-                                    <option value="" className="def-colour">Select Designation</option>
-                                    {DESIGNATIONS.map((designation, index) => (
-                                        <option key={index} value={designation} className="norm-colour">
-                                            {designation}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
                     </div>
 
                     <div className="create-user-buttons">
@@ -226,6 +298,28 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                     </div>
                 </form>
             </div>
+
+            {showDesignationDropdown && filteredDesignations.length > 0 && (
+                <ul
+                    className="floating-dropdown"
+                    style={{
+                        position: 'fixed',
+                        top: dropdownPosition.top,
+                        left: dropdownPosition.left,
+                        width: dropdownPosition.width,
+                        zIndex: 1000
+                    }}
+                >
+                    {filteredDesignations.slice().sort().map((designation, index) => (
+                        <li
+                            key={`${designation}-${index}`}
+                            onMouseDown={() => selectDesignationSuggestion(designation)}
+                        >
+                            {designation}
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
 };

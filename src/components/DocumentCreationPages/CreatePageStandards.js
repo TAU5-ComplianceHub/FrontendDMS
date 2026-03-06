@@ -27,6 +27,8 @@ import DraftPopup from "../Popups/DraftPopup";
 import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
+import ApproveApprovalProcessPopup from "../Popups/ApproveApprovalProcessPopup";
+import DuplicateName from "../Popups/DuplicateName";
 
 const CreatePageStandards = () => {
   const navigate = useNavigate();
@@ -65,9 +67,16 @@ const CreatePageStandards = () => {
   const [owner, setOwner] = useState(false);
   const [approval, setApproval] = useState(false);
   const [inApproval, setInApproval] = useState(false);
+  const [inReview, setInReview] = useState(false);
+  const [approveState, setApproveState] = useState(false);
+  const [isDuplicateName, setIsDuplicateName] = useState(false);
 
   const openApproval = () => {
     setApproval(true);
+  }
+
+  const closeApprovePopup = () => {
+    setApproveState(false);
   }
 
   const closeApproval = () => {
@@ -243,44 +252,108 @@ const CreatePageStandards = () => {
   const openLoadPopup = () => setLoadPopupOpen(true);
   const closeLoadPopup = () => setLoadPopupOpen(false);
 
-  const handleSave = () => {
-    if (formData.title !== "") {
-      if (loadedIDRef.current === '') {
-        saveData();
-
-        toast.dismiss();
-        toast.clearWaitingQueue();
-        toast.success("Draft has been successfully saved", {
-          closeButton: true,
-          autoClose: 1500, // 1.5 seconds
-          style: {
-            textAlign: 'center'
-          }
-        });
-      }
-      else if (loadedIDRef.current !== '') {
-        updateData(userIDsRef.current);
-
-        toast.dismiss();
-        toast.clearWaitingQueue();
-        toast.success("Draft has been successfully updated", {
-          closeButton: true,
-          autoClose: 800, // 1.5 seconds
-          style: {
-            textAlign: 'center'
-          }
-        });
-      }
-    }
-    else {
+  const handleSave = async () => {
+    if (formData.title.trim() === "") {
       toast.dismiss();
       toast.clearWaitingQueue();
       toast.error("Please fill in at least the title field before saving.", {
         closeButton: true,
-        autoClose: 800, // 1.5 seconds
-        style: {
-          textAlign: 'center'
-        }
+        autoClose: 800,
+        style: { textAlign: 'center' }
+      });
+      return;
+    }
+
+    if (loadedIDRef.current === '') {
+      const result = await saveData();
+
+      if (result?.duplicate) {
+        setIsDuplicateName(true);
+        toast.dismiss();
+        toast.clearWaitingQueue();
+        toast.warn("A draft with this name already exists. Please enter a new draft name.", {
+          closeButton: true,
+          autoClose: 2000,
+          style: { textAlign: 'center' }
+        });
+        return;
+      }
+
+      if (result?.ok) {
+        toast.dismiss();
+        toast.clearWaitingQueue();
+        toast.success("Draft has been successfully saved", {
+          closeButton: true,
+          autoClose: 1500,
+          style: { textAlign: 'center' }
+        });
+      }
+
+      return;
+    }
+
+    await updateData(userIDsRef.current);
+
+    toast.dismiss();
+    toast.clearWaitingQueue();
+    toast.success("Draft has been successfully updated", {
+      closeButton: true,
+      autoClose: 800,
+      style: { textAlign: 'center' }
+    });
+  };
+
+  const saveDraftName = async (newTitle) => {
+    const trimmedTitle = (newTitle || "").trim();
+
+    if (!trimmedTitle) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.warn("Please enter a draft name.", {
+        closeButton: true,
+        autoClose: 1000,
+        style: { textAlign: 'center' }
+      });
+      return;
+    }
+
+    const me = userIDRef.current;
+    const newFormData = {
+      ...formDataRef.current,
+      title: trimmedTitle,
+    };
+
+    setFormData(newFormData);
+    formDataRef.current = newFormData;
+
+    setUserIDs([me]);
+    userIDsRef.current = [me];
+
+    loadedIDRef.current = '';
+    setLoadedID('');
+
+    const result = await saveData(trimmedTitle);
+
+    if (result?.duplicate) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.warn("That draft name already exists. Please choose a different name.", {
+        closeButton: true,
+        autoClose: 1500,
+        style: { textAlign: 'center' }
+      });
+      return; // keep popup open
+    }
+
+    if (result?.ok) {
+      setIsDuplicateName(false);
+
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.success("Draft has been successfully saved", {
+        closeButton: false,
+        autoClose: 1500,
+        style: { textAlign: 'center' }
       });
     }
   };
@@ -340,7 +413,7 @@ const CreatePageStandards = () => {
     }
   };
 
-  const saveData = async () => {
+  const saveData = async (overrideTitle = null) => {
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
       usedTermCodes: usedTermCodesRef.current,
@@ -349,7 +422,10 @@ const CreatePageStandards = () => {
       usedEquipment: usedEquipmentRef.current,
       usedMobileMachine: usedMobileMachineRef.current,
       usedMaterials: usedMaterialsRef.current,
-      formData: formDataRef.current,
+      formData: {
+        ...formDataRef.current,
+        ...(overrideTitle ? { title: overrideTitle } : {})
+      },
       userIDs: userIDsRef.current,
       creator: userIDRef.current,
       updater: null,
@@ -365,17 +441,34 @@ const CreatePageStandards = () => {
         },
         body: JSON.stringify(dataToStore),
       });
+
       const result = await response.json();
+
+      if (response.status === 409 && result?.duplicate) {
+        return {
+          ok: false,
+          duplicate: true,
+          message: result.error,
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to save draft');
+      }
+
       setOfflineDraft(false);
       localStorage.removeItem("draftData");
 
-      if (result.id) {  // Ensure we receive an ID from the backend
-        setLoadedID(result.id);  // Update loadedID to track the saved document
+      if (result.id) {
+        setLoadedID(result.id);
         loadedIDRef.current = result.id;
       }
+
+      return { ok: true, id: result.id };
     } catch (error) {
       console.error('Error saving data:', error);
       saveDataOffline(""); // Fallback to offline save
+      return { ok: false, duplicate: false, error };
     }
   };
 
@@ -474,7 +567,7 @@ const CreatePageStandards = () => {
         }
       });
     } else {
-      openApproval();
+      handlePublishApprovalFlow();
     }
   };
 
@@ -520,6 +613,7 @@ const CreatePageStandards = () => {
       setReadOnly(readOnly);
       setOwner(isOwner)
       setInApproval(Boolean(data.statusApproval));
+      setInReview(Boolean(data.statusReview));
 
       requestAnimationFrame(() => {
         scrollBoxRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -592,6 +686,7 @@ const CreatePageStandards = () => {
   const usedMaterialsRef = useRef(usedMaterials);
   const userIDsRef = useRef(userIDs);
   const userIDRef = useRef(userID);
+  const readOnlyRef = useRef(readOnly);
 
   useEffect(() => {
     userIDRef.current = userID;
@@ -634,7 +729,12 @@ const CreatePageStandards = () => {
   }, [formData]);
 
   useEffect(() => {
+    readOnlyRef.current = readOnly;
+  }, [readOnly]);
+
+  useEffect(() => {
     if (offlineDraft) return;
+    if (readOnlyRef.current) return;
 
     if (!autoSaveInterval.current && formData.title.trim() !== "") {
       console.log("✅ Auto-save interval set");
@@ -656,6 +756,7 @@ const CreatePageStandards = () => {
 
   const autoSaveDraft = () => {
     if (readOnly) return;
+    if (readOnlyRef.current) return;
     if (formData.title.trim() === "") return; // Don't save without a valid title
 
     if (loadedIDRef.current === '') {
@@ -1160,11 +1261,16 @@ const CreatePageStandards = () => {
   const handlePublishApprovalFlow = async (approversValue) => {
     const dataToStore = {
       draftID: loadedIDRef.current,
-      approvers: approversValue
+      authorizations: (formDataRef.current?.rows ?? []).map(r => ({
+        auth: r.auth,     // "Author" | "Reviewer" | "Approver" etc
+        name: r.name,     // username
+        pos: r.pos,       // position
+        num: r.num
+      })),
     };
 
     setLoading(true);
-    updateData(userIDsRef.current);
+    await updateData(userIDsRef.current);
 
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/start-approval-stand-draft`, {
@@ -1187,11 +1293,17 @@ const CreatePageStandards = () => {
         }
       });
 
-      if (!data.currentApprover) {
-        setReadOnly(true)
+      if (autoSaveInterval.current) {
+        clearInterval(autoSaveInterval.current);
+        autoSaveInterval.current = null;
+      }
+
+      if (data.readOnly) {
+        setReadOnly(data.readOnly)
       }
 
       setInApproval(data.approvalStatus);
+      setInReview(data.reviewState);
 
       setLoading(false);
     } catch (error) {
@@ -1213,7 +1325,7 @@ const CreatePageStandards = () => {
         }
       });
     } else {
-      approveDraft();  // Call your function when the form is valid
+      setApproveState(true);
     }
   };
 
@@ -1223,7 +1335,7 @@ const CreatePageStandards = () => {
     };
 
     setLoading(true);
-    updateData(userIDsRef.current);
+    await updateData(userIDsRef.current);
 
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}/api/documentApprovals/approve-draft-stand`, {
@@ -1246,8 +1358,14 @@ const CreatePageStandards = () => {
         }
       });
 
+      if (autoSaveInterval.current) {
+        clearInterval(autoSaveInterval.current);
+        autoSaveInterval.current = null;
+      }
+
       setReadOnly(true);
       setLoading(false);
+      setApproveState(false);
 
       if (data.fullyApproved) {
         handlePublish()
@@ -1293,7 +1411,7 @@ const CreatePageStandards = () => {
               <button className="but-um" onClick={() => navigate('/FrontendDMS/generatedStandardFiles')}>
                 <div className="button-content">
                   <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
-                  <span className="button-text">Ready for Approval</span>
+                  <span className="button-text">Ready for Sign Off</span>
                 </div>
               </button>
             )}
@@ -1315,7 +1433,7 @@ const CreatePageStandards = () => {
           </div>
 
           <div className="sidebar-logo-dm-fi">
-            <img src={`${process.env.PUBLIC_URL}/standardsDMSInverted.svg`} alt="Control Attributes" className="icon-risk-rm" />
+            <img src={"/standardsDMSInverted.svg"} alt="Control Attributes" className="icon-risk-rm" />
             <p className="logo-text-dm-fi">{type}s</p>
           </div>
         </div>
@@ -1374,12 +1492,12 @@ const CreatePageStandards = () => {
               </div>
             )}
 
-            {!readOnly && !inApproval && owner && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && !inReview && !inApproval && owner && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
             </div>)}
 
-            {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+            {(inApproval || inReview) && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon style={{ color: "#7EAC89" }} icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
             </div>)}
           </div>
 
@@ -1391,16 +1509,22 @@ const CreatePageStandards = () => {
 
         </div>
 
+        {(!readOnly && (inApproval || inReview)) && (<div className="input-row">
+          <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+            To approve this document, click on the green circle above.
+          </div>
+        </div>)}
+
         <div className={`scrollable-box`} ref={scrollBoxRef}>
-          {(readOnly && !inApproval) && (<div className="input-row">
+          {(readOnly && !inReview && !inApproval) && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
               The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
             </div>
           </div>)}
 
-          {(readOnly && inApproval) && (<div className="input-row">
-            <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
-              The draft is in the approval process and needs to be approved.
+          {(readOnly && (inReview || inApproval)) && (<div className="input-row">
+            <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
+              This document is currently in the approval process
             </div>
           </div>)}
 
@@ -1572,6 +1696,8 @@ const CreatePageStandards = () => {
         {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       </div>
       <ToastContainer />
+      {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
+      {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
     </div>
   );
 };

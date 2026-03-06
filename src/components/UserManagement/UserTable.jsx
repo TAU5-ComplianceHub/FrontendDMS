@@ -52,7 +52,7 @@ const UserTable = ({ filteredUsers, openEditModal, setUserToDelete, setIsDeleteM
                         <th className="user-man-day-user">Date Added</th>
                         <th className="user-man-rt-user">Reporting To</th>
                         <th className="user-man-dept-user">Department</th>
-                        <th className="user-man-des-user">Designation</th>
+                        <th className="user-man-des-user">Position</th>
                         <th className="user-man-action-user">Action</th>
                     </tr>
                 </thead>

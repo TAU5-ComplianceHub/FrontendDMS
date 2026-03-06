@@ -36,6 +36,7 @@ import DraftPopup from "../Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup"
+import ApproveApprovalProcessPopup from "../Popups/ApproveApprovalProcessPopup";
 
 const RiskReviewPageJRA = () => {
     const navigate = useNavigate();
@@ -73,9 +74,15 @@ const RiskReviewPageJRA = () => {
     const [draftNote, setDraftNote] = useState(null);
     const [approval, setApproval] = useState(false);
     const [inApproval, setInApproval] = useState(false);
+    const [inReview, setInReview] = useState(false);
+    const [approveState, setApproveState] = useState(false);
 
     const openApproval = () => {
         setApproval(true);
+    }
+
+    const closeApprovePopup = () => {
+        setApproveState(false);
     }
 
     const closeApproval = () => {
@@ -256,7 +263,7 @@ const RiskReviewPageJRA = () => {
 
     const handleClick3 = async () => {
         try {
-            openApproval();
+            handlePublishApprovalFlow();
         } catch (err) {
             toast.error("Could not save draft, generation aborted." + err);
         }
@@ -378,6 +385,7 @@ const RiskReviewPageJRA = () => {
             setTitleSet(true);
             setAzureFN(storedData.azureFileName || "");
             setInApproval(Boolean(data.statusApproval));
+            setInReview(Boolean(data.statusReview));
         } catch (error) {
             console.error('Error loading data:', error);
         }
@@ -577,6 +585,7 @@ const RiskReviewPageJRA = () => {
     const usedMaterialsRef = useRef(usedMaterials);
     const userIDsRef = useRef(userIDs);
     const userIDRef = useRef(userID);
+    const readOnlyRef = useRef(readOnly);
 
     useEffect(() => {
         userIDRef.current = userID;
@@ -619,7 +628,12 @@ const RiskReviewPageJRA = () => {
     }, [formData]);
 
     useEffect(() => {
+        readOnlyRef.current = readOnly;
+    }, [readOnly]);
+
+    useEffect(() => {
         if (offlineDraft) return;
+        if (readOnlyRef.current) return;
 
         if (!autoSaveInterval.current && formData.title.trim() !== "") {
             console.log("✅ Auto-save interval set");
@@ -640,6 +654,8 @@ const RiskReviewPageJRA = () => {
     }, [formData.title]);
 
     const autoSaveDraft = () => {
+        if (readOnlyRef.current) return;
+        if (readOnly) return;
         if (formData.title.trim() === "") return; // Don't save without a valid title
         saveData(fileID);
     };
@@ -985,11 +1001,16 @@ const RiskReviewPageJRA = () => {
     const handlePublishApprovalFlow = async (approversValue) => {
         const dataToStore = {
             draftID: fileID,
-            approvers: approversValue
+            authorizations: (formDataRef.current?.rows ?? []).map(r => ({
+                auth: r.auth,     // "Author" | "Reviewer" | "Approver" etc
+                name: r.name,     // username
+                pos: r.pos,       // position
+                num: r.num
+            })),
         };
 
         setLoading(true);
-        saveData(fileID);
+        await saveData(fileID);
 
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/start-approval-jra-published`, {
@@ -1012,10 +1033,16 @@ const RiskReviewPageJRA = () => {
                 }
             });
 
-            if (!data.currentApprover) {
-                setReadOnly(true)
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
             }
 
+            if (data.readOnly) {
+                setReadOnly(data.readOnly)
+            }
+
+            setInReview(data.reviewState);
             setInApproval(data.approvalStatus);
 
             setLoading(false);
@@ -1029,7 +1056,7 @@ const RiskReviewPageJRA = () => {
         const newErrors = validateForm();
         setErrors(newErrors);
 
-        approveDraft();
+        setApproveState(true);
     };
 
     const approveDraft = async () => {
@@ -1038,7 +1065,7 @@ const RiskReviewPageJRA = () => {
         };
 
         setLoading(true);
-        saveData(fileID);
+        await saveData(fileID);
 
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskApprovals/approve-published-jra`, {
@@ -1061,8 +1088,14 @@ const RiskReviewPageJRA = () => {
                 }
             });
 
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
+            }
+
             setReadOnly(true);
             setLoading(false);
+            setApproveState(false);
 
             if (data.fullyApproved) {
                 await handleGeneratePublish()
@@ -1249,12 +1282,12 @@ const RiskReviewPageJRA = () => {
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
                         </div>)}
 
-                        {!readOnly && !inApproval && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && !inReview && !inApproval && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick3} title="Publish" />
                         </div>)}
 
-                        {inApproval && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
-                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        {(inApproval || inReview) && !readOnly && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon style={{ color: "#7EAC89" }} icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
                         </div>)}
 
                         {false && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
@@ -1270,10 +1303,16 @@ const RiskReviewPageJRA = () => {
                     <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
                 </div>
 
+                {(!readOnly && (inApproval || inReview)) && (<div className="input-row">
+                    <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                        To approve this document, click on the green circle above.
+                    </div>
+                </div>)}
+
                 <div className={`scrollable-box-risk-create`}>
-                    {(readOnly && inApproval) && (<div className="input-row">
-                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
-                            The draft is in the approval process and needs to be approved.
+                    {(readOnly && (inReview || inApproval)) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
+                            This document is currently in the approval process
                         </div>
                     </div>)}
 
@@ -1422,6 +1461,7 @@ const RiskReviewPageJRA = () => {
             )}
 
             {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+            {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
         </div>
     );
 };

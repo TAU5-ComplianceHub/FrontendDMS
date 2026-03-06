@@ -17,11 +17,10 @@ const DocumentWorkflow = ({ setClose }) => (
                     <div className="docwf-panel docwf-left">
                         <h3 className="docwf-panel-title">1. Saved Drafts Folder</h3>
                         <div className="docwf-left-content">
-                            <p style={{ fontSize: "14px" }}>
-                                Newly created documents and documents that are a work in progress are
-                                displayed here. Users can share and collaborate on these documents.
+                            <p style={{ fontSize: "15px", fontFamily: "Arial" }}>
+                                Documents that are a work in progress are displayed here.
                             </p>
-                            <p style={{ fontSize: "14px" }}>
+                            <p style={{ fontSize: "15px", fontFamily: "Arial" }}>
                                 <b>NB:</b> Documents in <b>Saved Drafts</b> must not be used for sign
                                 off purposes. Once documents are ready for sign off, they must be
                                 published first.
@@ -31,36 +30,38 @@ const DocumentWorkflow = ({ setClose }) => (
 
                     <div className="docwf-arrow">→</div>
 
-                    <div className="docwf-panel docwf-right">
-                        <h3 className="docwf-panel-title">2. Published Documents Folder</h3>
-                        <p style={{ fontSize: "14px", marginTop: "0px" }}>
-                            Documents that are ready for sign off are displayed here. Version
-                            numbers are allocated automatically to documents.
-                        </p>
-
-                        <div className="docwf-review">
-                            <h4 className="docwf-review-title">Review Process</h4>
-                            <div className="docwf-review-flow">
-                                <img src={`${process.env.PUBLIC_URL}/workflow.png`} />
-                            </div>
+                    <div className="docwf-panel docwf-left">
+                        <h3 className="docwf-panel-title">2. Ready for Sign Off</h3>
+                        <div className="docwf-left-content">
+                            <p style={{ fontSize: "15px", fontFamily: "Arial" }}>
+                                Documents that are in the review process are displayed here. This includes new documents that are getting reviewed for sign off and documents that are in revision.
+                            </p>
+                            <p style={{ fontSize: "15px", fontFamily: "Arial" }}>
+                                Version Numbers are allocated automatically to documents.
+                            </p>
                         </div>
+                    </div>
 
-                        <p style={{ fontSize: "14px", marginBottom: "0px" }}>
-                            Published documents contain revision history. If time has come for a
-                            document to be reviewed, the user is presented with the option. If a
-                            published document is in review, it is marked by an <b>In Review</b>{" "}
-                            status highlighted in yellow. Once the review process is complete,
-                            users can publish the document again and a new version number will be
-                            allocated to the document.
-                        </p>
+                    <div className="docwf-arrow">→</div>
+
+                    <div className="docwf-panel docwf-left">
+                        <h3 className="docwf-panel-title">3. Sign Off</h3>
+                        <div className="docwf-left-content">
+                            <p style={{ fontSize: "15px", fontFamily: "Arial" }}>
+                                Documents that have a signed off PDF attached are displayed here.
+                            </p>
+                            <p style={{ fontSize: "15px", fontFamily: "Arial" }}>
+                                <b>NB:</b> Documents that are getting revised are moved to the <b>Ready for Sign Off</b> folder. A signed off version remains available for access in the <strong>Signed Off</strong> folder with the statys updated to <strong>In Revision</strong>.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
                 <div className="matrix-notes-document-workflow">
                     <p>
                         At any point, a document can be <b>generated as a Word file</b>, but
-                        documents not generated from published documents should not be used for
-                        sign off. Once a document is published, it should be <b>saved as a PDF,
+                        documents not generated from <strong>Ready for Sign Off</strong> should not be used for
+                        sign off. Once a document is generated for sign off, it should be <b>saved as a PDF,
                             signed-off and uploaded to the Document Management System (DMS)</b> to
                         ensure it is officially stored and shared.
                     </p>

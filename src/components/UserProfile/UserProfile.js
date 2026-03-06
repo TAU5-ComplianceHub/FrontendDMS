@@ -328,7 +328,7 @@ const UserProfile = () => {
                                 </div>
 
                                 <div className="up-field">
-                                    <label>Designation</label>
+                                    <label>Position</label>
                                     <div>{user.designation}</div>
                                 </div>
                             </div>

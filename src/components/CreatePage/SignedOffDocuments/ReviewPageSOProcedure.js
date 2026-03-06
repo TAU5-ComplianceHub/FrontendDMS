@@ -57,6 +57,7 @@ const ReviewPageSOProcedure = () => {
     const [readOnly, setReadOnly] = useState(false);
     const [approval, setApproval] = useState(false);
     const [inApproval, setInApproval] = useState(false);
+    const [inReview, setInReview] = useState(false);
 
     const openApproval = () => {
         setApproval(true);
@@ -225,6 +226,8 @@ const ReviewPageSOProcedure = () => {
     };
 
     useEffect(() => {
+        if (readOnlyRef.current) return;
+
         if (!autoSaveInterval.current && formData.title.trim() !== "") {
             console.log("✅ Auto-save interval set");
 
@@ -244,6 +247,8 @@ const ReviewPageSOProcedure = () => {
     }, [formData.title]);
 
     const autoSaveDraft = () => {
+        if (readOnlyRef.current) return;
+        if (readOnly) return;
         saveData(fileID);
         toast.dismiss();
         toast.clearWaitingQueue();
@@ -364,7 +369,7 @@ const ReviewPageSOProcedure = () => {
                 }
             })
         } else {
-            openApproval();  // Call your function when the form is valid
+            handlePublishApprovalFlow();
         }
     };
 
@@ -398,6 +403,7 @@ const ReviewPageSOProcedure = () => {
             setUsedMobileMachines(storedData.usedMobileMachine || []);
             setUsedMaterials(storedData.usedMaterials || []);
             setInApproval(Boolean(data.statusApproval));
+            setInReview(Boolean(data.statusReview));
             setReadOnly(readOnly);
             const rawForm = storedData.formData || {};
             const normalizedForm = {
@@ -442,6 +448,7 @@ const ReviewPageSOProcedure = () => {
     const usedMaterialsRef = useRef(usedMaterials);
     const userIDsRef = useRef(userIDs);
     const userIDRef = useRef(userID);
+    const readOnlyRef = useRef(readOnly);
 
     useEffect(() => {
         userIDRef.current = userID;
@@ -482,6 +489,10 @@ const ReviewPageSOProcedure = () => {
     useEffect(() => {
         formDataRef.current = formData;
     }, [formData]);
+
+    useEffect(() => {
+        readOnlyRef.current = readOnly;
+    }, [readOnly]);
 
     const [history, setHistory] = useState([]);
     const timeoutRef = useRef(null);
@@ -896,7 +907,12 @@ const ReviewPageSOProcedure = () => {
     const handlePublishApprovalFlow = async (approversValue) => {
         const dataToStore = {
             draftID: fileID,
-            approvers: approversValue
+            authorizations: (formDataRef.current?.rows ?? []).map(r => ({
+                auth: r.auth,     // "Author" | "Reviewer" | "Approver" etc
+                name: r.name,     // username
+                pos: r.pos,       // position
+                num: r.num
+            })),
         };
 
         setLoading(true);
@@ -923,11 +939,17 @@ const ReviewPageSOProcedure = () => {
                 }
             });
 
-            if (!data.currentApprover) {
-                setReadOnly(true)
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
+            }
+
+            if (data.readOnly) {
+                setReadOnly(data.readOnly)
             }
 
             setInApproval(data.approvalStatus);
+            setInReview(data.reviewState);
 
             setLoading(false);
         } catch (error) {
@@ -972,6 +994,11 @@ const ReviewPageSOProcedure = () => {
                     textAlign: 'center'
                 }
             });
+
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
+            }
 
             setReadOnly(true);
             setLoading(false);
@@ -1136,11 +1163,11 @@ const ReviewPageSOProcedure = () => {
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
                         </div>)}
 
-                        {!readOnly && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
-                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick} title="Publish" />
+                        {!readOnly && !inReview && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePublishApprovalFlow} title="Publish" />
                         </div>)}
 
-                        {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {(inApproval || inReview) && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
                         </div>)}
                     </div>
@@ -1152,6 +1179,18 @@ const ReviewPageSOProcedure = () => {
                 </div>
 
                 <div className={`scrollable-box`}>
+                    {(readOnly && inApproval) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the approval process and needs to be approved.
+                        </div>
+                    </div>)}
+
+                    {(readOnly && inReview) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                            The draft is in the review process and needs to be reviewed.
+                        </div>
+                    </div>)}
+
                     <div className="input-row">
                         <div className={`review-page-input-box-title ${errors.title ? "error-create" : ""}`}>
                             <h3 className="font-fam-labels">Document Title <span className="required-field">*</span></h3>

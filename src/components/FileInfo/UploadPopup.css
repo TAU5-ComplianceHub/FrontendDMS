@@ -67,6 +67,26 @@
     justify-content: center;
 }
 
+.upload-file-signed-off-page-popup-right {
+    background: #f2f2f2;
+    padding: 20px;
+    padding-top: 20px;
+    padding-bottom: 15px;
+    border-radius: 5px;
+    width: 100%;
+    max-width: 650px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+    position: relative;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.upload-file-signed-off-page-form-footer {
+    margin-bottom: 5px;
+    margin-top: 10px;
+    padding-top: 0px;
+}
+
 .upload-file-page-divider {
     width: 15px;
 }
@@ -194,11 +214,11 @@
     width: 27.54%;
     height: 42px;
     border-radius: 4px;
+    margin-top: 10px;
     font-weight: bolder;
     font-family: Arial;
     cursor: pointer;
     transition: background-color 0.3s;
-    transform: translateY(-7%);
 }
 
 .choose-upload-file-button {

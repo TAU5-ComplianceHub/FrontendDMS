@@ -6,6 +6,7 @@ import { jwtDecode } from 'jwt-decode';
 import TopBar from "../../Notifications/TopBar";
 import DeletePopup from "../../FileInfo/DeletePopup";
 import RiskPopupMenuSignedOffFiles from "./RiskPopupMenuSignedOffFiles";
+import { toast, ToastContainer } from "react-toastify";
 
 const SignedOffIBRA = () => {
     const [files, setFiles] = useState([]);
@@ -33,6 +34,32 @@ const SignedOffIBRA = () => {
     }
 
     const navigate = useNavigate();
+    const reviewDocument = async (fileID) => {
+        let route = `${process.env.REACT_APP_URL}/api/riskGenerate/reviewSOIBRA/${fileID}`
+
+        try {
+            const response = await fetch(`${route}`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+            });
+            if (!response.ok) {
+                throw new Error(response.error || 'Failed to upload file');
+            }
+
+            toast.success("Document Version Created in Ready For Sign Off", {
+                closeButton: false,
+                autoClose: 1500,
+                style: {
+                    textAlign: 'center'
+                }
+
+            })
+        } catch (error) {
+            setLoading(false);
+        }
+    }
 
     // --- Unified Sort ---
     const DEFAULT_SORT = { colId: null, direction: "desc" };
@@ -60,7 +87,13 @@ const SignedOffIBRA = () => {
     const deleteFile = async () => { if (!fileToDelete) return; try { setLoading(true); const r = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/signedOffIBRA/trashFile/${fileToDelete}`, { headers: { Authorization: `Bearer ${token}` }, method: 'POST', }); if (!r.ok) throw new Error('Failed'); setFileToDelete(""); setSelectedFileName(""); setIsModalOpen(false); fetchFiles(); } catch (e) { console.error(e); } finally { setLoading(false); } };
     const clearSearch = () => setSearchQuery("");
     const formatDate = (dateString) => { const date = new Date(dateString); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
-    const getStatusClass = (s) => { switch (s?.toLowerCase()) { case 'published': return 'status-approved'; case 'in review': return 'status-pending'; default: return 'status-default'; } };
+    const getStatusClass = (s) => {
+        switch (s?.toLowerCase()) {
+            case 'published': return 'status-approved';
+            case 'in revision': return 'status-pending';
+            default: return 'status-default';
+        }
+    };
     const getStatus = (s) => (s?.toLowerCase() === 'published' ? 'Signed Off' : s);
 
     useEffect(() => { const t = localStorage.getItem('token'); if (t) { setToken(t); setUserID(jwtDecode(t).userId); } }, [navigate]);
@@ -118,7 +151,7 @@ const SignedOffIBRA = () => {
 
     const allColumns = [
         { id: "nr", title: "Nr", thClass: "gen-th ibraGenNr", tdClass: "cent-values-gen gen-point", td: (f, i) => i + 1 },
-        { id: "name", title: "Document Name", thClass: "gen-th ibraGenFN", tdClass: "gen-point", onCellClick: (f) => setHoveredFileId(hoveredFileId === f._id ? null : f._id), td: (f) => (<div className="popup-anchor"><span>{(f.formData.title)}</span>{(hoveredFileId === f._id) && (<RiskPopupMenuSignedOffFiles file={f} typeDoc={"ibra"} risk={false} isOpen={true} openDownloadModal={downloadFile} setHoveredFileId={setHoveredFileId} id={f._id} />)}</div>) },
+        { id: "name", title: "Document Name", thClass: "gen-th ibraGenFN", tdClass: "gen-point", onCellClick: (f) => setHoveredFileId(hoveredFileId === f._id ? null : f._id), td: (f) => (<div className="popup-anchor"><span>{(f.formData.title)}</span>{(hoveredFileId === f._id) && (<RiskPopupMenuSignedOffFiles file={f} typeDoc={"ibra"} risk={false} isOpen={true} openDownloadModal={downloadFile} setHoveredFileId={setHoveredFileId} id={f._id} review={reviewDocument} />)}</div>) },
         { id: "version", title: "Version", thClass: "gen-th ibraGenVer", tdClass: "cent-values-gen gen-point", td: (f) => f.formData.version },
         { id: "status", title: "Document Status", thClass: "gen-th ibraGenStatus", tdClass: "cent-values-gen gen-point", td: (f) => getStatus(f.documentStatus) },
         { id: "firstPublishedBy", title: "First Published By", thClass: "gen-th ibraGenPB", tdClass: "cent-values-gen gen-point", td: (f) => f.publisher.username },
@@ -450,6 +483,7 @@ const SignedOffIBRA = () => {
                 </div>
             )}
 
+            <ToastContainer />
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
         </div>
     );

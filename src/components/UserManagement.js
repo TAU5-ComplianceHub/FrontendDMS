@@ -7,10 +7,11 @@ import EditUserModal from './UserManagement/EditUserModal';
 import UserTable from "./UserManagement/UserTable";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faFolderOpen } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faFolderOpen, faUserGroup } from '@fortawesome/free-solid-svg-icons';
 import DeletePopupUM from "./UserManagement/DeletePopupUM";
 import TopBar from "./Notifications/TopBar";
 import { getCurrentUser, can, canIn, isAdmin } from "../utils/auth";
+import BatchUploadUsers from "./UserManagement/BatchUploadUsers";
 
 const UserManagement = () => {
     const [error, setError] = useState(null);
@@ -30,7 +31,16 @@ const UserManagement = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+    const [isOpenBatch, setIsOpenBatch] = useState(false);
     const navigate = useNavigate();
+
+    const openBatch = () => {
+        setIsOpenBatch(true);
+    }
+
+    const closeBatch = () => {
+        setIsOpenBatch(false);
+    }
 
     const clearSearch = () => {
         setSearchQuery("");
@@ -104,9 +114,24 @@ const UserManagement = () => {
         }
     }, [loggedInUserId]);
 
+    const normalizeUserPayload = (user) => ({
+        ...user,
+        username: user?.username?.trim() || "",
+        email: user?.email?.trim() || "",
+        role: user?.role?.trim() || "",
+        designation: user?.designation?.trim() || "",
+        department: user?.department?.trim() || "",
+        reportingTo: user?.reportingTo ? String(user.reportingTo) : null,
+        password: user?.password?.trim() || ""
+    });
+
     const createUser = async () => {
-        if (!newUser.username || !newUser.email || !newUser.role || !newUser.reportingTo || !newUser.department || !newUser.designation) {
-            setFormError('All fields are required.');
+        const payload = normalizeUserPayload(newUser);
+
+        console.log(payload);
+
+        if (!payload.username || !payload.email || !payload.role || !payload.designation) {
+            setFormError('Username, email, role and position are required.');
             return;
         }
 
@@ -117,17 +142,16 @@ const UserManagement = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(newUser)
+                body: JSON.stringify(payload)
             });
+
             if (!response.ok) throw new Error('Failed to create user');
 
             toast.success("User account created.", {
                 closeButton: false,
                 autoClose: 800,
-                style: {
-                    textAlign: 'center'
-                }
-            })
+                style: { textAlign: 'center' }
+            });
 
             setIsModalOpen(false);
             setNewUser({ username: '', email: '', role: '', reportingTo: '', department: '', designation: '' });
@@ -166,8 +190,10 @@ const UserManagement = () => {
     };
 
     const updateUser = async () => {
-        if (!userToEdit.username || !userToEdit.role || !userToEdit.department || !userToEdit.reportingTo || !userToEdit.designation) {
-            toast.error('All fields are required.', {
+        const payload = normalizeUserPayload(userToEdit);
+
+        if (!payload.username || !payload.role || !payload.designation) {
+            toast.error('Username, role and position are required.', {
                 closeButton: false,
                 autoClose: 800,
             });
@@ -181,8 +207,9 @@ const UserManagement = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify(userToEdit),
+                body: JSON.stringify(payload),
             });
+
             if (!response.ok) throw new Error('Failed to update user');
 
             setIsEditModalOpen(false);
@@ -242,6 +269,13 @@ const UserManagement = () => {
                             <div className="button-content">
                                 <FontAwesomeIcon icon={faUser} className="button-icon" />
                                 <span className="button-text">Add User</span>
+                            </div>
+                        </button>
+
+                        <button className="but-um" onClick={openBatch}>
+                            <div className="button-content">
+                                <FontAwesomeIcon icon={faUserGroup} className="button-icon" />
+                                <span className="button-text">Batch Register Users</span>
                             </div>
                         </button>
                     </div>
@@ -328,6 +362,8 @@ const UserManagement = () => {
                 current={access}
                 isAdmin={isAdmin}
             />
+
+            {isOpenBatch && (<BatchUploadUsers onClose={closeBatch} refresh={fetchUsers} />)}
             <ToastContainer />
         </div>
     );

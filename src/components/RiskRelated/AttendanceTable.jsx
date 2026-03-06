@@ -8,7 +8,7 @@ import { saveAs } from "file-saver";
 
 const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, generateAR, setErrors, readOnly = false, title, documentType }) => {
     const [designations, setDesignations] = useState([]);
-    const [authors, setAuthors] = useState([]);
+    const [attendees, setAttendees] = useState([]);
     const [companies, setCompanies] = useState([]);
     const [filteredAuthorOptions, setFilteredAuthorOptions] = useState({});
     const [filteredDesignationOptions, setFilteredDesignationOptions] = useState({});
@@ -27,7 +27,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
         { id: "name", title: "Name & Surname" },
         { id: "site", title: "Company/Site" },
         { id: "attendance", title: "Attendance" },
-        { id: "designation", title: "Designation" },
+        { id: "designation", title: "Position" },
         { id: "num", title: "Company/ ID Number" },
         { id: "action", title: "Action" },
     ];
@@ -117,6 +117,51 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
         ...(!readOnly ? ["action"] : []),
     ]);
 
+    const fetchAttendees = async () => {
+        try {
+            const [stkRes, userRes] = await Promise.all([
+                fetch(`${process.env.REACT_APP_URL}/api/riskInfo/stk`),
+                fetch(`${process.env.REACT_APP_URL}/api/user/`),
+            ]);
+
+            if (!stkRes.ok) throw new Error("Failed to fetch stakeholders");
+            if (!userRes.ok) throw new Error("Failed to fetch users");
+
+            const stkData = await stkRes.json();
+            const userData = await userRes.json();
+
+            const stakeholderAttendees = (stkData.stakeholders || []).map(s => ({
+                kind: "stakeholder",
+                id: s._id,
+                name: s.name || "",
+                position: s.pos || "",
+            }));
+
+            const userAttendees = (userData.users || []).map(u => ({
+                kind: "user",
+                id: u._id,
+                // Use username (always present). If you prefer first+last when available, you can swap later.
+                name: u.username || "",
+                position: u.designation || "",
+            }));
+
+            const combined = [...userAttendees, ...stakeholderAttendees]
+                .filter(a => a.name.trim() !== "")
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            setAttendees(combined);
+
+            // optional: build designation dropdown values from BOTH sources
+            const positions = Array.from(
+                new Set(combined.map(a => a.position).filter(p => (p || "").trim() !== ""))
+            ).sort((a, b) => a.localeCompare(b));
+            setDesignations(positions);
+        } catch (error) {
+            console.error("Error fetching attendees:", error);
+        }
+    };
+
+    /*
     const fetchAuthors = async () => {
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/stk`);
@@ -138,6 +183,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
             console.error("Error fetching authors:", error);
         }
     };
+    */
 
     const fetchSites = async () => {
         try {
@@ -153,7 +199,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
     };
 
     useEffect(() => {
-        fetchAuthors();
+        fetchAttendees();
         fetchSites();
     }, []);
 
@@ -184,8 +230,8 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
 
         // Update filtered options and show dropdown
         if (field === "name") {
-            const filtered = authors.filter(author =>
-                author.name.toLowerCase().includes(value.toLowerCase())
+            const filtered = attendees.filter(a =>
+                a.name.toLowerCase().includes(value.toLowerCase())
             );
 
             setFilteredAuthorOptions(prev => ({ ...prev, [index]: filtered }));
@@ -251,8 +297,8 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
         if (field === "name") {
             // Show all authors or filtered options on focus
             const value = rows[index].name || "";
-            const filtered = authors.filter(author =>
-                author.name.toLowerCase().includes(value.toLowerCase())
+            const filtered = attendees.filter(a =>
+                a.name.toLowerCase().includes(value.toLowerCase())
             );
 
             setFilteredAuthorOptions(prev => ({ ...prev, [index]: filtered }));
@@ -459,7 +505,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
             toast.clearWaitingQueue();
             toast.warn("All attedees names must have a value.", {
                 closeButton: true,
-                autoClose: 800, // 1.5 seconds
+                autoClose: 2000, // 1.5 seconds
                 style: {
                     textAlign: 'center'
                 }
@@ -472,7 +518,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
             toast.clearWaitingQueue();
             toast.warn("All attedees company/site must have a value.", {
                 closeButton: true,
-                autoClose: 800, // 1.5 seconds
+                autoClose: 2000, // 1.5 seconds
                 style: {
                     textAlign: 'center'
                 }
@@ -485,7 +531,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
             toast.clearWaitingQueue();
             toast.warn("All attedees designation must have a value.", {
                 closeButton: true,
-                autoClose: 800, // 1.5 seconds
+                autoClose: 2000, // 1.5 seconds
                 style: {
                     textAlign: 'center'
                 }
@@ -534,6 +580,23 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
         return Array.from(
             new Set(current.flatMap(r => getFilterValuesForCell(r, colId)))
         ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+    };
+
+    const handleSelectAttendee = (index, attendee) => {
+        const updatedRow = {
+            ...rows[index],
+            name: attendee.name,
+        };
+
+        // auto populate position for all rows except facilitator if you want to keep that rule
+        if (index !== 0) {
+            updatedRow.designation = attendee.position || "";
+        }
+
+        const newRows = [...rows];
+        newRows[index] = updatedRow;
+        updateRows(newRows);
+        setShowDropdown(null);
     };
 
     return (
@@ -631,7 +694,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                                     <FontAwesomeIcon icon={faFilter} style={{ marginLeft: "8px", color: "#002060" }} />
                                 )}
                             </th>
-                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-desg` : `attend-desg-exp`}`}>Designation</th>
+                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-desg` : `attend-desg-exp`}`}>Position</th>
                             <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-pres` : `attend-pres-exp`}`}>Attendance</th>
                             {showColumns.includes("num") && (<th className="font-fam cent attend-id">Company / ID Number</th>)}
                             {!readOnly && (<th className={`font-fam cent ${!showColumns.includes("num") ? `attend-act` : `attend-act-exp`}`}>Action</th>)}
@@ -724,7 +787,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                                                         toast.clearWaitingQueue();
                                                         toast.warn("The Facilitator cannot be removed.", {
                                                             closeButton: false,
-                                                            autoClose: 800,
+                                                            autoClose: 2000,
                                                             style: { textAlign: 'center' }
                                                         });
                                                     }
@@ -764,9 +827,9 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                         zIndex: 1000
                     }}
                 >
-                    {filteredAuthorOptions[showDropdown].map((author, i) => (
-                        <li key={i} onMouseDown={() => handleSelectOption(showDropdown, "name", author.name)}>
-                            {author.name}
+                    {filteredAuthorOptions[showDropdown].map((a, i) => (
+                        <li key={a.id || i} onMouseDown={() => handleSelectAttendee(showDropdown, a)}>
+                            {a.name}
                         </li>
                     ))}
                 </ul>

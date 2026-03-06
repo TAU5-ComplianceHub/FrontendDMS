@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const RiskPopupMenuSignedOffFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, type, risk = false, typeDoc = "", id = null, openProcedurePopup }) => {
+const RiskPopupMenuSignedOffFiles = ({ isOpen, setHoveredFileId, openDownloadModal, file, type, risk = false, typeDoc = "", id = null, openProcedurePopup, review }) => {
     const navigate = useNavigate();
 
     const getRoute = () => {
@@ -48,9 +48,9 @@ const RiskPopupMenuSignedOffFiles = ({ isOpen, setHoveredFileId, openDownloadMod
                     <ul>
                         <li onClick={() => openDownloadModal(file.dmsId._id, file.dmsId.fileName)}>Download</li>
                     </ul>
-                    {type !== "dont" && (
+                    {file.documentStatus.toLowerCase() !== "in revision" && (
                         <ul>
-                            <li onClick={() => navigate(`${getRoute()}`)}>Review</li>
+                            <li onClick={() => review(file._id)}>Review</li>
                         </ul>
                     )}
                     <ul>

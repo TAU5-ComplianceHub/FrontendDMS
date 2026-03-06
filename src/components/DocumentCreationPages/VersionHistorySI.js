@@ -30,7 +30,7 @@ const VersionHistorySI = () => {
 
     useEffect(() => {
         fetchActivity();
-    }, []);
+    }, [token]);
 
     const openDownloadModal = (fileName, displayName) => {
         setDownloadFileName(fileName);
@@ -99,7 +99,7 @@ const VersionHistorySI = () => {
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
                 headers: {
-                    // 'Authorization': `Bearer ${token}` // Uncomment and fill in the token if needed
+                    'Authorization': `Bearer ${token}` // Uncomment and fill in the token if needed
                 }
             });
             if (!response.ok) {

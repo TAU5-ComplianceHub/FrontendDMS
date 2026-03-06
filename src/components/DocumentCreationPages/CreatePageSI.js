@@ -25,6 +25,7 @@ import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
+import DuplicateName from "../Popups/DuplicateName";
 
 const CreatePageSI = () => {
   const navigate = useNavigate();
@@ -65,6 +66,7 @@ const CreatePageSI = () => {
   const [owner, setOwner] = useState(false);
   const [approval, setApproval] = useState(false);
   const [inApproval, setInApproval] = useState(false);
+  const [isDuplicateName, setIsDuplicateName] = useState(false);
 
   const openApproval = () => {
     setApproval(true);
@@ -431,44 +433,107 @@ const CreatePageSI = () => {
     });
   };
 
-  const handleSave = () => {
-    if (formData.title !== "") {
-      if (loadedIDRef.current === '') {
-        saveData();
-
-        toast.dismiss();
-        toast.clearWaitingQueue();
-        toast.success("Draft has been successfully saved", {
-          closeButton: true,
-          autoClose: 1500, // 1.5 seconds
-          style: {
-            textAlign: 'center'
-          }
-        });
-      }
-      else if (loadedIDRef.current !== '') {
-        updateData(userIDsRef.current);
-
-        toast.dismiss();
-        toast.clearWaitingQueue();
-        toast.success("Draft has been successfully updated", {
-          closeButton: true,
-          autoClose: 800, // 1.5 seconds
-          style: {
-            textAlign: 'center'
-          }
-        });
-      }
-    }
-    else {
+  const handleSave = async () => {
+    if (formData.title.trim() === "") {
       toast.dismiss();
       toast.clearWaitingQueue();
       toast.error("Please fill in at least the title field before saving.", {
         closeButton: true,
-        autoClose: 800, // 1.5 seconds
-        style: {
-          textAlign: 'center'
-        }
+        autoClose: 800,
+        style: { textAlign: 'center' }
+      });
+      return;
+    }
+
+    if (loadedIDRef.current === '') {
+      const result = await saveData();
+
+      if (result?.duplicate) {
+        setIsDuplicateName(true);
+        toast.dismiss();
+        toast.clearWaitingQueue();
+        toast.warn("A draft with this name already exists. Please enter a new draft name.", {
+          closeButton: true,
+          autoClose: 2000,
+          style: { textAlign: 'center' }
+        });
+        return;
+      }
+      if (result?.ok) {
+        toast.dismiss();
+        toast.clearWaitingQueue();
+        toast.success("Draft has been successfully saved", {
+          closeButton: true,
+          autoClose: 1500,
+          style: { textAlign: 'center' }
+        });
+      }
+
+      return;
+    }
+
+    await updateData(userIDsRef.current);
+
+    toast.dismiss();
+    toast.clearWaitingQueue();
+    toast.success("Draft has been successfully updated", {
+      closeButton: true,
+      autoClose: 800,
+      style: { textAlign: 'center' }
+    });
+  };
+
+  const saveDraftName = async (newTitle) => {
+    const trimmedTitle = (newTitle || "").trim();
+
+    if (!trimmedTitle) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.warn("Please enter a draft name.", {
+        closeButton: true,
+        autoClose: 2000,
+        style: { textAlign: 'center' }
+      });
+      return;
+    }
+
+    const me = userIDRef.current;
+    const newFormData = {
+      ...formDataRef.current,
+      title: trimmedTitle,
+    };
+
+    setFormData(newFormData);
+    formDataRef.current = newFormData;
+
+    setUserIDs([me]);
+    userIDsRef.current = [me];
+
+    loadedIDRef.current = '';
+    setLoadedID('');
+
+    const result = await saveData(trimmedTitle);
+
+    if (result?.duplicate) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.warn("That draft name already exists. Please choose a different name.", {
+        closeButton: true,
+        autoClose: 2000,
+        style: { textAlign: 'center' }
+      });
+      return; // keep popup open
+    }
+
+    if (result?.ok) {
+      setIsDuplicateName(false);
+
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.success("Draft has been successfully saved", {
+        closeButton: false,
+        autoClose: 2000,
+        style: { textAlign: 'center' }
       });
     }
   };
@@ -518,11 +583,14 @@ const CreatePageSI = () => {
     }
   };
 
-  const saveData = async () => {
+  const saveData = async (overrideTitle = null) => {
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
       usedTermCodes: usedTermCodesRef.current,
-      formData: formDataRef.current,
+      formData: {
+        ...formDataRef.current,
+        ...(overrideTitle ? { title: overrideTitle } : {})
+      },
       userIDs: userIDsRef.current,
       creator: userIDRef.current,
       updater: null,
@@ -538,17 +606,34 @@ const CreatePageSI = () => {
         },
         body: JSON.stringify(dataToStore),
       });
+
       const result = await response.json();
+
+      if (response.status === 409 && result?.duplicate) {
+        return {
+          ok: false,
+          duplicate: true,
+          message: result.error,
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to save draft');
+      }
+
       setOfflineDraft(false);
       localStorage.removeItem("draftData");
 
-      if (result.id) {  // Ensure we receive an ID from the backend
-        setLoadedID(result.id);  // Update loadedID to track the saved document
+      if (result.id) {
+        setLoadedID(result.id);
         loadedIDRef.current = result.id;
       }
+
+      return { ok: true, id: result.id };
     } catch (error) {
       console.error('Error saving data:', error);
-      saveDataOffline(""); // Fallback to offline save
+      saveDataOffline("");
+      return { ok: false, duplicate: false, error };
     }
   };
 
@@ -604,7 +689,7 @@ const CreatePageSI = () => {
     }
   };
 
-  const handlePubClick = () => {
+  const handlePubClick = async () => {
     const newErrors = validateForm();
     setErrors(newErrors);
 
@@ -631,7 +716,7 @@ const CreatePageSI = () => {
         }
       });
     } else {
-      openApproval();
+      await handlePublish();
     }
   };
 
@@ -1239,7 +1324,7 @@ const CreatePageSI = () => {
               <button className="but-um" onClick={() => navigate('/FrontendDMS/generatedSpecialFiles')}>
                 <div className="button-content">
                   <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
-                  <span className="button-text">Ready for Approval</span>
+                  <span className="button-text">Ready for Sign Off</span>
                 </div>
               </button>
             )}
@@ -1637,6 +1722,7 @@ const CreatePageSI = () => {
       {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
       {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
       {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+      {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
       <ToastContainer />
     </div>
   );

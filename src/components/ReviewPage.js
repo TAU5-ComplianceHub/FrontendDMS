@@ -26,6 +26,7 @@ import SupportingDocumentTable from "./RiskRelated/SupportingDocumentTable";
 import DraftPopup from "./Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../utils/auth";
 import ApproversPopup from "./VisitorsInduction/InductionCreation/ApproversPopup";
+import ApproveApprovalProcessPopup from "./Popups/ApproveApprovalProcessPopup";
 
 const ReviewPage = () => {
     const navigate = useNavigate();
@@ -59,9 +60,15 @@ const ReviewPage = () => {
     const [readOnly, setReadOnly] = useState(false);
     const [approval, setApproval] = useState(false);
     const [inApproval, setInApproval] = useState(false);
+    const [inReview, setInReview] = useState(false);
+    const [approveState, setApproveState] = useState(false);
 
     const openApproval = () => {
         setApproval(true);
+    }
+
+    const closeApprovePopup = () => {
+        setApproveState(false);
     }
 
     const closeApproval = () => {
@@ -227,6 +234,8 @@ const ReviewPage = () => {
     };
 
     useEffect(() => {
+        if (readOnlyRef.current) return;
+
         if (!autoSaveInterval.current && formData.title.trim() !== "") {
             console.log("✅ Auto-save interval set");
 
@@ -246,6 +255,8 @@ const ReviewPage = () => {
     }, [formData.title]);
 
     const autoSaveDraft = () => {
+        if (readOnlyRef.current) return;
+        if (readOnly) return;
         saveData(fileID);
         toast.dismiss();
         toast.clearWaitingQueue();
@@ -366,7 +377,7 @@ const ReviewPage = () => {
                 }
             })
         } else {
-            openApproval();
+            handlePublishApprovalFlow();
         }
     };
 
@@ -400,6 +411,8 @@ const ReviewPage = () => {
             setUsedMobileMachines(storedData.usedMobileMachine || []);
             setUsedMaterials(storedData.usedMaterials || []);
             setInApproval(Boolean(data.statusApproval));
+            setInReview(Boolean(data.statusReview));
+
             setReadOnly(readOnly);
             const rawForm = storedData.formData || {};
             const normalizedForm = {
@@ -444,6 +457,7 @@ const ReviewPage = () => {
     const usedMaterialsRef = useRef(usedMaterials);
     const userIDsRef = useRef(userIDs);
     const userIDRef = useRef(userID);
+    const readOnlyRef = useRef(readOnly);
 
     useEffect(() => {
         userIDRef.current = userID;
@@ -484,6 +498,10 @@ const ReviewPage = () => {
     useEffect(() => {
         formDataRef.current = formData;
     }, [formData]);
+
+    useEffect(() => {
+        readOnlyRef.current = readOnly;
+    }, [readOnly]);
 
     const [history, setHistory] = useState([]);
     const timeoutRef = useRef(null);
@@ -899,7 +917,12 @@ const ReviewPage = () => {
     const handlePublishApprovalFlow = async (approversValue) => {
         const dataToStore = {
             draftID: fileID,
-            approvers: approversValue
+            authorizations: (formDataRef.current?.rows ?? []).map(r => ({
+                auth: r.auth,     // "Author" | "Reviewer" | "Approver" etc
+                name: r.name,     // username
+                pos: r.pos,       // position
+                num: r.num
+            })),
         };
 
         setLoading(true);
@@ -926,11 +949,17 @@ const ReviewPage = () => {
                 }
             });
 
-            if (!data.currentApprover) {
-                setReadOnly(true)
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
+            }
+
+            if (data.readOnly) {
+                setReadOnly(data.readOnly)
             }
 
             setInApproval(data.approvalStatus);
+            setInReview(data.reviewState);
 
             setLoading(false);
         } catch (error) {
@@ -944,7 +973,7 @@ const ReviewPage = () => {
         setErrors(newErrors);
 
 
-        approveDraft();
+        setApproveState(true);
     };
 
     const approveDraft = async () => {
@@ -976,8 +1005,14 @@ const ReviewPage = () => {
                 }
             });
 
+            if (autoSaveInterval.current) {
+                clearInterval(autoSaveInterval.current);
+                autoSaveInterval.current = null;
+            }
+
             setReadOnly(true);
             setLoading(false);
+            setApproveState(false);
 
             if (data.fullyApproved) {
                 await handleGeneratePDF()
@@ -1139,12 +1174,12 @@ const ReviewPage = () => {
                             <FontAwesomeIcon icon={faRotateRight} onClick={redoChange} title="Redo" />
                         </div>)}
 
-                        {!readOnly && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && !inReview && !inApproval && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleClick} title="Publish" />
                         </div>)}
 
-                        {inApproval && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
-                            <FontAwesomeIcon icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
+                        {(inApproval || inReview) && !readOnly && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                            <FontAwesomeIcon style={{ color: "#7EAC89" }} icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
                         </div>)}
                     </div>
                     {/* This div creates the space in the middle */}
@@ -1154,10 +1189,16 @@ const ReviewPage = () => {
                     <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} />
                 </div>
 
+                {(!readOnly && (inApproval || inReview)) && (<div className="input-row">
+                    <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
+                        To approve this document, click on the green circle above.
+                    </div>
+                </div>)}
+
                 <div className={`scrollable-box`}>
-                    {(readOnly && inApproval) && (<div className="input-row">
-                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
-                            The draft is in the approval process and needs to be approved.
+                    {(readOnly && (inReview || inApproval)) && (<div className="input-row">
+                        <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
+                            This document is currently in the approval process
                         </div>
                     </div>)}
 
@@ -1279,6 +1320,7 @@ const ReviewPage = () => {
             </div>
             <ToastContainer />
             {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+            {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
         </div>
     );
 };

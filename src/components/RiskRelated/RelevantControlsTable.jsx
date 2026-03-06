@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, forwardRef } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faPlusCircle, faInfoCircle, faChevronDown, faChevronRight, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 import { v4 as uuidv4 } from "uuid";
 import RelevantControlsSelectionPopup from "./RelevantControlsSelectionPopup";
 import ApplicableControlHelp from "./RiskInfo/ApplicableControlHelp";
 
-const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false, globalControls = [], isCollapsed, highlightedControlNames }) => {
+const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readOnly = false, globalControls = [], isCollapsed, highlightedControlNames }, ref) => {
     const [isPopupOpen, setIsPopupOpen] = useState(false);
     const [help, setHelp] = useState(false);
 
@@ -129,7 +129,7 @@ const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false
     const highlightedSet = new Set((highlightedControlNames || []).map(norm));
 
     return (
-        <div className="input-row">
+        <div className="input-row" ref={ref}>
             {/* Added relative positioning to ensure the button stays in the corner */}
             <div className="input-box-ref" style={{ position: "relative" }}>
                 <button
@@ -228,6 +228,6 @@ const RelevantControlsTable = ({ relevantControls, setFormData, readOnly = false
             )}
         </div>
     );
-};
+});
 
 export default RelevantControlsTable;

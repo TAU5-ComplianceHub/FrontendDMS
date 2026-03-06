@@ -14,9 +14,9 @@ const ApplicableControlHelp = ({ setClose }) => {
                 <div className="exec-table-group-2">
                     <div className="popup-table-wrapper-app-controls">
                         <p>
-                            Use this section to select controls that are applicable to this risk assessment. The goal is to narrow down risk assessment controls to ones that are necessary for the execution of a specific risk assessment. If a control of interest does not appear in the options provided, select Suggest New to add controls that have not been captured in the system.
+                            This section serves as a preparatory workspace for the facilitator to capture potential controls before completing the risk assessment table. Its purpose is to stimulate structured thinking and assist in identifying all relevant controls that may be required during the session. Controls recorded here will be available for selection in the risk assessment dropdown lists, making the assessment process more efficient and consistent.
                             <br /><br />
-                            Controls not included in this section will not be available through out the risk assessment.
+                            Controls added in this section that are not applied in the risk assessment will be flagged when generating the final output document, serving as a reminder to review their relevance. Facilitators may still add controls directly within the risk assessment table by typing them manually; however, such controls will not appear in the dropdown list unless captured in this preparatory section.
                         </p>
                     </div>
                 </div>

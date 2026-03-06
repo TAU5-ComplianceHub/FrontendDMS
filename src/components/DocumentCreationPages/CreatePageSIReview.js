@@ -465,7 +465,7 @@ const CreatePageSIReview = () => {
     }
   };
 
-  const handleClick = () => {
+  const handleClick = async () => {
     const newErrors = validateForm();
     setErrors(newErrors);
 
@@ -477,7 +477,7 @@ const CreatePageSIReview = () => {
         }
       })
     } else {
-      openApproval();
+      await handleGeneratePDF();
     }
   };
 

@@ -191,7 +191,7 @@ const RiskDocumentsIBRA = () => {
 
     const getStatus = (status) => {
         if (!status) return "";
-        if (status.toLowerCase() === 'published') return 'Ready for Approval';
+        if (status.toLowerCase() === 'published') return 'Ready for Sign Off';
         return status
     };
 
@@ -660,7 +660,7 @@ const RiskDocumentsIBRA = () => {
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/ibra2.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"Ready for Approval IBRAs"}</p>
+                        <p className="logo-text-dm-fi">{"Ready for Sign Off IBRAs"}</p>
                     </div>
                 </div>
             )}
@@ -700,7 +700,7 @@ const RiskDocumentsIBRA = () => {
                 </div>
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
-                        <label className="risk-control-label">{"Ready for Approval IBRAs"}</label>
+                        <label className="risk-control-label">{"Ready for Sign Off IBRAs"}</label>
 
                         <FontAwesomeIcon
                             icon={faColumns}

@@ -7,6 +7,7 @@ import PopupMenuPubFiles from "../../PublishedDocuments/PopupMenuPubFiles";
 import TopBar from "../../Notifications/TopBar";
 import DeletePopup from "../../FileInfo/DeletePopup";
 import PopupMenuSignedOffFiles from "./PopupMenuSignedOffFiles";
+import { toast, ToastContainer } from "react-toastify";
 
 const SignedOffProcedures = () => {
     const [files, setFiles] = useState([]);
@@ -61,7 +62,13 @@ const SignedOffProcedures = () => {
     const deleteFile = async () => { if (!fileToDelete) return; try { setLoading(true); const r = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/signedOffProcedure/trashFile/${fileToDelete}`, { headers: { Authorization: `Bearer ${token}` }, method: 'POST', }); if (!r.ok) throw new Error('Failed'); setFileToDelete(""); setSelectedFileName(""); setIsModalOpen(false); fetchFiles(); } catch (e) { console.error(e); } finally { setLoading(false); } };
     const clearSearch = () => setSearchQuery("");
     const formatDate = (dateString) => { const date = new Date(dateString); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; };
-    const getStatusClass = (s) => { switch (s?.toLowerCase()) { case 'published': return 'status-approved'; case 'in review': return 'status-pending'; default: return 'status-default'; } };
+    const getStatusClass = (s) => {
+        switch (s?.toLowerCase()) {
+            case 'published': return 'status-approved';
+            case 'in revision': return 'status-pending';
+            default: return 'status-default';
+        }
+    };
     const getStatus = (s) => (s?.toLowerCase() === 'published' ? 'Signed Off' : s);
 
     useEffect(() => { const t = localStorage.getItem('token'); if (t) { setToken(t); setUserID(jwtDecode(t).userId); } }, [navigate]);
@@ -84,6 +91,33 @@ const SignedOffProcedures = () => {
     };
     const openExcelFilterPopup = (colId, e) => { if (colId === "action") return; const th = e.target.closest("th"); const rect = th.getBoundingClientRect(); const vals = Array.from(new Set((files || []).flatMap((r, i) => getFilterValuesForCell(r, colId, i)))).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" })); const existing = activeExcelFilters[colId]; setExcelSelected(new Set(existing && Array.isArray(existing) ? existing : vals)); setExcelSearch(""); setExcelFilter({ open: true, colId, anchorRect: rect, pos: { top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX, width: Math.max(220, rect.width) } }); };
     const toggleSort = (colId, direction) => setSortConfig(p => (p?.colId === colId && p?.direction === direction) ? DEFAULT_SORT : { colId, direction });
+
+    const reviewDocument = async (fileID) => {
+        let route = `${process.env.REACT_APP_URL}/api/docCreate/reviewSOProcedure/${fileID}`
+
+        try {
+            const response = await fetch(`${route}`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('token')}`,
+                },
+            });
+            if (!response.ok) {
+                throw new Error(response.error || 'Failed to upload file');
+            }
+
+            toast.success("Document Version Created in Ready For Sign Off", {
+                closeButton: false,
+                autoClose: 1500,
+                style: {
+                    textAlign: 'center'
+                }
+
+            })
+        } catch (error) {
+            setLoading(false);
+        }
+    }
 
     const processedFiles = useMemo(() => {
         let current = [...files];
@@ -119,7 +153,18 @@ const SignedOffProcedures = () => {
 
     const allColumns = [
         { id: "nr", title: "Nr", thClass: "gen-th ibraGenNr", tdClass: "cent-values-gen gen-point", td: (f, i) => i + 1 },
-        { id: "name", title: "Document Name", thClass: "gen-th ibraGenFN", tdClass: "gen-point", onCellClick: (f) => setHoveredFileId(hoveredFileId === f._id ? null : f._id), td: (f) => (<div className="popup-anchor"><span>{removeFileExtension(f.formData.title)}</span>{(hoveredFileId === f._id) && (<PopupMenuSignedOffFiles file={f} typeDoc={"procedure"} risk={false} isOpen={true} openDownloadModal={downloadFile} setHoveredFileId={setHoveredFileId} id={f._id} />)}</div>) },
+        {
+            id: "name", title: "Document Name", thClass: "gen-th ibraGenFN", tdClass: "gen-point", onCellClick: (f) => setHoveredFileId(hoveredFileId === f._id ? null : f._id), td: (f) => (<div className="popup-anchor"><span>{removeFileExtension(f.formData.title)}</span>{(hoveredFileId === f._id) && (
+                <PopupMenuSignedOffFiles file={f}
+                    typeDoc={"procedure"}
+                    risk={false}
+                    isOpen={true}
+                    openDownloadModal={downloadFile}
+                    setHoveredFileId={setHoveredFileId}
+                    id={f._id}
+                    review={reviewDocument}
+                />)}</div>)
+        },
         { id: "version", title: "Version", thClass: "gen-th ibraGenVer", tdClass: "cent-values-gen gen-point", td: (f) => f.formData.version },
         { id: "status", title: "Document Status", thClass: "gen-th ibraGenStatus", tdClass: "cent-values-gen gen-point", td: (f) => getStatus(f.documentStatus) },
         { id: "firstPublishedBy", title: "First Published By", thClass: "gen-th ibraGenPB", tdClass: "cent-values-gen gen-point", td: (f) => f.publisher.username },
@@ -206,6 +251,8 @@ const SignedOffProcedures = () => {
             new Set(filtered.flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
         ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
     };
+
+    if (error) return <div>Error: {error}</div>;
 
     return (
         <div className="gen-file-info-container">
@@ -450,6 +497,7 @@ const SignedOffProcedures = () => {
             )}
 
             {isModalOpen && (<DeletePopup closeModal={closeModal} deleteFile={deleteFile} isTrashView={false} loading={loading} selectedFileName={selectedFileName} />)}
+            <ToastContainer />
         </div>
     );
 };
