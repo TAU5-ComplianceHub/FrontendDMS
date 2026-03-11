@@ -19,7 +19,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';  // Import CSS for styling
 import LoadDraftPopup from "../CreatePage/LoadDraftPopup";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFloppyDisk, faCheckCircle, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faL, faMagicWandSparkles, faInfo } from '@fortawesome/free-solid-svg-icons';
+import { faFloppyDisk, faCheckCircle, faSpinner, faRotateLeft, faFolderOpen, faChevronLeft, faChevronRight, faFileCirclePlus, faArrowLeft, faSort, faCircleUser, faBell, faShareNodes, faUpload, faRotateRight, faCircleExclamation, faPen, faSave, faArrowUp, faCaretLeft, faCaretRight, faL, faMagicWandSparkles, faInfo, faFileImport, faDownload } from '@fortawesome/free-solid-svg-icons';
 import { faFolderOpen as faFolderOpenSolid } from "@fortawesome/free-regular-svg-icons"
 import BurgerMenu from "../CreatePage/BurgerMenu";
 import SharePage from "../CreatePage/SharePage";
@@ -33,6 +33,7 @@ import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 import ApproveApprovalProcessPopup from "../Popups/ApproveApprovalProcessPopup";
 import DuplicateName from "../Popups/DuplicateName";
+import ImportJRAPopup from "../CreatePage/ImportJRAPopup";
 
 const CreatePage = () => {
   const navigate = useNavigate();
@@ -75,6 +76,124 @@ const CreatePage = () => {
   const [inReview, setInReview] = useState(false);
   const [approveState, setApproveState] = useState(false);
   const [isDuplicateName, setIsDuplicateName] = useState(false);
+  const [isImportJRAPopupOpen, setIsImportJRAPopupOpen] = useState(false);
+
+  const openImportJRA = () => setIsImportJRAPopupOpen(true);
+  const closeImportJRA = () => setIsImportJRAPopupOpen(false);
+
+  const toArray = (value) => {
+    if (Array.isArray(value)) return value;
+    if (value == null) return [];
+    return [value];
+  };
+
+  const cleanLine = (value) => String(value || "").trim();
+
+  const uniqueNonEmptyLines = (values) => {
+    const seen = new Set();
+    const result = [];
+
+    values
+      .flatMap((v) => Array.isArray(v) ? v : [v])
+      .map(cleanLine)
+      .filter(Boolean)
+      .forEach((item) => {
+        const key = item.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push(item);
+        }
+      });
+
+    return result;
+  };
+
+  const buildProcedureRowsFromJRA = (jraFormData = {}) => {
+    const jraRows = Array.isArray(jraFormData.jra) ? jraFormData.jra : [];
+
+    if (jraRows.length === 0) {
+      return [{
+        nr: 1,
+        mainStep: "",
+        SubStep: "",
+        accountable: "",
+        responsible: "",
+        prevStep: ""
+      }];
+    }
+
+    return jraRows.map((row, index) => {
+      const bodies = Array.isArray(row?.jraBody) ? row.jraBody : [];
+
+      const subControls = uniqueNonEmptyLines(
+        bodies.flatMap((body) =>
+          Array.isArray(body?.sub)
+            ? body.sub.map((c) => c?.task)
+            : []
+        )
+      );
+
+      const responsiblePeople = uniqueNonEmptyLines(
+        bodies.flatMap((body) =>
+          Array.isArray(body?.taskExecution)
+            ? body.taskExecution.map((t) => t?.R)
+            : []
+        )
+      );
+
+      return {
+        nr: index + 1,
+        mainStep: cleanLine(row?.main),
+        SubStep: subControls.join("\n"),
+        accountable: "",
+        responsible: responsiblePeople.join("\n"),
+        prevStep: ""
+      };
+    });
+  };
+
+  const importJRAData = (jraItem) => {
+    if (!jraItem) return;
+
+    const importedFormData = jraItem.formData || {};
+
+    const importedUsedAbbrCodes = Array.isArray(jraItem.usedAbbrCodes) ? jraItem.usedAbbrCodes : [];
+    const importedUsedTermCodes = Array.isArray(jraItem.usedTermCodes) ? jraItem.usedTermCodes : [];
+    const importedUsedPPEOptions = Array.isArray(jraItem.usedPPEOptions) ? jraItem.usedPPEOptions : [];
+    const importedUsedHandTools = Array.isArray(jraItem.usedHandTools) ? jraItem.usedHandTools : [];
+    const importedUsedEquipment = Array.isArray(jraItem.usedEquipment) ? jraItem.usedEquipment : [];
+    const importedUsedMobileMachine = Array.isArray(jraItem.usedMobileMachine) ? jraItem.usedMobileMachine : [];
+    const importedUsedMaterials = Array.isArray(jraItem.usedMaterials) ? jraItem.usedMaterials : [];
+
+    setUsedAbbrCodes(importedUsedAbbrCodes);
+    setUsedTermCodes(importedUsedTermCodes);
+    setUsedPPEOptions(importedUsedPPEOptions);
+    setUsedHandTools(importedUsedHandTools);
+    setUsedEquipment(importedUsedEquipment);
+    setUsedMobileMachines(importedUsedMobileMachine);
+    setUsedMaterials(importedUsedMaterials);
+
+    setFormData((prev) => ({
+      ...prev,
+      procedureRows: buildProcedureRowsFromJRA(importedFormData),
+
+      abbrRows: Array.isArray(importedFormData.abbrRows) ? importedFormData.abbrRows : [],
+      termRows: Array.isArray(importedFormData.termRows) ? importedFormData.termRows : [],
+      PPEItems: Array.isArray(importedFormData.PPEItems) ? importedFormData.PPEItems : [],
+      HandTools: Array.isArray(importedFormData.HandTools) ? importedFormData.HandTools : [],
+      Equipment: Array.isArray(importedFormData.Equipment) ? importedFormData.Equipment : [],
+      MobileMachine: Array.isArray(importedFormData.MobileMachine) ? importedFormData.MobileMachine : [],
+      Materials: Array.isArray(importedFormData.Materials) ? importedFormData.Materials : [],
+    }));
+
+    toast.dismiss();
+    toast.clearWaitingQueue();
+    toast.success("JRA data imported successfully.", {
+      closeButton: true,
+      autoClose: 1200,
+      style: { textAlign: "center" }
+    });
+  };
 
   const openApproval = () => {
     setApproval(true);
@@ -1557,6 +1676,10 @@ const CreatePage = () => {
               <FontAwesomeIcon style={{ color: "#7EAC89" }} icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
             </div>)}
 
+            {false && !readOnly && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faDownload} onClick={openImportJRA} title="Import JRA" />
+            </div>)}
+
             {(localStorage.getItem("draftData")) && (
               <div className="burger-menu-icon-risk-create-page-1" onClick={() => loadOfflineData()}>
                 <FontAwesomeIcon icon={faCircleExclamation} title="Load Offline Draft" />
@@ -1769,6 +1892,16 @@ const CreatePage = () => {
       </div>
       <ToastContainer />
       {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
+      {isImportJRAPopupOpen && (
+        <ImportJRAPopup
+          isOpen={isImportJRAPopupOpen}
+          onClose={closeImportJRA}
+          setLoadedID={setLoadedID}
+          loadData={importJRAData}
+          userID={userID}
+          type={type}
+        />
+      )}
     </div>
   );
 };

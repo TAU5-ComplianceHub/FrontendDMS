@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck, faX, faCalendarAlt, faClock, faClockRotateLeft } from "@fortawesome/free-solid-svg-icons";
+import { faArrowLeft, faBell, faCircleUser, faChevronLeft, faChevronRight, faSearch, faEraser, faTimes, faDownload, faCaretLeft, faCaretRight, faTableColumns, faArrowsLeftRight, faArrowsRotate, faFolderOpen, faCirclePlus, faEdit, faFilter, faSort, faFile, faSave, faCheck, faX, faCalendarAlt, faClock, faClockRotateLeft, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../Notifications/TopBar";
@@ -11,6 +11,7 @@ import AddControlPopup from "./AddControlPopup";
 import { ToastContainer, toast } from "react-toastify"; // Added toast import
 import EditControlPopup from "./EditControlPopup";
 import ControlPopupMenuOptions from "./ControlPopupMenuOptions";
+import DeleteControlCMPopup from "./ControlManagement/DeleteControlCMPopup";
 
 const ControlAttributes = () => {
     const [controls, setControls] = useState([]); // State to hold the file data
@@ -29,6 +30,8 @@ const ControlAttributes = () => {
     const drag = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
     const [addControl, setAddControl] = useState(false);
     const [modifyControl, setModifyControl] = useState(false);
+    const [deleteControlPopup, setDeleteControlPopup] = useState(false);
+    const [deletionControl, setDeletionControl] = useState(false);
     const [modifyingControl, setModifyingControl] = useState("")
     const [categoryChanges, setCategoryChanges] = useState({});
     const [searchQuery, setSearchQuery] = useState("");
@@ -55,7 +58,7 @@ const ControlAttributes = () => {
     const DROPDOWN_MARGIN = 8;       // viewport padding
 
     // --- Unified Sort Configuration ---
-    const DEFAULT_SORT = { colId: "nr", direction: "asc" };
+    const DEFAULT_SORT = { colId: null, direction: "asc" };
     const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
 
     // --- Excel Filter States ---
@@ -140,6 +143,16 @@ const ControlAttributes = () => {
 
     const closeModifyControl = () => {
         setModifyControl(false);
+        fetchControls();
+    }
+
+    const openConfirmDelete = (control) => {
+        setDeletionControl(control);
+        setDeleteControlPopup(true);
+    }
+
+    const closeConfirmDelete = () => {
+        setDeleteControlPopup(false);
         fetchControls();
     }
 
@@ -411,6 +424,47 @@ const ControlAttributes = () => {
             setError(error.message);
         }
     };
+    const deleteControl = async (id) => {
+        const route = `/api/riskInfo/deleteControls/${id}`;
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || data.error || "Failed to delete control");
+            }
+
+            fetchControls();
+            setDeleteControlPopup(false);
+
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.success(data.message, {   // ✅ uses backend message
+                closeButton: true,
+                autoClose: 1200,
+                style: { textAlign: "center" }
+            });
+
+        } catch (error) {
+            setError(error.message);
+
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.error(error.message || "Could not delete control.", {
+                closeButton: true,
+                autoClose: 1500,
+                style: { textAlign: "center" }
+            });
+        }
+    };
 
     const fetchCategories = async () => {
         const route = `/api/riskInfo/getCategories`;
@@ -446,7 +500,7 @@ const ControlAttributes = () => {
     const getFilterValuesForCell = (row, colId, index) => {
         if (colId === "nr") return [String(index + 1)];
         // Add category handler
-        if (colId === "category") return [row.category ? String(row.category).trim() : "No Category"];
+        if (colId === "category") return [row.category ? String(row.category).trim() : "-"];
         if (colId === "critical") return [row.critical ? String(row.critical).trim() : "-"];
         if (colId === "updatedAt") return [formatUpdatedAt(row?.updatedAt)];
 
@@ -526,11 +580,11 @@ const ControlAttributes = () => {
     const processedControls = useMemo(() => {
         let current = [...controls];
 
-        // 1. Global Search (on control name)
+        // 1. Global Search (control name)
         if (searchQuery) {
             const lowerQ = searchQuery.toLowerCase();
             current = current.filter(c =>
-                c.control.toLowerCase().includes(lowerQ)
+                (c.control || "").toLowerCase().includes(lowerQ)
             );
         }
 
@@ -546,38 +600,74 @@ const ControlAttributes = () => {
             return true;
         });
 
-        // 3. Sorting
-        const { colId, direction } = sortConfig;
-        const dir = direction === "desc" ? -1 : 1;
+        const normalize = (v) => {
+            const s = v == null ? "" : String(v).trim();
+            return s === "" ? "(Blanks)" : s;
+        };
 
-        if (colId === "nr") {
-            // Default load order (assumed to be 'controls' order)
-        } else {
-            const normalize = (v) => {
-                const s = v == null ? "" : String(v).trim();
-                return s === "" ? "(Blanks)" : s;
-            };
-
-            current.sort((a, b) => {
-                const valA = a[colId];
-                const valB = b[colId];
-
-                const normA = normalize(valA);
-                const normB = normalize(valB);
-
-                if (normA === "(Blanks)" && normB !== "(Blanks)") return 1;
-                if (normA !== "(Blanks)" && normB === "(Blanks)") return -1;
-
-                return normA.localeCompare(normB, undefined, { numeric: true, sensitivity: 'base' }) * dir;
+        const compareText = (a, b) =>
+            String(a).localeCompare(String(b), undefined, {
+                numeric: true,
+                sensitivity: "base"
             });
-        }
+
+        const compareDefaultCategory = (a, b) => {
+            const catA = normalize(a?.category);
+            const catB = normalize(b?.category);
+
+            const isGeneralA = catA.toLowerCase() === "general";
+            const isGeneralB = catB.toLowerCase() === "general";
+
+            // General first only in default view
+            if (isGeneralA && !isGeneralB) return -1;
+            if (!isGeneralA && isGeneralB) return 1;
+
+            // Blanks last
+            if (catA === "(Blanks)" && catB !== "(Blanks)") return 1;
+            if (catA !== "(Blanks)" && catB === "(Blanks)") return -1;
+
+            return compareText(catA, catB);
+        };
+
+        current.sort((a, b) => {
+            // DEFAULT VIEW: sortConfig.colId is null
+            if (!sortConfig?.colId) {
+                const categoryResult = compareDefaultCategory(a, b);
+                if (categoryResult !== 0) return categoryResult;
+
+                const controlA = normalize(a?.control);
+                const controlB = normalize(b?.control);
+                return compareText(controlA, controlB);
+            }
+
+            const { colId, direction } = sortConfig;
+            const dir = direction === "desc" ? -1 : 1;
+
+            const valA = normalize(a?.[colId]);
+            const valB = normalize(b?.[colId]);
+
+            if (valA === "(Blanks)" && valB !== "(Blanks)") return 1;
+            if (valA !== "(Blanks)" && valB === "(Blanks)") return -1;
+
+            const mainResult = compareText(valA, valB) * dir;
+            if (mainResult !== 0) return mainResult;
+
+            // Tie-break by control name only
+            const controlA = normalize(a?.control);
+            const controlB = normalize(b?.control);
+
+            if (controlA === "(Blanks)" && controlB !== "(Blanks)") return 1;
+            if (controlA !== "(Blanks)" && controlB === "(Blanks)") return -1;
+
+            return compareText(controlA, controlB);
+        });
 
         return current;
-
     }, [controls, searchQuery, activeExcelFilters, sortConfig]);
 
     const availableColumns = [
         { id: "nr", title: "Nr" },
+        { id: "category", title: "Category" }, // New Column Added
         { id: "control", title: "Control" },
         { id: "description", title: "Control Description" },
         { id: "performance", title: "Performance Requirements & Verification" },
@@ -586,23 +676,20 @@ const ControlAttributes = () => {
         { id: "activation", title: "Control Activation (Pre or Post Unwanted Event)" },
         { id: "hierarchy", title: "Hierarchy of Controls" },
         { id: "quality", title: "Control Quality" },
-        { id: "cons", title: "Main Consequence Addressed" },
-        { id: "category", title: "Category" }, // New Column Added
-        { id: "updatedAt", title: "Date Updated" },
+        { id: "cons", title: "Specific Consequence Addressed" },
+        { id: "updatedAt", title: "Updated On" },
         { id: "action", title: "Action" },
     ];
 
     const [showColumns, setShowColumns] = useState([
         "nr",
+        "category",
         "control",
-        "description",
         "critical",
         "act",
         "activation",
         "hierarchy",
         "cons",
-        "category", // Default to show
-        "updatedAt",
         "action",
     ]);
 
@@ -635,7 +722,7 @@ const ControlAttributes = () => {
     };
 
     // Groupings for the first header row
-    const identificationColumns = ["nr", "control", "description", "performance", "critical"];
+    const identificationColumns = ["nr", "category", "control", "description", "performance", "critical"];
     const cerColumns = ["act", "activation", "hierarchy", "quality", "cons"];
 
     const visibleIdentificationColumns = identificationColumns.filter(id => showColumns.includes(id));
@@ -664,48 +751,48 @@ const ControlAttributes = () => {
 
     const [columnWidths, setColumnWidths] = useState({
         nr: 60,
-        control: 250,
+        category: 30, // Default width for Category
+        control: 200,
         description: 320,
         performance: 260,
-        critical: 90,
-        act: 140,
-        activation: 200,
-        hierarchy: 220,
+        critical: 50,
+        act: 50,
+        activation: 100,
+        hierarchy: 70,
         quality: 120,
-        cons: 150,
-        category: 180, // Default width for Category
+        cons: 90,
         updatedAt: 200,
         action: 80,
     });
 
     const [initialColumnWidths] = useState({
         nr: 60,
-        control: 250,
+        category: 30,
+        control: 200,
         description: 320,
         performance: 260,
-        critical: 90,
-        act: 140,
-        activation: 200,
-        hierarchy: 220,
+        critical: 50,
+        act: 50,
+        activation: 100,
+        hierarchy: 70,
         quality: 120,
-        cons: 150,
-        category: 180,
+        cons: 90,
         updatedAt: 200,
         action: 80,
     });
 
     const columnSizeLimits = {
         nr: { min: 60, max: 60 },
+        category: { min: 30, max: 300 }, // Limits for category
         control: { min: 150, max: 600 },
         description: { min: 200, max: 800 },
         performance: { min: 150, max: 600 },
-        critical: { min: 70, max: 200 },
-        act: { min: 100, max: 300 },
-        activation: { min: 150, max: 400 },
-        hierarchy: { min: 150, max: 400 },
+        critical: { min: 50, max: 200 },
+        act: { min: 50, max: 300 },
+        activation: { min: 100, max: 400 },
+        hierarchy: { min: 70, max: 400 },
         quality: { min: 100, max: 250 },
-        cons: { min: 120, max: 300 },
-        category: { min: 100, max: 300 }, // Limits for category
+        cons: { min: 90, max: 300 },
         updatedAt: { min: 160, max: 320 },
         action: { min: 80, max: 80 },
     };
@@ -866,7 +953,21 @@ const ControlAttributes = () => {
         const wrapperWidth = wrapper.getBoundingClientRect().width;
         if (!wrapperWidth) return;
 
-        const visibleCols = getDisplayColumns().filter(
+        const defaultColumns = [
+            "nr",
+            "category",
+            "control",
+            "critical",
+            "act",
+            "activation",
+            "hierarchy",
+            "cons",
+            "action",
+        ];
+
+        setShowColumns(defaultColumns);
+
+        const visibleCols = defaultColumns.filter(
             id => typeof initialColumnWidths[id] === "number"
         );
         if (!visibleCols.length) return;
@@ -876,15 +977,28 @@ const ControlAttributes = () => {
         if (!totalWidth) return;
 
         const scale = wrapperWidth / totalWidth;
-        let newWidths = prevWidths.map(w => w * scale);
-        newWidths = newWidths.map(w => Math.round(w));
+        let newWidths = prevWidths.map(w => Math.round(w * scale));
 
         let diff = wrapperWidth - newWidths.reduce((s, w) => s + w, 0);
         let i = 0;
-        while (diff !== 0 && i < newWidths.length * 2) {
+
+        while (diff !== 0 && i < newWidths.length * 10) {
             const idx = i % newWidths.length;
-            newWidths[idx] += diff > 0 ? 1 : -1;
-            diff = wrapperWidth - newWidths.reduce((s, w) => s + w, 0);
+            const colId = visibleCols[idx];
+            const limits = columnSizeLimits[colId] || {};
+
+            if (diff > 0) {
+                if (limits.max == null || newWidths[idx] < limits.max) {
+                    newWidths[idx] += 1;
+                    diff -= 1;
+                }
+            } else {
+                if (limits.min == null || newWidths[idx] > limits.min) {
+                    newWidths[idx] -= 1;
+                    diff += 1;
+                }
+            }
+
             i++;
         }
 
@@ -999,7 +1113,7 @@ const ControlAttributes = () => {
     const hasActiveFilters = useMemo(() => {
         const hasColumnFilters = Object.keys(activeExcelFilters).length > 0;
         // Assuming default sort is nr/asc. Change if your default differs.
-        const hasSort = sortConfig.colId !== "nr" || sortConfig.direction !== "asc";
+        const hasSort = sortConfig.colId !== null || sortConfig.direction !== "asc";
         return hasColumnFilters || hasSort;
     }, [activeExcelFilters, sortConfig]);
 
@@ -1022,7 +1136,7 @@ const ControlAttributes = () => {
 
     const handleClearFilters = () => {
         setActiveExcelFilters({});
-        setSortConfig({ colId: "nr", direction: "asc" });
+        setSortConfig({ colId: null, direction: "asc" });
         setFilterMenu({ isOpen: false, anchorRect: null });
     };
 
@@ -1066,7 +1180,7 @@ const ControlAttributes = () => {
                                 <button className="but-um" onClick={() => navigate("/FrontendDMS/suggestedControls/new")}>
                                     <div className="button-content">
                                         <FontAwesomeIcon icon={faFile} className="button-logo-custom" />
-                                        <span className="button-text">Suggestions</span>
+                                        <span className="button-text">Suggested Controls</span>
                                     </div>
                                 </button>
                             </>
@@ -1247,34 +1361,6 @@ const ControlAttributes = () => {
                                         </th>
                                     )}
 
-                                    {showColumns.includes("category") && (
-                                        <th
-                                            className="risk-control-attributes-category"
-                                            rowSpan={2}
-                                            style={{
-                                                position: "relative",
-                                                width: columnWidths.category ? `${columnWidths.category}px` : undefined,
-                                                minWidth: columnSizeLimits.category?.min,
-                                                maxWidth: columnSizeLimits.category?.max,
-                                                cursor: "pointer",
-                                                zIndex: 2, // Keep header above
-                                                textAlign: "center",
-                                                borderLeft: "1px solid white"
-                                            }}
-                                            onClick={(e) => {
-                                                if (isResizingRef.current) return;
-                                                if (e.target.classList.contains('rca-col-resizer')) return;
-                                                openExcelFilterPopup("category", e);
-                                            }}
-                                        >
-                                            <span>Category</span>
-                                            {(activeExcelFilters["category"] || sortConfig.colId === "category") && (
-                                                <FontAwesomeIcon icon={faFilter} className="th-filter-icon" style={{ marginLeft: "8px", opacity: 0.8 }} />
-                                            )}
-                                            <div className="rca-col-resizer" onMouseDown={(e) => startColumnResize(e, "category")} />
-                                        </th>
-                                    )}
-
                                     {showColumns.includes("updatedAt") && (
                                         <th
                                             className="risk-control-attributes-category"
@@ -1295,7 +1381,7 @@ const ControlAttributes = () => {
                                                 openExcelFilterPopup("updatedAt", e);
                                             }}
                                         >
-                                            <span>Updated At</span>
+                                            <span>Updated On</span>
                                             {(activeExcelFilters["updatedAt"] || sortConfig.colId === "updatedAt") && (
                                                 <FontAwesomeIcon icon={faFilter} className="th-filter-icon" style={{ marginLeft: "8px", opacity: 0.8 }} />
                                             )}
@@ -1329,7 +1415,6 @@ const ControlAttributes = () => {
                                     {/* Render header columns dynamically with filter logic */}
                                     {availableColumns.map(col => {
                                         if (col.id === "action") return null; // Handled in rowSpan above
-                                        if (col.id === "category") return null; // Skip category here
                                         if (col.id === "updatedAt") return null;
 
                                         if (!showColumns.includes(col.id)) return null;
@@ -1337,6 +1422,7 @@ const ControlAttributes = () => {
                                         // Map to current CSS classes
                                         const classMap = {
                                             nr: "risk-control-attributes-nr",
+                                            category: "risk-control-attributes-control",
                                             control: "risk-control-attributes-control",
                                             description: "risk-control-attributes-description",
                                             performance: "risk-control-attributes-perf",
@@ -1418,6 +1504,12 @@ const ControlAttributes = () => {
                                                 </td>
                                             )}
 
+                                            {showColumns.includes("category") && (
+                                                <td style={{ fontSize: "14px", padding: "4px", textAlign: "center" }}>
+                                                    {row.category || ""}
+                                                </td>
+                                            )}
+
                                             {showColumns.includes("control") && (
                                                 <td style={{ fontSize: "14px", position: "relative" }}>
                                                     {row.control}
@@ -1471,12 +1563,6 @@ const ControlAttributes = () => {
 
                                             {showColumns.includes("cons") && (
                                                 <td style={{ fontSize: "14px" }}>{row.cons}</td>
-                                            )}
-
-                                            {showColumns.includes("category") && (
-                                                <td style={{ fontSize: "14px", padding: "4px" }}>
-                                                    {row.category || "No Category"}
-                                                </td>
                                             )}
 
                                             {false && showColumns.includes("category") && (
@@ -1541,9 +1627,20 @@ const ControlAttributes = () => {
                                                     <button
                                                         type="button"
                                                         className="rca-action-btn"
+                                                        title="Edit Control"
                                                         onClick={() => openModifyControl(row)}
                                                     >
                                                         <FontAwesomeIcon icon={faEdit} />
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        className="rca-action-btn"
+                                                        title="Delete Control"
+                                                        style={{ marginLeft: "5px" }}
+                                                        onClick={() => openConfirmDelete(row)}
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
                                                     </button>
                                                 </td>
                                             )}
@@ -1714,6 +1811,7 @@ const ControlAttributes = () => {
 
             {addControl && (<AddControlPopup onClose={closeAddControl} />)}
             {modifyControl && (<EditControlPopup onClose={closeModifyControl} data={modifyingControl} />)}
+            {deleteControlPopup && (<DeleteControlCMPopup closeModal={closeConfirmDelete} control={deletionControl} deleteControl={deleteControl} />)}
             <ToastContainer />
         </div >
     );

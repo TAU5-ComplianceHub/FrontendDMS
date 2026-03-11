@@ -61,7 +61,7 @@ const ImportSiteInfo = ({ onClose }) => {
     const downloadTemplate = () => {
         const link = document.createElement('a');
         link.href = `${process.env.PUBLIC_URL}/Risk_Template.xlsx`; // Adjust path as needed
-        link.setAttribute('download', 'Site Information Document V0.25.xlsx');
+        link.setAttribute('download', 'Site General Information Document V0.25.xlsx');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -179,14 +179,14 @@ const ImportSiteInfo = ({ onClose }) => {
 
     return (
         <div className="import-si-popup-overlay">
-            <div className="import-si-popup-content">
+            <div className="import-si-popup-content-new">
                 <div className="import-si-file-header">
-                    <h2 className="import-si-file-title">Import Site Information</h2>
+                    <h2 className="import-si-file-title">Import Site General Information</h2>
                     <button className="import-si-file-close" onClick={onClose} title="Close Popup">×</button>
                 </div>
 
                 <div className="import-si-file-group">
-                    <div className="import-si-file-text">Upload Site Import Information File</div>
+                    <div className="import-si-file-text">Upload Site General Information</div>
                     <div className="import-si-file-text-xlsx">{file ? file.name : "No File Selected"}</div>
                     <div className="import-si-file-buttons">
                         <label className="import-si-file-button">
@@ -210,7 +210,7 @@ const ImportSiteInfo = ({ onClose }) => {
                         >
                             <FontAwesomeIcon icon={faDownload} className="icon-um-search" />
                         </button>
-                        <div className="import-si-file-text">Site Information Document Template</div>
+                        <div className="import-si-file-text">Download Site General Information Template</div>
                         <div className="import-si-label">Version</div>
                         <div className="import-si-value">V0.25</div>
                         <div className="import-si-label">Date Uploaded</div>
@@ -225,12 +225,12 @@ const ImportSiteInfo = ({ onClose }) => {
                         >
                             <FontAwesomeIcon icon={faDownload} className="icon-um-search" />
                         </button>
-                        <div className="import-si-file-text">Current Site Information</div>
+                        <div className="import-si-file-text">Download Current Site General Information</div>
 
                         <div className="import-si-label">Title</div>
                         <div className="import-si-value">{info?.fileName || "N/A"}</div>
 
-                        <div className="import-si-label">Uploader</div>
+                        <div className="import-si-label">Uploaded By</div>
                         <div className="import-si-value">{info?.uploader?.username || "N/A"}</div>
 
                         <div className="import-si-label">Date Uploaded</div>

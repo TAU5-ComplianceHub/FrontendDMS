@@ -31,7 +31,15 @@ const AddControlPopup = ({ onClose }) => {
     const [controlTypeOptions] = useState(['Act', 'Object', 'System']);
     const [activationOptions] = useState(['Prevention Control', 'Consequence Minimizing Control', 'Both']);
     const [hierarchyOptions] = useState(['1. Elimination', '2. Substitution', '3. Engineering', '4. Separation', '5. Administration', '6. PPE']);
-    const [aimOptions] = useState(['Safety (S)', 'Health (H)', 'Environment (E)', 'Community (C)', 'Legal & Regulatory (L&R)', 'Material Losses (M)', 'Reputation (R)']);
+    const [aimOptions] = useState([
+        'Community (C)',
+        'Environment (E)',
+        'Health (H)',
+        'Legal & Regulatory (L&R)',
+        'Material Losses (M)',
+        'Reputation (R)',
+        'Safety (S)'
+    ]);
     const [qualityOptions] = useState(['< 30%', '30-59%', '60-90%', '> 90%']);
 
     const [loading, setLoading] = useState(false);
@@ -109,7 +117,7 @@ const AddControlPopup = ({ onClose }) => {
             return;
         }
         if (!controlAim.trim()) {
-            toast.warn(`Please specify the Main Consequence that the control aims to address.`, { autoClose: 1200, closeButton: false });
+            toast.warn(`Please specify the Specific Consequence that the control aims to address.`, { autoClose: 1200, closeButton: false });
             return;
         }
 
@@ -292,7 +300,7 @@ const AddControlPopup = ({ onClose }) => {
                                 <div className="ibra-popup-page-column-half">
                                     <div className="cea-popup-page-component-wrapper">
                                         <div className={`ibra-popup-page-form-group ${errors.departmentHead ? "error-upload-required-up" : ""}`}>
-                                            <label>Main Consequence that the Control Aims to Address <span className="required-field">*</span></label>
+                                            <label>Specific Consequence that the Control Aims to Address <span className="required-field">*</span></label>
                                             <div className="ibra-popup-page-select-container">
                                                 <select
                                                     className="ibra-popup-page-select"
@@ -301,7 +309,7 @@ const AddControlPopup = ({ onClose }) => {
                                                 >
                                                     <option value="">Select Consequence</option>
                                                     {
-                                                        aimOptions.map((option, index) => (
+                                                        aimOptions.sort().map((option, index) => (
                                                             <option key={index} value={option}>
                                                                 {option}
                                                             </option>

@@ -1065,11 +1065,13 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
                                                         style={{ color: riskSource === "" ? "#838383ff" : "black" }}
                                                     >
                                                         <option className={"ibra-select-styling"} value="">Select Hazard Classification / Energy Release</option>
-                                                        {riskSources.map((term, index) => (
-                                                            <option className={"ibra-select-styling"} key={index} value={term.term}>
-                                                                {term.term}
-                                                            </option>
-                                                        ))}
+                                                        {[...riskSources]
+                                                            .sort((a, b) => a.term.localeCompare(b.term, undefined, { sensitivity: "base" }))
+                                                            .map((term, index) => (
+                                                                <option className="ibra-select-styling" key={index} value={term.term}>
+                                                                    {term.term}
+                                                                </option>
+                                                            ))}
                                                     </select>
                                                 </div>
                                             </div>
@@ -1421,14 +1423,17 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
                         zIndex: 1000
                     }}
                 >
-                    {filteredMainAreas.sort().map((term, i) => (
-                        <li
-                            key={i}
-                            onMouseDown={() => selectMainAreaSuggestion(term)}
-                        >
-                            {term}
-                        </li>
-                    ))}
+                    {[...new Set(filteredMainAreas)]
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+                        .map((term) => (
+                            <li
+                                key={term}
+                                onMouseDown={() => selectMainAreaSuggestion(term)}
+                            >
+                                {term}
+                            </li>
+                        ))}
                 </ul>
             )}
 
@@ -1443,14 +1448,17 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
                         zIndex: 1000
                     }}
                 >
-                    {filteredSubAreas.filter(Boolean).sort().map((term, i) => (
-                        <li
-                            key={i}
-                            onMouseDown={() => selectSubAreaSuggestion(term)}
-                        >
-                            {term}
-                        </li>
-                    ))}
+                    {[...new Set(filteredSubAreas)]
+                        .filter(Boolean)
+                        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+                        .map((term) => (
+                            <li
+                                key={term}
+                                onMouseDown={() => selectSubAreaSuggestion(term)}
+                            >
+                                {term}
+                            </li>
+                        ))}
                 </ul>
             )}
 
@@ -1465,14 +1473,16 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
                         zIndex: 1000
                     }}
                 >
-                    {filteredOwners.map((term, i) => (
-                        <li
-                            key={i}
-                            onMouseDown={() => selectOwnerSuggestion(term.owner)}
-                        >
-                            {term.owner}
-                        </li>
-                    ))}
+                    {[...filteredOwners]
+                        .sort((a, b) => a.owner.localeCompare(b.owner, undefined, { sensitivity: "base" }))
+                        .map((term, i) => (
+                            <li
+                                key={term.owner ?? i}
+                                onMouseDown={() => selectOwnerSuggestion(term.owner)}
+                            >
+                                {term.owner}
+                            </li>
+                        ))}
                 </ul>
             )}
 

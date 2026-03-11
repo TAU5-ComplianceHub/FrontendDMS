@@ -595,11 +595,13 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                                 >
                                                     <option value="">Select Consequence</option>
                                                     {
-                                                        aimOptions.map((option, index) => (
-                                                            <option key={index} value={option}>
-                                                                {option}
-                                                            </option>
-                                                        ))
+                                                        [...aimOptions]
+                                                            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+                                                            .map((option) => (
+                                                                <option key={option} value={option}>
+                                                                    {option}
+                                                                </option>
+                                                            ))
                                                     }
                                                 </select>
                                             </div>

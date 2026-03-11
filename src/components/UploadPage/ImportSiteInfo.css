@@ -23,6 +23,18 @@
     min-height: 440px;
 }
 
+.import-si-popup-content-new {
+    background: #f2f2f2;
+    padding: 25px;
+    padding-bottom: 20px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    max-width: 1000px;
+    width: 100%;
+    min-height: 440px;
+}
+
 .import-si-info-row {
     display: flex;
     justify-content: space-between;

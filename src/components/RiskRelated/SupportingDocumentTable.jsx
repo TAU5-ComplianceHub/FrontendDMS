@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import "./SupportingDocumentTable.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faPlusCircle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { toast } from "react-toastify";
 
 const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) => {
     const fileInputRef = useRef(null);
@@ -14,23 +15,37 @@ const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) =>
     const handleFileChange = (event) => {
         const selected = Array.from(event.target.files);
 
+        const existingFiles = formData.supportingDocuments;
+
+        const uniqueFiles = selected.filter((file) =>
+            !existingFiles.some(
+                (doc) => doc.name === file.name && doc.file?.size === file.size
+            )
+        );
+
         const updatedFiles = [
-            ...formData.supportingDocuments,
-            ...selected.map((file, index) => ({
-                nr: formData.supportingDocuments.length + index + 1,
+            ...existingFiles,
+            ...uniqueFiles.map((file, index) => ({
+                nr: existingFiles.length + index + 1,
                 name: file.name,
                 file,
                 note: ""
             }))
         ];
 
+        if (uniqueFiles.length !== selected.length) {
+            toast.error("Some files were already added and were skipped.");
+        }
+
         setFormData({
             ...formData,
             supportingDocuments: updatedFiles
-        }
-        );
+        });
 
         setSelectedFiles(updatedFiles);
+
+        // reset input so the same file can be selected again if removed
+        event.target.value = null;
     };
 
     const handleRemoveFile = (indexToRemove) => {

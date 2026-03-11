@@ -82,7 +82,7 @@ const ControlVersionHistory = () => {
         { id: "activation", title: "Control Activation (Pre or Post Unwanted Event)" },
         { id: "hierarchy", title: "Hierarchy of Controls" },
         { id: "quality", title: "Control Quality" },
-        { id: "cons", title: "Main Consequence Addressed" },
+        { id: "cons", title: "Specific Consequence Addressed" },
         { id: "version", title: "Version" },
         { id: "updatedBy", title: "Updated By" },
         { id: "updatedAt", title: "Updated At" },

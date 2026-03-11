@@ -38,6 +38,7 @@ import ImportRiskSiteInfo from "./RiskRelated/ImportRiskSiteInfo";
 import TopBar from "./Notifications/TopBar";
 import { saveAs } from "file-saver";
 import MigrateOwnership from "./FileInfo/MigrateOwnership";
+import ExportSIDPopup from "./Popups/ExportSIDPopup";
 
 const AdminPage = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
@@ -45,10 +46,13 @@ const AdminPage = () => {
     const access = getCurrentUser();
     const [importSI, setImportSI] = useState(false);
     const [migrate, setMigrate] = useState(false);
+    const [exportLoad, setExportLoad] = useState(false);
     const navigate = useNavigate();
 
     const exportSID = async () => {
         try {
+            setExportLoad(true);
+
             const response = await fetch(
                 `${process.env.REACT_APP_URL}/api/siteInfoExport/export-sid`,
                 {
@@ -76,6 +80,9 @@ const AdminPage = () => {
 
             const blob = await response.blob();
             saveAs(blob, filename);
+            setExportLoad(false);
+
+            toast.success("Site General Information successfully exported.", { autoClose: "2000", closeButton: false })
         } catch (error) {
             console.error("Error generating document:", error);
         }
@@ -194,6 +201,7 @@ const AdminPage = () => {
                 </div>
             </div>
             {migrate && (<MigrateOwnership onClose={closeMigrate} />)}
+            {exportLoad && (<ExportSIDPopup />)}
             <ToastContainer />
         </div>
     );

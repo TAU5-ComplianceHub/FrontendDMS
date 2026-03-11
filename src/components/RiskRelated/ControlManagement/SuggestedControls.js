@@ -333,7 +333,7 @@ const SuggestedControls = () => {
         { id: "activation", title: "Control Activation (Pre or Post Unwanted Event)" },
         { id: "hierarchy", title: "Hierarchy of Controls" },
         { id: "quality", title: "Control Quality" },
-        { id: "cons", title: "Main Consequence Addressed" },
+        { id: "cons", title: "Specific Consequence Addressed" },
         { id: "dateSuggested", title: "Date Suggested" },
         { id: "dateReviewed", title: "Date Reviewed" },
         { id: "suggestedBy", title: "Suggested By" },
@@ -1048,99 +1048,115 @@ const SuggestedControls = () => {
                                 onPointerCancel={endRowDrag}
                                 onDragStart={onNativeDragStart}
                             >
-                                {processedControls.map((row, index) => (
-                                    <tr className="table-scroll-wrapper-attributes-controls" key={row._id ?? index} onClick={() => {
-                                        if (drag.current.moved) return;
-                                        if (row.status === "Approved" || row.status === "Declined") return;
-                                        setSelectedDraft(row);
-                                        setShowPopup(true);
-                                    }}>
-                                        {showColumns.includes("nr") && (
-                                            <td className="procCent" style={{ fontSize: "14px" }}>
-                                                {index + 1}
-                                            </td>
-                                        )}
-
-                                        {showColumns.includes("control") && (
-                                            <td style={{ fontSize: "14px" }}>{row.control}</td>
-                                        )}
-
-                                        {showColumns.includes("description") && (
-                                            <td style={{ fontSize: "14px" }}>{row.description}</td>
-                                        )}
-
-                                        {showColumns.includes("performance") && (
-                                            <td style={{ fontSize: "14px" }}>{row.performance}</td>
-                                        )}
-
-                                        {showColumns.includes("critical") && (
-                                            <td
-                                                className={`${row.critical === "Yes"
-                                                    ? "procCent cea-table-page-critical"
-                                                    : "procCent"
-                                                    }`}
-                                                style={{ fontSize: "14px" }}
-                                            >
-                                                {row.critical}
-                                            </td>
-                                        )}
-
-                                        {showColumns.includes("act") && (
-                                            <td className="procCent" style={{ fontSize: "14px" }}>
-                                                {row.act}
-                                            </td>
-                                        )}
-
-                                        {showColumns.includes("activation") && (
-                                            <td style={{ fontSize: "14px" }}>{row.activation}</td>
-                                        )}
-
-                                        {showColumns.includes("hierarchy") && (
-                                            <td style={{ fontSize: "14px" }}>{row.hierarchy}</td>
-                                        )}
-
-                                        {showColumns.includes("quality") && (
-                                            <td style={{ fontSize: "14px" }}>{row.quality}</td>
-                                        )}
-
-                                        {showColumns.includes("cons") && (
-                                            <td style={{ fontSize: "14px" }}>{row.cons}</td>
-                                        )}
-
-                                        {showColumns.includes("dateSuggested") && (
-                                            <td style={{ fontSize: "14px", textAlign: "center" }}>{formatDate(row.dateSuggested)}</td>
-                                        )}
-
-                                        {showColumns.includes("dateReviewed") && (
-                                            <td style={{ fontSize: "14px", textAlign: "center" }}>{formatDate(row.dateReviewed)}</td>
-                                        )}
-
-                                        {showColumns.includes("suggestedBy") && (
-                                            <td style={{ fontSize: "14px", textAlign: "center" }}>{row.suggestedBy}</td>
-                                        )}
-
-                                        {showColumns.includes("status") && (
-                                            <td
-                                                className={
-                                                    row.status === "Approved" ? "procCent status-good" :
-                                                        row.status === "Declined" ? "procCent status-worst" : // Assuming you have a red/danger class, reusing 'high' or similar
-                                                            "procCent status-missing"
-                                                }
-                                                style={{ fontSize: "14px", fontWeight: "bold" }}
-                                            >
-                                                {row.status}
-                                            </td>
-                                        )}
-
-                                        {showColumns.includes("suggestionMessage") && (
-                                            <td
-                                                style={{ fontSize: "14px", fontWeight: "normal" }}
-                                            >
-                                                {row.suggestionMessage ? row.suggestionMessage : "-"}
-                                            </td>
-                                        )}
+                                {processedControls.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={showColumns.length}
+                                            style={{
+                                                textAlign: "center",
+                                                padding: "25px",
+                                                fontSize: "14px",
+                                                color: "#666",
+                                                fontStyle: "italic"
+                                            }}
+                                        >
+                                            There are currently no suggested controls for your approval.
+                                        </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    processedControls.map((row, index) => (
+                                        <tr className="table-scroll-wrapper-attributes-controls" key={row._id ?? index} onClick={() => {
+                                            if (drag.current.moved) return;
+                                            if (row.status === "Approved" || row.status === "Declined") return;
+                                            setSelectedDraft(row);
+                                            setShowPopup(true);
+                                        }}>
+                                            {showColumns.includes("nr") && (
+                                                <td className="procCent" style={{ fontSize: "14px" }}>
+                                                    {index + 1}
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("control") && (
+                                                <td style={{ fontSize: "14px" }}>{row.control}</td>
+                                            )}
+
+                                            {showColumns.includes("description") && (
+                                                <td style={{ fontSize: "14px" }}>{row.description}</td>
+                                            )}
+
+                                            {showColumns.includes("performance") && (
+                                                <td style={{ fontSize: "14px" }}>{row.performance}</td>
+                                            )}
+
+                                            {showColumns.includes("critical") && (
+                                                <td
+                                                    className={`${row.critical === "Yes"
+                                                        ? "procCent cea-table-page-critical"
+                                                        : "procCent"
+                                                        }`}
+                                                    style={{ fontSize: "14px" }}
+                                                >
+                                                    {row.critical}
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("act") && (
+                                                <td className="procCent" style={{ fontSize: "14px" }}>
+                                                    {row.act}
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("activation") && (
+                                                <td style={{ fontSize: "14px" }}>{row.activation}</td>
+                                            )}
+
+                                            {showColumns.includes("hierarchy") && (
+                                                <td style={{ fontSize: "14px" }}>{row.hierarchy}</td>
+                                            )}
+
+                                            {showColumns.includes("quality") && (
+                                                <td style={{ fontSize: "14px" }}>{row.quality}</td>
+                                            )}
+
+                                            {showColumns.includes("cons") && (
+                                                <td style={{ fontSize: "14px" }}>{row.cons}</td>
+                                            )}
+
+                                            {showColumns.includes("dateSuggested") && (
+                                                <td style={{ fontSize: "14px", textAlign: "center" }}>{formatDate(row.dateSuggested)}</td>
+                                            )}
+
+                                            {showColumns.includes("dateReviewed") && (
+                                                <td style={{ fontSize: "14px", textAlign: "center" }}>{formatDate(row.dateReviewed)}</td>
+                                            )}
+
+                                            {showColumns.includes("suggestedBy") && (
+                                                <td style={{ fontSize: "14px", textAlign: "center" }}>{row.suggestedBy}</td>
+                                            )}
+
+                                            {showColumns.includes("status") && (
+                                                <td
+                                                    className={
+                                                        row.status === "Approved" ? "procCent status-good" :
+                                                            row.status === "Declined" ? "procCent status-worst" : // Assuming you have a red/danger class, reusing 'high' or similar
+                                                                "procCent status-missing"
+                                                    }
+                                                    style={{ fontSize: "14px", fontWeight: "bold" }}
+                                                >
+                                                    {row.status}
+                                                </td>
+                                            )}
+
+                                            {showColumns.includes("suggestionMessage") && (
+                                                <td
+                                                    style={{ fontSize: "14px", fontWeight: "normal" }}
+                                                >
+                                                    {row.suggestionMessage ? row.suggestionMessage : "-"}
+                                                </td>
+                                            )}
+                                        </tr>
+                                    )))}
                             </tbody>
                         </table>
                     </div>

@@ -10,7 +10,7 @@ const ControlChangesPopup = ({ newData, prevData, importNew, onClose }) => {
             act: "Act, Object or System",
             activation: "Control Activation",
             hierarchy: "Hierarchy of Controls",
-            cons: "Main Consequence Addressed",
+            cons: "Specific Consequence Addressed",
             quality: "Control Quality",
             performance: "Performance Requirement"
         };

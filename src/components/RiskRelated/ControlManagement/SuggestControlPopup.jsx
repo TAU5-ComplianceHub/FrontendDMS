@@ -122,7 +122,7 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
             return;
         }
         if (!controlAim.trim()) {
-            toast.warn(`Please specify the Main Consequence that the control aims to address.`, { autoClose: 1200, closeButton: false });
+            toast.warn(`Please specify the Specific Consequence that the control aims to address.`, { autoClose: 1200, closeButton: false });
             return;
         }
 
@@ -249,6 +249,10 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
         }
     };
 
+    const sortedAimOptions = [...aimOptions].sort((a, b) =>
+        a.trim().localeCompare(b.trim(), undefined, { sensitivity: "base" })
+    );
+
     return (
         <div className="ibra-popup-page-container">
             <div className="ibra-popup-page-overlay">
@@ -372,7 +376,7 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
                                 <div className="ibra-popup-page-column-half">
                                     <div className="cea-popup-page-component-wrapper">
                                         <div className={`ibra-popup-page-form-group ${errors.departmentHead ? "error-upload-required-up" : ""}`}>
-                                            <label>Main Consequence that the Control Aims to Address <span className="required-field">*</span></label>
+                                            <label>Specific Consequence that the Control Aims to Address <span className="required-field">*</span></label>
                                             <div className="ibra-popup-page-select-container">
                                                 <select
                                                     className="ibra-popup-page-select"
@@ -380,13 +384,11 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
                                                     onChange={(e) => setControlAim(e.target.value)}
                                                 >
                                                     <option value="">Select Consequence</option>
-                                                    {
-                                                        aimOptions.map((option, index) => (
-                                                            <option key={index} value={option}>
-                                                                {option}
-                                                            </option>
-                                                        ))
-                                                    }
+                                                    {sortedAimOptions.map((option) => (
+                                                        <option key={option} value={option}>
+                                                            {option}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         </div>
