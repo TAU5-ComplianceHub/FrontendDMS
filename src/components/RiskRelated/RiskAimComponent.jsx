@@ -1,35 +1,66 @@
-import React from "react";
+import React, { useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faInfoCircle,
     faMagicWandSparkles,
     faRotateLeft,
-    faSpinner
+    faSpinner,
+    faTrash,
+    faPlus,
+    faCirclePlus
 } from "@fortawesome/free-solid-svg-icons";
 
 const RiskAimComponent = ({
     readOnly,
-    error,
-    value,
-    loading,
+    aims = [{ type: "text", text: "" }],
+    errors = [],
+    loadingIndex = null,
     rewriteHistory,
     onChange,
+    onBulletChange,
     onFocus,
     onHelp,
     onAiRewrite,
-    onUndo
+    onUndo,
+    onAddAim,
+    onRemoveAim,
+    onRemoveAimSection,
+    onAddBullet,
+    onRemoveBullet
 }) => {
+    const lastType = aims?.length ? aims[aims.length - 1]?.type : "text";
+    const nextType = lastType === "text" ? "bullet" : "text";
+    const sectionCount = aims.filter((item) => item?.type === "text").length;
+    const bulletRefs = useRef({});
+
+    const handleBulletKeyDown = (e, aimIndex, bulletIndex) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+
+            onAddBullet(aimIndex, bulletIndex);
+
+            // wait for React render
+            setTimeout(() => {
+                const nextKey = `${aimIndex}-${bulletIndex + 1}`;
+                const nextTextarea = bulletRefs.current[nextKey];
+                if (nextTextarea) {
+                    nextTextarea.focus();
+                }
+            }, 0);
+        }
+    };
+
     return (
         <div className="input-row-risk-create">
-            <div className={`input-box-aim-risk-create ${error ? "error-create" : ""}`}>
+            <div className="input-box-aim-risk-create">
                 <button
                     className="top-left-button-refs"
                     title="Information"
                     type="button"
+                    onClick={onHelp}
                 >
                     <FontAwesomeIcon
                         icon={faInfoCircle}
-                        onClick={onHelp}
                         style={{ cursor: "pointer" }}
                         className="icon-um-search"
                     />
@@ -39,48 +70,168 @@ const RiskAimComponent = ({
                     Aim <span className="required-field">*</span>
                 </h3>
 
-                <textarea
-                    spellCheck="true"
-                    name="aim"
-                    className="aim-textarea-risk-create-ibra font-fam"
-                    onChange={onChange}
-                    onFocus={onFocus}
-                    value={value}
-                    rows="5"
-                    placeholder="Clearly state the goal of the risk assessment, focusing on what the assessment intends to achieve or address. Keep it specific, relevant, and outcome-driven."
-                    readOnly={readOnly}
-                />
+                {aims.map((aim, index) => {
+                    const isLast = index === aims.length - 1;
+                    const hasError = !!errors[index];
+                    const isTextType = (aim?.type || "text") === "text";
+                    const isBulletType = aim?.type === "bullet";
+                    const bullets = Array.isArray(aim?.bullets) ? aim.bullets : [];
+
+                    return (
+                        <React.Fragment key={index}>
+                            <div className={`aim-textarea-stack-item ${hasError ? "error-create" : ""}`}>
+                                {isTextType && !readOnly && aims.length > 1 && isLast && (
+                                    <button
+                                        type="button"
+                                        className="top-right-button-aim-delete"
+                                        title="Remove Aim"
+                                        onClick={() => onRemoveAim(index)}
+                                    >
+                                        <FontAwesomeIcon icon={faTrash} />
+                                    </button>
+                                )}
+
+                                {isTextType ? (
+                                    <>
+                                        {!readOnly && aims[index + 1]?.type === "bullet" && sectionCount > 1 && (
+                                            <button
+                                                type="button"
+                                                className="top-right-button-aim-delete top-right-button-aim-delete-section"
+                                                title="Remove Section"
+                                                onClick={() => onRemoveAimSection(index)}
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} />
+                                            </button>
+                                        )}
+
+                                        <textarea
+                                            spellCheck="true"
+                                            name={`aim-${index}`}
+                                            className="aim-textarea-risk-create-ibra font-fam aim-textarea-text"
+                                            onChange={(e) => onChange(index, e.target.value)}
+                                            onFocus={() => onFocus?.(index)}
+                                            value={aim?.text || ""}
+                                            rows={1}
+                                            placeholder="Clearly state the goal of the risk assessment, focusing on what the assessment intends to achieve or address. Keep it specific, relevant, and outcome-driven."
+                                            readOnly={readOnly}
+                                        />
+
+                                        {!readOnly && (
+                                            <>
+                                                {loadingIndex === index ? (
+                                                    <FontAwesomeIcon
+                                                        icon={faSpinner}
+                                                        className="aim-textarea-icon-ibra2 spin-animation"
+                                                    />
+                                                ) : (
+                                                    <FontAwesomeIcon
+                                                        icon={faMagicWandSparkles}
+                                                        className="aim-textarea-icon-ibra2"
+                                                        title="AI Rewrite"
+                                                        style={{ fontSize: "15px" }}
+                                                        onClick={() => onAiRewrite(index)}
+                                                    />
+                                                )}
+
+                                                <FontAwesomeIcon
+                                                    icon={faRotateLeft}
+                                                    className="aim-textarea-icon-ibra2-undo"
+                                                    title="Undo AI Rewrite"
+                                                    onClick={() => onUndo(index)}
+                                                    style={{
+                                                        marginLeft: "8px",
+                                                        opacity: rewriteHistory?.aim?.[index]?.length ? 1 : 0.3,
+                                                        cursor: rewriteHistory?.aim?.[index]?.length ? "pointer" : "not-allowed",
+                                                        fontSize: "15px"
+                                                    }}
+                                                />
+                                            </>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div
+                                        className={`aim-bullet-section-box ${!readOnly && aims.length > 1 && isLast ? "aim-bullet-section-box-with-delete" : ""
+                                            }`}
+                                    >
+                                        {!readOnly && aims.length > 1 && isLast && (
+                                            <button
+                                                type="button"
+                                                className="top-right-button-aim-delete"
+                                                title="Remove Aim"
+                                                onClick={() => onRemoveAim(index)}
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} />
+                                            </button>
+                                        )}
+
+                                        {bullets.map((bullet, bulletIndex) => {
+                                            const isFilled = (bullet?.text || "").trim() !== "";
+
+                                            return (
+                                                <div key={bullet.id} className="aim-bullet-row-wrap">
+                                                    <span className={`aim-visual-bullet ${isFilled ? "filled" : "empty"}`}>
+                                                        •
+                                                    </span>
+
+                                                    <textarea
+                                                        ref={(el) => {
+                                                            bulletRefs.current[`${index}-${bulletIndex}`] = el;
+                                                        }}
+                                                        spellCheck="true"
+                                                        name={`aim-${index}-bullet-${bulletIndex}`}
+                                                        className="aim-textarea-risk-create-ibra font-fam aim-textarea-bullet-single"
+                                                        onChange={(e) => onBulletChange(index, bullet.id, e.target.value)}
+                                                        onKeyDown={(e) => handleBulletKeyDown(e, index, bulletIndex)}
+                                                        onFocus={() => onFocus?.(index)}
+                                                        value={bullet?.text || ""}
+                                                        rows={1}
+                                                        style={{ minHeight: "0px" }}
+                                                        placeholder="Clearly state a key point related to the aim of the risk assessment."
+                                                        readOnly={readOnly}
+                                                    />
+
+                                                    {!readOnly && (
+                                                        <div className="aim-bullet-actions">
+                                                            {bullets.length > 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="aim-bullet-inline-button"
+                                                                    title="Remove Bullet"
+                                                                    onClick={() => onRemoveBullet(index, bullet.id)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faTrash} />
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                className="aim-bullet-inline-button"
+                                                                title="Insert Bullet Below"
+                                                                onClick={() => onAddBullet(index, bulletIndex)}
+                                                            >
+                                                                <FontAwesomeIcon icon={faCirclePlus} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </React.Fragment>
+                    );
+                })}
 
                 {!readOnly && (
-                    <>
-                        {loading ? (
-                            <FontAwesomeIcon
-                                icon={faSpinner}
-                                className="aim-textarea-icon-ibra spin-animation"
-                            />
-                        ) : (
-                            <FontAwesomeIcon
-                                icon={faMagicWandSparkles}
-                                className="aim-textarea-icon-ibra"
-                                title="AI Rewrite"
-                                style={{ fontSize: "15px" }}
-                                onClick={onAiRewrite}
-                            />
-                        )}
-
-                        <FontAwesomeIcon
-                            icon={faRotateLeft}
-                            className="aim-textarea-icon-ibra-undo"
-                            title="Undo AI Rewrite"
-                            onClick={onUndo}
-                            style={{
-                                marginLeft: "8px",
-                                opacity: rewriteHistory?.aim?.length ? 1 : 0.3,
-                                cursor: rewriteHistory?.aim?.length ? "pointer" : "not-allowed",
-                                fontSize: "15px"
-                            }}
-                        />
-                    </>
+                    <div className="aim-add-button-wrap">
+                        <button
+                            type="button"
+                            className="add-aim-button"
+                            onClick={onAddAim}
+                        >
+                            {nextType === "bullet" ? "Add Bullets" : "Add Paragraph"}
+                        </button>
+                    </div>
                 )}
             </div>
         </div>

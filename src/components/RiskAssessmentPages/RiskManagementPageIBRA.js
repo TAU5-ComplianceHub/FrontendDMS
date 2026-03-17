@@ -67,6 +67,7 @@ const RiskManagementPageIBRA = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [helpRA, setHelpRA] = useState(false);
     const [helpScope, setHelpScope] = useState(false);
+    const [loadingAimIndex, setLoadingAimIndex] = useState(null);
     const [loadingAim, setLoadingAim] = useState(false);
     const [loadingScope, setLoadingScope] = useState(false);
     const [loadingScopeI, setLoadingScopeI] = useState(false);
@@ -564,31 +565,6 @@ const RiskManagementPageIBRA = () => {
         });
     };
 
-    const AiRewriteAim = async () => {
-        try {
-            const prompt = formData.aim;
-
-            pushAiRewriteHistory('aim');
-            setLoadingAim(true);
-
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatAim/ibra`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ prompt }),
-            });
-
-            const { response: newText } = await response.json();
-            setLoadingAim(false);
-            setFormData(fd => ({ ...fd, aim: newText }));
-        } catch (error) {
-            setLoadingAim(false);
-            console.error('Error saving data:', error);
-        }
-    }
-
     const AiRewriteScope = async () => {
         try {
             const prompt = formData.scope;
@@ -664,9 +640,45 @@ const RiskManagementPageIBRA = () => {
     function normalizeIbraFormData(formData = {}) {
         if (!Array.isArray(formData.ibra)) return formData;
 
+        const normalizedAim = Array.isArray(formData.aim)
+            ? formData.aim.map(item => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        type: "text",
+                        text: item?.text || ""
+                    };
+                }
+
+                const bullets = Array.isArray(item?.bullets)
+                    ? item.bullets.map(b => ({
+                        id: b?.id || uuidv4(),
+                        text: b?.text || ""
+                    }))
+                    : String(item?.text || "")
+                        .split(/\r?\n/)
+                        .map(line => line.trim())
+                        .filter(Boolean)
+                        .map(line => ({
+                            id: uuidv4(),
+                            text: line
+                        }));
+
+                return {
+                    type: "bullet",
+                    bullets: bullets.length > 0 ? bullets : [{ id: uuidv4(), text: "" }],
+                    text: bullets.map(b => b.text).join("\n")
+                };
+            })
+            : typeof formData.aim === "string"
+                ? [{ type: "text", text: formData.aim }]
+                : [{ type: "text", text: "" }];
+
         // 1. Existing Normalization Logic (Keep this)
         const normalized = {
             ...formData,
+            aim: normalizedAim,
             ibra: formData.ibra.map(row => {
                 // ... existing row mapping logic ...
                 const possible = Array.isArray(row.possible) ? row.possible : [];
@@ -908,7 +920,7 @@ const RiskManagementPageIBRA = () => {
     const [formData, setFormData] = useState({
         title: "",
         documentType: useParams().type,
-        aim: "",
+        aim: [{ type: "text", text: "" }],
         scopeExclusions: "",
         execSummaryGen: "",
         execSummary: "",
@@ -1091,11 +1103,92 @@ const RiskManagementPageIBRA = () => {
     }, [showSiteDropdown]);
 
     const [rewriteHistory, setRewriteHistory] = useState({
-        aim: [],
+        aim: {},
         scope: [],
         scopeInclusions: [],
         scopeExclusions: [],
     });
+
+    const pushAimRewriteHistory = (index, oldValue) => {
+        setRewriteHistory(prev => ({
+            ...prev,
+            aim: {
+                ...prev.aim,
+                [index]: [...(prev.aim[index] || []), oldValue]
+            }
+        }));
+    };
+
+    const undoAimRewrite = (index) => {
+        setRewriteHistory(prev => {
+            const currentHistory = [...(prev.aim[index] || [])];
+            if (currentHistory.length === 0) return prev;
+
+            const lastValue = currentHistory.pop();
+
+            setFormData(fd => ({
+                ...fd,
+                aim: fd.aim.map((item, i) =>
+                    i === index ? { ...item, text: lastValue } : item
+                )
+            }));
+
+            return {
+                ...prev,
+                aim: {
+                    ...prev.aim,
+                    [index]: currentHistory
+                }
+            };
+        });
+    };
+
+    const AiRewriteAim = async (index) => {
+        try {
+            const currentAim = formData.aim?.[index];
+            const prompt = currentAim?.text || "";
+
+            if (!prompt.trim()) {
+                toast.warn("Please enter some aim text before using AI rewrite.", {
+                    closeButton: true,
+                    autoClose: 1000,
+                    style: { textAlign: "center" }
+                });
+                return;
+            }
+
+            pushAimRewriteHistory(index, prompt);
+            setLoadingAimIndex(index);
+
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatAim/ibra`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify({ prompt }),
+            });
+
+            const data = await response.json();
+            const newText = data?.response || "";
+
+            setFormData(fd => ({
+                ...fd,
+                aim: fd.aim.map((item, i) =>
+                    i === index ? { ...item, text: newText } : item
+                )
+            }));
+        } catch (error) {
+            console.error("Error rewriting aim:", error);
+            toast.error("AI rewrite failed.", {
+                closeButton: true,
+                autoClose: 1200,
+                style: { textAlign: "center" }
+            });
+        } finally {
+            setLoadingAimIndex(null);
+        }
+    };
 
     const pushAiRewriteHistory = (field) => {
         setRewriteHistory(prev => ({
@@ -1666,7 +1759,10 @@ const RiskManagementPageIBRA = () => {
     // Send data to backend to generate a Word document
     const handleGenerateIBRADocument = async () => {
         const dataToStore = {
-            formData,
+            formData: {
+                ...formData,
+                aim: sanitizeAimForStorage(formData.aim)
+            }
         };
 
         const documentName = (formData.title) + ' ' + formData.documentType;
@@ -1828,7 +1924,7 @@ const RiskManagementPageIBRA = () => {
             setLoading(false);
 
             setTimeout(() => {
-                navigate('/FrontendDMS/generatedIBRADocs'); // Redirect to the generated file info page
+                navigate('/generatedIBRADocs'); // Redirect to the generated file info page
             }, 1000);
         } catch (error) {
             console.error("Error generating document:", error);
@@ -2823,6 +2919,184 @@ const RiskManagementPageIBRA = () => {
         openImportPopup(); // same function used by Fetch Controls button
     };
 
+    const createAimBulletRow = () => ({
+        id: uuidv4(),
+        text: ""
+    });
+
+    const sanitizeAimForStorage = (aim = []) => {
+        if (!Array.isArray(aim)) return [];
+
+        return aim
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text : ""
+                    };
+                }
+
+                const bulletItems = Array.isArray(item?.bullets)
+                    ? item.bullets
+                    : typeof item?.text === "string"
+                        ? item.text
+                            .split(/\r?\n/)
+                            .map(line => ({ id: uuidv4(), text: line }))
+                        : [];
+
+                const cleanedBullets = bulletItems
+                    .map(b => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter(b => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map(b => b.text).join("\n")
+                };
+            })
+            .filter(item => {
+                if (item.type === "text") {
+                    return item.text.trim() !== "";
+                }
+
+                return item.text.trim() !== "";
+            });
+    };
+
+    const handleAimChange = (index, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) =>
+                i === index ? { ...item, text: value } : item
+            )
+        }));
+    };
+
+    const handleAimBulletChange = (aimIndex, bulletId, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) => {
+                if (i !== aimIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).map((bullet) =>
+                    bullet.id === bulletId ? { ...bullet, text: value } : bullet
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const handleAddAim = () => {
+        setFormData((prev) => {
+            const currentAims = Array.isArray(prev.aim) ? prev.aim : [{ type: "text", text: "" }];
+            const lastType = currentAims[currentAims.length - 1]?.type || "text";
+            const nextType = lastType === "text" ? "bullet" : "text";
+
+            return {
+                ...prev,
+                aim: [
+                    ...currentAims,
+                    nextType === "bullet"
+                        ? { type: "bullet", bullets: [createAimBulletRow()], text: "" }
+                        : { type: "text", text: "" }
+                ]
+            };
+        });
+    };
+
+    const handleRemoveAim = (indexToRemove) => {
+        setFormData(prev => {
+            const currentAim = Array.isArray(prev.aim) ? prev.aim : [];
+            const updatedAim = currentAim.filter((_, index) => index !== indexToRemove);
+
+            return {
+                ...prev,
+                aim: updatedAim.length > 0 ? updatedAim : [{ type: "text", text: "" }]
+            };
+        });
+    };
+
+    const handleAddAimBullet = (aimIndex, insertAtIndex = null) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) => {
+                if (i !== aimIndex || item?.type !== "bullet") return item;
+
+                const currentBullets = Array.isArray(item.bullets) ? item.bullets : [];
+                const newBullet = createAimBulletRow();
+
+                if (insertAtIndex === null || insertAtIndex < 0 || insertAtIndex > currentBullets.length) {
+                    return {
+                        ...item,
+                        bullets: [...currentBullets, newBullet]
+                    };
+                }
+
+                return {
+                    ...item,
+                    bullets: [
+                        ...currentBullets.slice(0, insertAtIndex + 1),
+                        newBullet,
+                        ...currentBullets.slice(insertAtIndex + 1)
+                    ]
+                };
+            })
+        }));
+    };
+
+    const handleRemoveAimBullet = (aimIndex, bulletId) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) => {
+                if (i !== aimIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).filter(
+                    (bullet) => bullet.id !== bulletId
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const handleRemoveAimSection = (textIndex) => {
+        setFormData((prev) => {
+            const currentAim = Array.isArray(prev.aim) ? prev.aim : [];
+
+            const sectionStartIndexes = currentAim
+                .map((item, index) => (item?.type === "text" ? index : null))
+                .filter(index => index !== null);
+
+            // Do not allow deleting the last remaining section
+            if (sectionStartIndexes.length <= 1) {
+                return prev;
+            }
+
+            const updatedAim = currentAim.filter((_, index) => {
+                return index !== textIndex && index !== textIndex + 1;
+            });
+
+            return {
+                ...prev,
+                aim: updatedAim
+            };
+        });
+    };
+
     return (
         <div className="risk-create-container">
             {isSidebarVisible && (
@@ -2903,7 +3177,7 @@ const RiskManagementPageIBRA = () => {
                             </div>
                         )}
 
-                        {!readOnly && (
+                        {(
                             <div className="burger-menu-icon-risk-create-page-1">
                                 <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={openSaveAs} title="Save As">
                                     {/* base floppy-disk, full size */}
@@ -3058,20 +3332,31 @@ const RiskManagementPageIBRA = () => {
 
                     <RiskAimComponent
                         readOnly={readOnly}
-                        error={errors.aim}
-                        value={formData.aim}
-                        loading={loadingAim}
+                        aims={formData.aim}
+                        errors={errors.aim || []}
+                        loadingIndex={loadingAimIndex}
                         rewriteHistory={rewriteHistory}
-                        onChange={handleInputChange}
-                        onFocus={() =>
-                            setErrors(prev => ({
-                                ...prev,
-                                aim: false
-                            }))
+                        onChange={handleAimChange}
+                        onBulletChange={handleAimBulletChange}
+                        onFocus={(index) =>
+                            setErrors(prev => {
+                                const nextAimErrors = [...(prev.aim || [])];
+                                nextAimErrors[index] = false;
+
+                                return {
+                                    ...prev,
+                                    aim: nextAimErrors
+                                };
+                            })
                         }
                         onHelp={openHelpRA}
                         onAiRewrite={AiRewriteAim}
-                        onUndo={() => undoAiRewrite("aim")}
+                        onUndo={undoAimRewrite}
+                        onAddAim={handleAddAim}
+                        onRemoveAim={handleRemoveAim}
+                        onRemoveAimSection={handleRemoveAimSection}
+                        onAddBullet={handleAddAimBullet}
+                        onRemoveBullet={handleRemoveAimBullet}
                     />
 
                     <RiskScopeIE

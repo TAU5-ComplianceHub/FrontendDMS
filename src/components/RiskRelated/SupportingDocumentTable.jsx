@@ -14,18 +14,51 @@ const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) =>
 
     const handleFileChange = (event) => {
         const selected = Array.from(event.target.files);
+        const existingFiles = formData.supportingDocuments || [];
 
-        const existingFiles = formData.supportingDocuments;
+        const exactDuplicates = [];
+        const sameNameDifferentExtension = [];
+        const acceptedFiles = [];
 
-        const uniqueFiles = selected.filter((file) =>
-            !existingFiles.some(
-                (doc) => doc.name === file.name && doc.file?.size === file.size
-            )
+        const existingBaseNames = new Set(
+            existingFiles.map((doc) => removeFileExtension(doc.name).trim().toLowerCase())
         );
+
+        const existingExactKeys = new Set(
+            existingFiles.map((doc) => `${doc.name}__${doc.file?.size ?? 0}`)
+        );
+
+        const newBaseNames = new Set();
+        const newExactKeys = new Set();
+
+        selected.forEach((file) => {
+            const baseName = removeFileExtension(file.name).trim().toLowerCase();
+            const exactKey = `${file.name}__${file.size}`;
+
+            const isExactDuplicate =
+                existingExactKeys.has(exactKey) || newExactKeys.has(exactKey);
+
+            const hasSameBaseName =
+                existingBaseNames.has(baseName) || newBaseNames.has(baseName);
+
+            if (isExactDuplicate) {
+                exactDuplicates.push(file);
+                return;
+            }
+
+            if (hasSameBaseName) {
+                sameNameDifferentExtension.push(file);
+                return;
+            }
+
+            acceptedFiles.push(file);
+            newBaseNames.add(baseName);
+            newExactKeys.add(exactKey);
+        });
 
         const updatedFiles = [
             ...existingFiles,
-            ...uniqueFiles.map((file, index) => ({
+            ...acceptedFiles.map((file, index) => ({
                 nr: existingFiles.length + index + 1,
                 name: file.name,
                 file,
@@ -33,8 +66,12 @@ const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) =>
             }))
         ];
 
-        if (uniqueFiles.length !== selected.length) {
+        if (exactDuplicates.length > 0) {
             toast.error("Some files were already added and were skipped.");
+        }
+
+        if (sameNameDifferentExtension.length > 0) {
+            toast.error("A file with the same name already exists. Please rename the file or remove the existing one before uploading a different extension.");
         }
 
         setFormData({
@@ -44,7 +81,6 @@ const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) =>
 
         setSelectedFiles(updatedFiles);
 
-        // reset input so the same file can be selected again if removed
         event.target.value = null;
     };
 

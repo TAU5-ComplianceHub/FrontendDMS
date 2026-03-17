@@ -366,6 +366,34 @@
     transition: color 0.2s;
 }
 
+.aim-textarea-icon-ibra2 {
+    position: absolute;
+    bottom: 15px;
+    /* tweak as needed for vertical offset */
+    right: 10px;
+    /* tweak for horizontal offset */
+    cursor: pointer;
+    font-size: 18px;
+    /* adjust size to suit */
+    color: black;
+    /* light grey by default */
+    transition: color 0.2s;
+}
+
+.aim-textarea-icon-ibra2-undo {
+    position: absolute;
+    bottom: 15px;
+    /* tweak as needed for vertical offset */
+    right: 35px;
+    /* tweak for horizontal offset */
+    cursor: pointer;
+    font-size: 18px;
+    /* adjust size to suit */
+    color: black;
+    /* light grey by default */
+    transition: color 0.2s;
+}
+
 .aim-textarea-icon-exec {
     position: absolute;
     bottom: 15px;
@@ -747,4 +775,84 @@
     /* Remove border between the two inputs */
     padding: 10px;
     /* Match padding of the first input */
+}
+
+.aim-bullet-row-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.aim-visual-bullet {
+    width: 18px;
+    min-width: 18px;
+    text-align: center;
+    font-size: 22px;
+    line-height: 1;
+    user-select: none;
+}
+
+.aim-visual-bullet.empty {
+    color: lightgrey;
+}
+
+.aim-visual-bullet.filled {
+    color: black;
+}
+
+.aim-bullet-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.aim-bullet-inline-button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: black;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.aim-bullet-inline-button:hover {
+    opacity: 0.7;
+}
+
+.aim-bullet-section-box {
+    position: relative;
+    width: 100%;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+    padding: 12px 10px 8px 10px;
+    box-sizing: border-box;
+}
+
+.aim-empty-bullet-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 5px;
+}
+
+.aim-bullet-section-box .top-right-button-aim-delete {
+    position: absolute;
+    top: 8px;
+    right: 11px;
+    z-index: 2;
+}
+
+.aim-bullet-section-box-with-delete {
+    padding-top: 40px;
+}
+
+.top-right-button-aim-delete-section {
+    right: 42px;
 }

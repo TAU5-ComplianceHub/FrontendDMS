@@ -37,6 +37,7 @@ const ControlAttributes = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [categories, setCategories] = useState([]);
     const [showRecentChanges, setShowRecentChanges] = useState(false);
+    const [categoryTab, setCategoryTab] = useState("All");
 
     const toggleRecentChanges = () => {
         setShowRecentChanges(prev => !prev);
@@ -510,31 +511,45 @@ const ControlAttributes = () => {
 
     // --- NEW: Helper to get options filtered by OTHER columns ---
     const getAvailableOptions = (colId) => {
-        // Start with all controls
-        let filtered = controls;
+        let filtered = [...controls];
 
-        // 1. Apply Global Search (if you want options to respect the top search bar)
+        // 1. Apply Global Search
         if (searchQuery) {
             const lowerQ = searchQuery.toLowerCase();
-            filtered = filtered.filter(c => c.control.toLowerCase().includes(lowerQ));
+            filtered = filtered.filter(c =>
+                (c.control || "").toLowerCase().includes(lowerQ)
+            );
         }
 
-        // 2. Apply filters from ALL OTHER active columns
+        // 2. Apply pill filter first, so popup options only reflect the active pill
+        if (categoryTab === "General") {
+            filtered = filtered.filter(row =>
+                String(row.category || "").trim().toLowerCase() === "general"
+            );
+        } else if (categoryTab === "Specialised") {
+            filtered = filtered.filter(row => {
+                const category = String(row.category || "").trim().toLowerCase();
+                return category !== "general";
+            });
+        }
+
+        // 3. Apply filters from all OTHER active columns
         for (const [filterColId, selectedValues] of Object.entries(activeExcelFilters)) {
-            if (filterColId === colId) continue; // Don't filter a column by itself
+            if (filterColId === colId) continue;
             if (!selectedValues || !Array.isArray(selectedValues)) continue;
 
             filtered = filtered.filter((row, index) => {
                 const cellValues = getFilterValuesForCell(row, filterColId, index);
-                // Keep row if ANY of its cell values match the selection
                 return cellValues.some(v => selectedValues.includes(v));
             });
         }
 
-        // 3. Extract unique values for the requested column from the filtered subset
+        // 4. Extract unique values for the requested column from the filtered subset
         const uniqueValues = Array.from(
             new Set(filtered.flatMap((r, i) => getFilterValuesForCell(r, colId, i)))
-        ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
+        ).sort((a, b) =>
+            String(a).localeCompare(String(b), undefined, { sensitivity: "base" })
+        );
 
         return uniqueValues;
     };
@@ -580,7 +595,7 @@ const ControlAttributes = () => {
     const processedControls = useMemo(() => {
         let current = [...controls];
 
-        // 1. Global Search (control name)
+        // 1. Global Search
         if (searchQuery) {
             const lowerQ = searchQuery.toLowerCase();
             current = current.filter(c =>
@@ -600,6 +615,18 @@ const ControlAttributes = () => {
             return true;
         });
 
+        // 3. Pill filter
+        if (categoryTab === "General") {
+            current = current.filter(row =>
+                String(row.category || "").trim().toLowerCase() === "general"
+            );
+        } else if (categoryTab === "Specialised") {
+            current = current.filter(row => {
+                const category = String(row.category || "").trim().toLowerCase();
+                return category !== "general";
+            });
+        }
+
         const normalize = (v) => {
             const s = v == null ? "" : String(v).trim();
             return s === "" ? "(Blanks)" : s;
@@ -618,11 +645,9 @@ const ControlAttributes = () => {
             const isGeneralA = catA.toLowerCase() === "general";
             const isGeneralB = catB.toLowerCase() === "general";
 
-            // General first only in default view
             if (isGeneralA && !isGeneralB) return -1;
             if (!isGeneralA && isGeneralB) return 1;
 
-            // Blanks last
             if (catA === "(Blanks)" && catB !== "(Blanks)") return 1;
             if (catA !== "(Blanks)" && catB === "(Blanks)") return -1;
 
@@ -630,7 +655,6 @@ const ControlAttributes = () => {
         };
 
         current.sort((a, b) => {
-            // DEFAULT VIEW: sortConfig.colId is null
             if (!sortConfig?.colId) {
                 const categoryResult = compareDefaultCategory(a, b);
                 if (categoryResult !== 0) return categoryResult;
@@ -652,7 +676,6 @@ const ControlAttributes = () => {
             const mainResult = compareText(valA, valB) * dir;
             if (mainResult !== 0) return mainResult;
 
-            // Tie-break by control name only
             const controlA = normalize(a?.control);
             const controlB = normalize(b?.control);
 
@@ -663,7 +686,7 @@ const ControlAttributes = () => {
         });
 
         return current;
-    }, [controls, searchQuery, activeExcelFilters, sortConfig]);
+    }, [controls, searchQuery, activeExcelFilters, categoryTab, sortConfig]);
 
     const availableColumns = [
         { id: "nr", title: "Nr" },
@@ -1142,18 +1165,18 @@ const ControlAttributes = () => {
 
     const getFilterBtnClass = () => {
         if (showResetButton) {
-            return "top-right-button-control-att-4";
+            return "top-right-button-control-att-4-new";
         }
 
-        return "top-right-button-control-att-3";
+        return "top-right-button-control-att-3-new";
     };
 
     const getDatesBtnClass = () => {
         if (showResetButton) {
-            return "top-right-button-control-att-5";
+            return "top-right-button-control-att-5-new";
         }
 
-        return "top-right-button-control-att-4";
+        return "top-right-button-control-att-4-new";
     };
 
     return (
@@ -1227,20 +1250,32 @@ const ControlAttributes = () => {
                     <TopBar />
                 </div>
                 <div className="table-container-risk-control-attributes">
-                    <div className="risk-control-label-wrapper">
-                        <label className="risk-control-label">Manage Controls</label>
+                    <div className="risk-control-label-wrapper-new">
+                        <div className="control-attributes-pill-bar">
+                            {["All", "General", "Specialised"].map((pill) => (
+                                <div
+                                    key={pill}
+                                    className={`control-attributes-pill ${categoryTab === pill ? "active" : ""}`}
+                                    onClick={() => setCategoryTab(pill)}
+                                >
+                                    {pill}
+                                </div>
+                            ))}
+                        </div>
+
+                        <label className="risk-control-label-new">Manage Controls</label>
 
                         <FontAwesomeIcon
                             icon={faDownload}
                             title="Download Excel"
-                            className="top-right-button-control-att"
+                            className="top-right-button-control-att-new"
                             onClick={handleDownload}
                         />
 
                         <FontAwesomeIcon
                             icon={faTableColumns}
                             title="Show / Hide Columns"
-                            className="top-right-button-control-att-2"
+                            className="top-right-button-control-att-2-new"
                             onClick={() => setShowColumnSelector(prev => !prev)}
                         />
 

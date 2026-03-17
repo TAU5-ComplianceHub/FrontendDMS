@@ -41,6 +41,8 @@ const AddControlPopup = ({ onClose }) => {
         'Safety (S)'
     ]);
     const [qualityOptions] = useState(['< 30%', '30-59%', '60-90%', '> 90%']);
+    const [category, setCategory] = useState("");
+    const [categoryOptions, setCategoryOptions] = useState([]);
 
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({
@@ -92,6 +94,28 @@ const AddControlPopup = ({ onClose }) => {
         setHelpHier(false);
     }
 
+    const fetchCategories = async () => {
+        const route = `/api/riskInfo/getCategories`;
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}${route}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch files');
+            }
+            const data = await response.json();
+
+            const sortedControls = data.categories.sort((a, b) =>
+                a.category.localeCompare(b.category, undefined, { sensitivity: 'base' })
+            );
+            setCategoryOptions(sortedControls);
+        } catch (error) {
+            console.log(error)
+        }
+    };
+
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (loading) return;
@@ -137,6 +161,7 @@ const AddControlPopup = ({ onClose }) => {
                     quality: quality.trim(),
                     description: description.trim(),
                     performance: performance.trim(),
+                    category: category.trim()
                 },
                 {
                     headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -321,25 +346,55 @@ const AddControlPopup = ({ onClose }) => {
                                     </div>
                                 </div>
                                 <div className="ibra-popup-page-column-half">
+
                                     <div className="ibra-popup-page-additional-row">
-                                        <div className="cea-popup-page-component-wrapper-control-management">
-                                            <div className={`ibra-popup-page-form-group ${errors.riskSource ? "error-upload-required-up" : ""}`}>
-                                                <label><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpQuality} className="ibra-popup-label-icon" />Quality</label>
-                                                <div className="ibra-popup-page-select-container">
-                                                    <select
-                                                        className="ibra-popup-page-select"
-                                                        value={quality}
-                                                        onChange={(e) => setQuality(e.target.value)}
-                                                    >
-                                                        <option value="">Select Quality</option>
-                                                        {
-                                                            qualityOptions.map((option, index) => (
-                                                                <option key={index} value={option}>
-                                                                    {option}
-                                                                </option>
-                                                            ))
-                                                        }
-                                                    </select>
+                                        <div className="ibra-popup-page-column-half">
+                                            <div className="ibra-popup-page-additional-row">
+                                                <div className="cea-popup-page-component-wrapper-control-management">
+                                                    <div className={`ibra-popup-page-form-group ${errors.riskSource ? "error-upload-required-up" : ""}`}>
+                                                        <label><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpQuality} className="ibra-popup-label-icon" />Quality</label>
+                                                        <div className="ibra-popup-page-select-container">
+                                                            <select
+                                                                className="ibra-popup-page-select"
+                                                                value={quality}
+                                                                onChange={(e) => setQuality(e.target.value)}
+                                                            >
+                                                                <option value="">Select Quality</option>
+                                                                {
+                                                                    qualityOptions.map((option, index) => (
+                                                                        <option key={index} value={option}>
+                                                                            {option}
+                                                                        </option>
+                                                                    ))
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="ibra-popup-page-column-half">
+                                            <div className="ibra-popup-page-additional-row">
+                                                <div className="cea-popup-page-component-wrapper-control-management">
+                                                    <div className={`ibra-popup-page-form-group ${errors.riskSource ? "error-upload-required-up" : ""}`}>
+                                                        <label>{/*<FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpQuality} className="ibra-popup-label-icon" />*/}Category</label>
+                                                        <div className="ibra-popup-page-select-container">
+                                                            <select
+                                                                className="ibra-popup-page-select"
+                                                                value={category}
+                                                                onChange={(e) => setCategory(e.target.value)}
+                                                            >
+                                                                <option value="">Select Category</option>
+                                                                {
+                                                                    categoryOptions.map((option, index) => (
+                                                                        <option key={index} value={option.category}>
+                                                                            {option.category}
+                                                                        </option>
+                                                                    ))
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>

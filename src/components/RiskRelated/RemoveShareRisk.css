@@ -197,3 +197,41 @@
     font-weight: bold;
     margin-bottom: 15px;
 }
+
+.popup-table-wrapper-share-rel {
+    max-height: 330px;
+    min-height: 330px;
+    width: 97%;
+    /* You can adjust the width as needed */
+    margin-bottom: 10px;
+    /* Space between table and buttons */
+    position: relative;
+    /* Ensures the table is positioned correctly */
+    display: flex;
+    /* Enable flexbox for centering the table inside */
+    justify-content: center;
+    /* Centers the table horizontally */
+    align-items: center;
+    /* Centers the table vertically */
+    display: block;
+}
+
+.popup-table-scroll {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.popup-table-wrapper-share-rel .control-attributes-pill-bar-new {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding-left: 6px;
+}
+
+.control-attributes-pill-bar-new {
+    left: 5px;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    white-space: nowrap;
+}

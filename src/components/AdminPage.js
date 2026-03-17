@@ -33,68 +33,16 @@ import {
     faServer,
     faUniversity, faChevronLeft, faChevronRight
 } from "@fortawesome/free-solid-svg-icons";
-import ImportSiteInfo from "./UploadPage/ImportSiteInfo";
-import ImportRiskSiteInfo from "./RiskRelated/ImportRiskSiteInfo";
 import TopBar from "./Notifications/TopBar";
 import { saveAs } from "file-saver";
 import MigrateOwnership from "./FileInfo/MigrateOwnership";
-import ExportSIDPopup from "./Popups/ExportSIDPopup";
 
 const AdminPage = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [count, setCount] = useState([]);
     const access = getCurrentUser();
-    const [importSI, setImportSI] = useState(false);
     const [migrate, setMigrate] = useState(false);
-    const [exportLoad, setExportLoad] = useState(false);
     const navigate = useNavigate();
-
-    const exportSID = async () => {
-        try {
-            setExportLoad(true);
-
-            const response = await fetch(
-                `${process.env.REACT_APP_URL}/api/siteInfoExport/export-sid`,
-                {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${localStorage.getItem("token")}`,
-                    },
-                }
-            );
-
-            if (!response.ok) throw new Error("Failed to generate document");
-
-            let filename = response.headers.get("X-Export-Filename");
-
-            if (!filename) {
-                const cd = response.headers.get("Content-Disposition") || "";
-                const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i);
-                if (match) filename = decodeURIComponent(match[1] || match[2]);
-            }
-
-            const documentName = "SID Document VN/A";
-
-            if (!filename) filename = `${documentName}.xlsx`;
-
-            const blob = await response.blob();
-            saveAs(blob, filename);
-            setExportLoad(false);
-
-            toast.success("Site General Information successfully exported.", { autoClose: "2000", closeButton: false })
-        } catch (error) {
-            console.error("Error generating document:", error);
-        }
-    };
-
-    const openImportSI = () => {
-        setImportSI(true);
-    };
-
-    const closeImportSI = () => {
-        setImportSI(false);
-    };
 
     const openMigrate = () => {
         setMigrate(true);
@@ -114,7 +62,6 @@ const AdminPage = () => {
 
     return (
         <div className="user-info-container">
-            {importSI && (<ImportSiteInfo onClose={closeImportSI} />)}
             {isSidebarVisible && (
                 <div className="sidebar-um">
                     <div className="sidebar-toggle-icon" title="Hide Sidebar" onClick={() => setIsSidebarVisible(false)}>
@@ -148,23 +95,12 @@ const AdminPage = () => {
 
                 <div className="scrollable-box-fi-home">
                     {(can(access, "RMS", "systemAdmin") || isAdmin(access) || can(access, "DDS", "systemAdmin")) && (
-                        <div className={`document-card-fi-home-all`} onClick={openImportSI}>
+                        <div className={`document-card-fi-home-all`} onClick={() => navigate("/FrontendDMS/sgiAdminPage")}>
                             <>
                                 <div className="icon-dept">
-                                    <img src={`${process.env.PUBLIC_URL}/importSIDAdmin.svg`} className={"all-icon-fi-home"} />
+                                    <img src={`${process.env.PUBLIC_URL}/importSIDAdminHome.svg`} className={"all-icon-fi-home"} />
                                 </div>
-                                <h3 className="document-title-fi-home">Import Site General Information</h3>
-                            </>
-                        </div>
-                    )}
-
-                    {(can(access, "RMS", "systemAdmin") || isAdmin(access) || can(access, "DDS", "systemAdmin")) && (
-                        <div className={`document-card-fi-home-all`} onClick={exportSID}>
-                            <>
-                                <div className="icon-dept">
-                                    <img src={`${process.env.PUBLIC_URL}/exportSIDAdmin.svg`} className={"all-icon-fi-home"} />
-                                </div>
-                                <h3 className="document-title-fi-home">Export Site General Information</h3>
+                                <h3 className="document-title-fi-home">Manage Site General Information</h3>
                             </>
                         </div>
                     )}
@@ -201,7 +137,6 @@ const AdminPage = () => {
                 </div>
             </div>
             {migrate && (<MigrateOwnership onClose={closeMigrate} />)}
-            {exportLoad && (<ExportSIDPopup />)}
             <ToastContainer />
         </div>
     );

@@ -178,6 +178,8 @@ import VersionHistorySOJRA from './components/RiskRelated/SignedOffDocuments/Ver
 import ReviewPageSOJRA from './components/RiskRelated/SignedOffDocuments/ReviewPageSOJRA';
 import DeletedDocumentsSOProcedure from './components/CreatePage/SignedOffDocuments/DeletedDocumentsSOProcedure';
 import ScopeOnlyDocxTestPage from './components/ScopeOnlyDocxTestPage';
+import SGIBackupHistory from './components/SystemAdmin/SGIBackupHistory';
+import SGIAdminPage from './components/SystemAdmin/SGIAdminPage';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -422,6 +424,8 @@ function App() {
         <Route path="FrontendDMS/versionHistorySOJRA/:id" element={<VersionHistorySOJRA />} />
         <Route path="FrontendDMS/reviewSOJRA/:fileId/:type" element={<ReviewPageSOJRA />} />
         <Route path="/test" element={<ScopeOnlyDocxTestPage />} />
+        <Route path="/sgiBackups" element={<SGIBackupHistory />} />
+        <Route path="/sgiAdminPage" element={<SGIAdminPage />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

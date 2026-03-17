@@ -111,7 +111,9 @@ const CreatePage = () => {
   const buildProcedureRowsFromJRA = (jraFormData = {}) => {
     const jraRows = Array.isArray(jraFormData.jra) ? jraFormData.jra : [];
 
-    if (jraRows.length === 0) {
+    const filteredRows = jraRows.filter((row) => cleanLine(row?.main) !== "");
+
+    if (filteredRows.length === 0) {
       return [{
         nr: 1,
         mainStep: "",
@@ -122,11 +124,18 @@ const CreatePage = () => {
       }];
     }
 
-    return jraRows.map((row, index) => {
+    return filteredRows.map((row, index) => {
       const bodies = Array.isArray(row?.jraBody) ? row.jraBody : [];
 
+      const workExecutionBodies = bodies.filter((body) =>
+        Array.isArray(body?.hazards) &&
+        body.hazards.some(
+          (h) => cleanLine(h?.hazard).toLowerCase() === "work execution"
+        )
+      );
+
       const subControls = uniqueNonEmptyLines(
-        bodies.flatMap((body) =>
+        workExecutionBodies.flatMap((body) =>
           Array.isArray(body?.sub)
             ? body.sub.map((c) => c?.task)
             : []
@@ -134,7 +143,7 @@ const CreatePage = () => {
       );
 
       const responsiblePeople = uniqueNonEmptyLines(
-        bodies.flatMap((body) =>
+        workExecutionBodies.flatMap((body) =>
           Array.isArray(body?.taskExecution)
             ? body.taskExecution.map((t) => t?.R)
             : []
@@ -150,6 +159,39 @@ const CreatePage = () => {
         prevStep: ""
       };
     });
+  };
+
+  const buildProcedureAuthorizationsFromJRA = (jraFormData = {}) => {
+    const sourceRows = Array.isArray(jraFormData.rows) ? jraFormData.rows : [];
+
+    const filtered = sourceRows.filter((row) => row?.auth !== "Facilitator");
+
+    if (filtered.length === 0) {
+      return [
+        { auth: "Author", name: "", pos: "", num: 1 },
+        { auth: "Reviewer", name: "", pos: "", num: 2 },
+        { auth: "Approver", name: "", pos: "", num: 3 },
+      ];
+    }
+
+    const authOrder = {
+      Owner: 1,
+      Reviewer: 2,
+      Approver: 3
+    };
+
+    const authRename = {
+      Owner: "Author",
+      Reviewer: "Reviewer",
+      Approver: "Approver"
+    };
+
+    return filtered.map((row) => ({
+      auth: authRename[row.auth] || row.auth,
+      name: row?.name || "",
+      pos: row?.pos || "",
+      num: authOrder[row.auth] || row?.num || 1
+    }));
   };
 
   const importJRAData = (jraItem) => {
@@ -175,7 +217,9 @@ const CreatePage = () => {
 
     setFormData((prev) => ({
       ...prev,
+      title: importedFormData.title || prev.title,
       procedureRows: buildProcedureRowsFromJRA(importedFormData),
+      rows: buildProcedureAuthorizationsFromJRA(importedFormData),
 
       abbrRows: Array.isArray(importedFormData.abbrRows) ? importedFormData.abbrRows : [],
       termRows: Array.isArray(importedFormData.termRows) ? importedFormData.termRows : [],
@@ -185,6 +229,10 @@ const CreatePage = () => {
       MobileMachine: Array.isArray(importedFormData.MobileMachine) ? importedFormData.MobileMachine : [],
       Materials: Array.isArray(importedFormData.Materials) ? importedFormData.Materials : [],
     }));
+
+    if (importedFormData.title?.trim()) {
+      setTitleSet(true);
+    }
 
     toast.dismiss();
     toast.clearWaitingQueue();
@@ -1426,7 +1474,7 @@ const CreatePage = () => {
       setLoading(false);
 
       setTimeout(() => {
-        navigate('/FrontendDMS/generatedFileInfo'); // Redirect to the generated file info page
+        navigate('/generatedFileInfo'); // Redirect to the generated file info page
       }, 1000);
     } catch (error) {
       console.error("Error generating document:", error);
@@ -1676,8 +1724,8 @@ const CreatePage = () => {
               <FontAwesomeIcon style={{ color: "#7EAC89" }} icon={faCheckCircle} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handleApproveClick} title="Approve Draft" />
             </div>)}
 
-            {false && !readOnly && (<div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faDownload} onClick={openImportJRA} title="Import JRA" />
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faFileImport} onClick={openImportJRA} title="Import JRA" />
             </div>)}
 
             {(localStorage.getItem("draftData")) && (

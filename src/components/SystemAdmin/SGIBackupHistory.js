@@ -1,0 +1,230 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+    faArrowLeft,
+    faCircleUser,
+    faDownload,
+    faCaretLeft,
+    faCaretRight
+} from "@fortawesome/free-solid-svg-icons";
+import BurgerMenuFI from "../FileInfo/BurgerMenuFI";
+import DownloadPopup from "../FileInfo/DownloadPopup";
+import TopBar from "../Notifications/TopBar";
+
+const SGIBackupHistory = () => {
+    const [activity, setActivity] = useState([]);
+    const [error, setError] = useState(null);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(false);
+    const [token, setToken] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [loadingId, setLoadingId] = useState(null);
+    const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+    const [downloadFileId, setDownloadFileId] = useState(null);
+    const [downloadFileName, setDownloadFileName] = useState(null);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const navigate = useNavigate();
+
+    const removeFileExtension = (fileName) => fileName.replace(/\.[^/.]+$/, "");
+
+    useEffect(() => {
+        const storedToken = localStorage.getItem("token");
+        if (storedToken) {
+            setToken(storedToken);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (token) {
+            fetchActivity();
+        }
+    }, [token]);
+
+    const openDownloadModal = (fileId, fileName) => {
+        setDownloadFileId(fileId);
+        setDownloadFileName(fileName);
+        setIsDownloadModalOpen(true);
+    };
+
+    const closeDownloadModal = () => {
+        setDownloadFileId(null);
+        setDownloadFileName(null);
+        setIsDownloadModalOpen(false);
+    };
+
+    const confirmDownload = () => {
+        if (downloadFileId && downloadFileName) {
+            downloadFile(downloadFileId, downloadFileName);
+        }
+        closeDownloadModal();
+    };
+
+    const downloadFile = async (fileId, fileName) => {
+        try {
+            setLoading(true);
+            setLoadingId(fileId);
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/file/site-information-backups/download/${fileId}`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed to download the file");
+            }
+
+            const blob = await response.blob();
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.setAttribute("download", fileName || "Site Information Backup.xlsx");
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Error downloading file:", error);
+            alert("Error downloading the file. Please try again.");
+        } finally {
+            setLoading(false);
+            setLoadingId(null);
+        }
+    };
+
+    const fetchActivity = async () => {
+        try {
+            setLoading(true);
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/file/site-information-backups`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch site information backups");
+            }
+
+            const data = await response.json();
+            setActivity(data);
+        } catch (error) {
+            setError(error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return "";
+        const date = new Date(dateString);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    return (
+        <div className="version-history-file-info-container">
+            {isSidebarVisible && (
+                <div className="sidebar-um">
+                    <div className="sidebar-toggle-icon" title="Hide Sidebar" onClick={() => setIsSidebarVisible(false)}>
+                        <FontAwesomeIcon icon={faCaretLeft} />
+                    </div>
+                    <div className="sidebar-logo-um">
+                        <img
+                            src={`${process.env.PUBLIC_URL}/CH_Logo.svg`}
+                            alt="Logo"
+                            className="logo-img-um"
+                            onClick={() => navigate("/FrontendDMS/home")}
+                            title="Home"
+                        />
+                        <p className="logo-text-um">Site Information Backups</p>
+                    </div>
+                </div>
+            )}
+
+            {!isSidebarVisible && (
+                <div className="sidebar-hidden">
+                    <div className="sidebar-toggle-icon" title="Show Sidebar" onClick={() => setIsSidebarVisible(true)}>
+                        <FontAwesomeIcon icon={faCaretRight} />
+                    </div>
+                </div>
+            )}
+
+            <div className="main-box-version-history-file">
+                <div className="top-section-um">
+                    <div className="burger-menu-icon-um">
+                        <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
+                    </div>
+
+                    <div className="spacer"></div>
+
+                    {/* Container for right-aligned icons */}
+                    <TopBar />
+                </div>
+
+                <div className="table-containerversion-history-file-info">
+                    <table className="version-history-file-info-table">
+                        <thead className="version-history-file-info-head">
+                            <tr>
+                                <th className="version-history-file-th">Nr</th>
+                                <th className="version-history-file-th">File Name</th>
+                                <th className="version-history-file-th">Date Created</th>
+                                <th className="version-history-file-th">Expiry Date</th>
+                                <th className="version-history-file-th">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {activity.length > 0 ? (
+                                activity.map((act, index) => (
+                                    <tr key={act._id} className="file-info-row-height version-history-file-info-tr">
+                                        <td className="version-history-file-nr">{index + 1}</td>
+                                        <td className="version-history-file-fn">{removeFileExtension(act.fileName)}</td>
+                                        <td className="version-history-file-stat">{formatDate(act.createdAtBackup)}</td>
+                                        <td className="version-history-file-stat">{formatDate(act.expiresAt)}</td>
+                                        <td className="version-history-file-ver">
+                                            <button
+                                                className="verion-download-button"
+                                                onClick={() => openDownloadModal(act._id, (act.fileName))}
+                                                disabled={loading && loadingId === act._id}
+                                            >
+                                                <FontAwesomeIcon icon={faDownload} title="Download" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="5">
+                                        {loading ? "Loading backups..." : error ? error : "No Site Information Backups"}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {isDownloadModalOpen && (
+                <DownloadPopup
+                    closeDownloadModal={closeDownloadModal}
+                    confirmDownload={confirmDownload}
+                    downloadFileName={downloadFileName}
+                    loading={loading}
+                />
+            )}
+        </div>
+    );
+};
+
+export default SGIBackupHistory;

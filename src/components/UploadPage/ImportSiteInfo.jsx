@@ -238,11 +238,19 @@ const ImportSiteInfo = ({ onClose }) => {
                     </div>
                 </div>
 
-                <div className="import-si-file-buttons">
-                    <button className="import-si-file-button-sub" onClick={handleClick} disabled={loading}>
-                        {'Submit'}
-                    </button>
-                </div>
+                <button
+                    className="import-si-file-button-sub"
+                    onClick={handleClick}
+                    disabled={loading}
+                >
+                    {loading ? (
+                        <>
+                            <FontAwesomeIcon icon={faSpinner} className="import-si-fa-spin" />
+                        </>
+                    ) : (
+                        "Submit"
+                    )}
+                </button>
             </div>
         </div >
     );

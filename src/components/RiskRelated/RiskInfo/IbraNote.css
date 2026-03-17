@@ -1,22 +1,28 @@
 .note-table-group {
-    justify-content: center;
-    /* Centers horizontally */
-    align-items: center;
-    /* Centers vertically */
-    height: 150px;
-    padding: 15px 0;
     background-color: white;
     border-radius: 5px;
     margin-bottom: 10px;
+    height: 250px;
+    padding: 15px;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: column;
 }
 
 .note-header {
-    display: block;
     font-size: 19px;
     font-family: Arial;
     font-weight: 500;
     margin-bottom: 10px;
     text-align: center;
+    flex-shrink: 0;
+}
+
+.note-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .note-text {
@@ -24,9 +30,7 @@
     font-size: 16px;
     font-family: Arial;
     font-weight: 500;
-    margin: auto;
-    margin-top: 10px;
-    margin-left: 15px;
-    margin-bottom: 10px;
     text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
 }

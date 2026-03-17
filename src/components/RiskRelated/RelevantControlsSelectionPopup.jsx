@@ -17,6 +17,7 @@ const RelevantControlsSelectionPopup = ({
     const [searchTerm, setSearchTerm] = useState("");
     const [showSuggestPopup, setShowSuggestPopup] = useState(false);
     const [extraControls, setExtraControls] = useState([]); // pseudo controls created in UI
+    const [categoryTab, setCategoryTab] = useState("All");
 
     const key = (s) => (s ?? "").toString().trim().toLowerCase();
 
@@ -80,8 +81,23 @@ const RelevantControlsSelectionPopup = ({
     })();
 
     const filteredControls = mergedControls
-        .filter(c => c.control.toLowerCase().includes(searchTerm.toLowerCase()))
-        .sort((a, b) => a.control.localeCompare(b.control));
+        .filter(c => (c.control || "").toLowerCase().includes(searchTerm.toLowerCase()))
+        .filter(c => {
+            const category = String(c.category || "").trim().toLowerCase();
+
+            if (categoryTab === "General") {
+                return category === "general";
+            }
+
+            if (categoryTab === "Specialised") {
+                return category !== "general";
+            }
+
+            return true; // All
+        })
+        .sort((a, b) =>
+            (a.control || "").localeCompare(b.control || "", undefined, { sensitivity: "base" })
+        );
 
     const toPseudoControl = (name) => ({
         _id: `pseudo-${key(name)}`,
@@ -145,44 +161,58 @@ const RelevantControlsSelectionPopup = ({
                 </div>
 
                 <div className="share-table-group">
-                    <div className="popup-table-wrapper-share">
-                        <table className="popup-table font-fam">
-                            <thead className="share-headers">
-                                <tr>
-                                    <th className="inp-size-share">Select</th>
-                                    <th>Control Name</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredControls.length > 0 ? (
-                                    filteredControls.map((control, index) => (
-                                        <tr
-                                            key={index}
-                                            onClick={() => handleCheckboxChange(control.control)}
-                                            style={{ cursor: "pointer" }}
-                                            className={selectedControlNames.includes(control.control) ? "selected-row" : ""}
-                                        >
-                                            <td>
-                                                <input
-                                                    type="checkbox"
-                                                    className="checkbox-inp-share"
-                                                    checked={selectedControlNames.includes(control.control)}
-                                                    onClick={(e) => e.stopPropagation()} // Prevent double trigger
-                                                    onChange={() => handleCheckboxChange(control.control)}
-                                                />
-                                            </td>
-                                            <td style={{ fontWeight: "normal" }}>{control.control}</td>
-                                        </tr>
-                                    ))
-                                ) : (
+                    <div className="popup-table-wrapper-share-rel">
+                        <div className="control-attributes-pill-bar-new">
+                            {["All", "General", "Specialised"].map((pill) => (
+                                <div
+                                    key={pill}
+                                    className={`control-attributes-pill ${categoryTab === pill ? "active" : ""}`}
+                                    onClick={() => setCategoryTab(pill)}
+                                >
+                                    {pill}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="popup-table-scroll">
+                            <table className="popup-table font-fam">
+                                <thead className="share-headers">
                                     <tr>
-                                        <td colSpan="3" style={{ textAlign: "center", padding: "20px" }}>
-                                            No controls found matching "{searchTerm}"
-                                        </td>
+                                        <th className="inp-size-share">Select</th>
+                                        <th>Control Name</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {filteredControls.length > 0 ? (
+                                        filteredControls.map((control, index) => (
+                                            <tr
+                                                key={index}
+                                                onClick={() => handleCheckboxChange(control.control)}
+                                                style={{ cursor: "pointer" }}
+                                                className={selectedControlNames.includes(control.control) ? "selected-row" : ""}
+                                            >
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="checkbox-inp-share"
+                                                        checked={selectedControlNames.includes(control.control)}
+                                                        onClick={(e) => e.stopPropagation()} // Prevent double trigger
+                                                        onChange={() => handleCheckboxChange(control.control)}
+                                                    />
+                                                </td>
+                                                <td style={{ fontWeight: "normal" }}>{control.control}</td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="2" style={{ textAlign: "center", padding: "20px", fontFamily: "Arial" }}>
+                                                No controls found matching "{searchTerm}"
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
