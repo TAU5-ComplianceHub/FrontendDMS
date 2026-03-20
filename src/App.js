@@ -180,6 +180,7 @@ import DeletedDocumentsSOProcedure from './components/CreatePage/SignedOffDocume
 import ScopeOnlyDocxTestPage from './components/ScopeOnlyDocxTestPage';
 import SGIBackupHistory from './components/SystemAdmin/SGIBackupHistory';
 import SGIAdminPage from './components/SystemAdmin/SGIAdminPage';
+import SGIVersionHistory from './components/SystemAdmin/SGIVersionHistory';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -426,6 +427,7 @@ function App() {
         <Route path="/test" element={<ScopeOnlyDocxTestPage />} />
         <Route path="/sgiBackups" element={<SGIBackupHistory />} />
         <Route path="/sgiAdminPage" element={<SGIAdminPage />} />
+        <Route path="/sgiVersionHistory" element={<SGIVersionHistory />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

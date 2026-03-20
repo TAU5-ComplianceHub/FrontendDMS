@@ -5,8 +5,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faFilter, faInfoCircle, faPlusCircle, faTableColumns, faTimes, faTrash } from '@fortawesome/free-solid-svg-icons';
 import { toast } from "react-toastify";
 import { saveAs } from "file-saver";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, generateAR, setErrors, readOnly = false, title, documentType }) => {
+const AttendanceTable = ({ collapsible = false, rows = [], addRow, removeRow, error, updateRows, generateAR, setErrors, readOnly = false, title, documentType }) => {
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
     const [designations, setDesignations] = useState([]);
     const [attendees, setAttendees] = useState([]);
     const [companies, setCompanies] = useState([]);
@@ -21,6 +27,11 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
     const popupRef = useRef(null);
     const [nameToPositionMap, setNameToPositionMap] = useState({});
     const [loading, setLoading] = useState(false);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const availableColumns = [
         { id: "nr", title: "Nr" },
@@ -606,7 +617,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                     Attendance Register <span className="required-field">*</span>
                 </h3>
                 <button
-                    className="top-right-button-ar"
+                    className={`${collapsible ? `top-right-button-ibra2` : `top-right-button-ibra`}`}
                     title="Show / Hide Columns"
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
                 >
@@ -614,7 +625,7 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                 </button>
 
                 <button
-                    className="top-right-button-ar-2"
+                    className={`${collapsible ? `top-right-button-ibra3` : `top-right-button-ibra2`}`}
                     title="Generate Attendance Register"
                     onClick={handleGenerateARegister}
                 >
@@ -674,145 +685,157 @@ const AttendanceTable = ({ rows = [], addRow, removeRow, error, updateRows, gene
                     </div>
                 )}
 
-                <table className="vcr-table-2 font-fam table-borders">
-                    <thead className="cp-table-header">
-                        <tr>
-                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-nr` : `attend-nr`}`}>Nr</th>
-                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-name` : `attend-name-exp`}`}>Name & Surname</th>
-                            <th
-                                className={`font-fam cent ${!showColumns.includes("num") ? `attend-comp` : `attend-comp-exp`}`}
-                                style={{ cursor: "pointer", position: "relative" }}
-                                onClick={(e) => {
-                                    // Only open if not clicking resizing handles (if you have them)
-                                    // or just open directly
-                                    openExcelFilterPopup("site", e);
-                                }}
-                            >
-                                Company/Site
-                                {/* Show filter icon if filtered OR sorted by site */}
-                                {(filters["site"] || sortConfig.colId === "site") && (
-                                    <FontAwesomeIcon icon={faFilter} style={{ marginLeft: "8px", color: "#002060" }} />
-                                )}
-                            </th>
-                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-desg` : `attend-desg-exp`}`}>Position</th>
-                            <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-pres` : `attend-pres-exp`}`}>Attendance</th>
-                            {showColumns.includes("num") && (<th className="font-fam cent attend-id">Company / ID Number</th>)}
-                            {!readOnly && (<th className={`font-fam cent ${!showColumns.includes("num") ? `attend-act` : `attend-act-exp`}`}>Action</th>)}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredRows.map((row, visualIndex) => {
-                            const index = row._originalIndex; // USE THIS for logic
-                            return (
-                                <tr key={index}>
-                                    {/* Display Nr based on Visual Index (1, 2, 3...) */}
-                                    <td className="cent">{visualIndex + 1}</td>
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                                    <td>
-                                        <input
-                                            type="text"
-                                            className="table-control font-fam"
-                                            value={row.name || ""}
-                                            style={{ fontSize: "14px" }}
-                                            onChange={(e) => handleInputChange(index, "name", e)}
-                                            onFocus={() => handleFocus(index, "name")}
-                                            placeholder="Insert or select name"
-                                            ref={(el) => (inputRefs.current[`name-${index}`] = el)}
-                                            readOnly={readOnly}
-                                        />
-                                    </td>
-                                    <td>
-                                        <input
-                                            type="text"
-                                            className="table-control font-fam"
-                                            value={row.site || ""}
-                                            onFocus={() => handleFocus(index, "site")}
-                                            style={{ fontSize: "14px" }}
-                                            onChange={(e) => handleInputChange(index, "site", e)}
-                                            placeholder="Insert company/site"
-                                            ref={(el) => (inputRefs.current[`site-${index}`] = el)}
-                                            readOnly={readOnly}
-                                        />
-                                    </td>
-                                    <td>
-                                        <input
-                                            type="text"
-                                            className="table-control font-fam"
-                                            value={row.designation || ""}
-                                            onChange={(e) => handleInputChange(index, "designation", e)}
-                                            onFocus={() => handleFocus(index, "designation")}
-                                            placeholder="Insert or select designation"
-                                            readOnly={index === 0 || readOnly}
-                                            style={{ fontSize: "14px" }}
-                                            ref={(el) => (inputRefs.current[`designation-${index}`] = el)}
-                                        />
-                                    </td>
-                                    <td>
-                                        <input
-                                            type="checkbox"
-                                            className="checkbox-inp-attend"
-                                            checked={row.presence === "Present"}
-                                            onChange={(e) => {
-                                                const updatedRow = {
-                                                    ...rows[index], // Use original index
-                                                    presence: e.target.checked ? "Present" : "Absent"
-                                                };
-                                                const newRows = [...rows];
-                                                newRows[index] = updatedRow;
-                                                updateRows(newRows);
-                                            }}
-                                            disabled={readOnly}
-                                        />
-                                    </td>
-                                    {showColumns.includes("num") && (<td className="font-fam cent">
-                                        <input
-                                            type="text"
-                                            className="table-control font-fam"
-                                            value={row.num || ""}
-                                            style={{ fontSize: "14px" }}
-                                            onChange={(e) => handleInputChange(index, "num", e)}
-                                            placeholder="Insert company / ID number"
-                                            readOnly={readOnly}
-                                        />
-                                    </td>)}
-                                    {!readOnly && (
-                                        <td className="procCent action-cell-auth-risk">
-                                            <button
-                                                className="remove-row-button font-fam"
-                                                onClick={() => {
-                                                    if (index !== 0) {
-                                                        removeRow(index); // Prevent removal of the first row
-                                                    } else {
-                                                        toast.dismiss();
-                                                        toast.clearWaitingQueue();
-                                                        toast.warn("The Facilitator cannot be removed.", {
-                                                            closeButton: false,
-                                                            autoClose: 2000,
-                                                            style: { textAlign: 'center' }
-                                                        });
-                                                    }
-                                                }}
-                                                title="Remove Row"
-                                                type="button"
-                                            >
-                                                <FontAwesomeIcon icon={faTrash} />
-                                            </button>
-                                            <button
-                                                className="insert-row-button-sig font-fam"
-                                                onClick={() => insertRowAt(index + 1)} // Use original index
-                                                title="Add row"
-                                                type="button"
-                                                style={{ fontSize: "15px" }}
-                                            >
-                                                <FontAwesomeIcon icon={faPlusCircle} />
-                                            </button>
-                                        </td>
+                {(!isCollapsed) && (
+                    <table className="vcr-table-2 font-fam table-borders">
+                        <thead className="cp-table-header">
+                            <tr>
+                                <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-nr` : `attend-nr`}`}>Nr</th>
+                                <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-name` : `attend-name-exp`}`}>Name & Surname</th>
+                                <th
+                                    className={`font-fam cent ${!showColumns.includes("num") ? `attend-comp` : `attend-comp-exp`}`}
+                                    style={{ cursor: "pointer", position: "relative" }}
+                                    onClick={(e) => {
+                                        // Only open if not clicking resizing handles (if you have them)
+                                        // or just open directly
+                                        openExcelFilterPopup("site", e);
+                                    }}
+                                >
+                                    Company/Site
+                                    {/* Show filter icon if filtered OR sorted by site */}
+                                    {(filters["site"] || sortConfig.colId === "site") && (
+                                        <FontAwesomeIcon icon={faFilter} style={{ marginLeft: "8px", color: "#002060" }} />
                                     )}
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                </th>
+                                <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-desg` : `attend-desg-exp`}`}>Position</th>
+                                <th className={`font-fam cent ${!showColumns.includes("num") ? `attend-pres` : `attend-pres-exp`}`}>Attendance</th>
+                                {showColumns.includes("num") && (<th className="font-fam cent attend-id">Company / ID Number</th>)}
+                                {!readOnly && (<th className={`font-fam cent ${!showColumns.includes("num") ? `attend-act` : `attend-act-exp`}`}>Action</th>)}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredRows.map((row, visualIndex) => {
+                                const index = row._originalIndex; // USE THIS for logic
+                                return (
+                                    <tr key={index}>
+                                        {/* Display Nr based on Visual Index (1, 2, 3...) */}
+                                        <td className="cent">{visualIndex + 1}</td>
+
+                                        <td>
+                                            <input
+                                                type="text"
+                                                className="table-control font-fam"
+                                                value={row.name || ""}
+                                                style={{ fontSize: "14px" }}
+                                                onChange={(e) => handleInputChange(index, "name", e)}
+                                                onFocus={() => handleFocus(index, "name")}
+                                                placeholder="Insert or select name"
+                                                ref={(el) => (inputRefs.current[`name-${index}`] = el)}
+                                                readOnly={readOnly}
+                                            />
+                                        </td>
+                                        <td>
+                                            <input
+                                                type="text"
+                                                className="table-control font-fam"
+                                                value={row.site || ""}
+                                                onFocus={() => handleFocus(index, "site")}
+                                                style={{ fontSize: "14px" }}
+                                                onChange={(e) => handleInputChange(index, "site", e)}
+                                                placeholder="Insert company/site"
+                                                ref={(el) => (inputRefs.current[`site-${index}`] = el)}
+                                                readOnly={readOnly}
+                                            />
+                                        </td>
+                                        <td>
+                                            <input
+                                                type="text"
+                                                className="table-control font-fam"
+                                                value={row.designation || ""}
+                                                onChange={(e) => handleInputChange(index, "designation", e)}
+                                                onFocus={() => handleFocus(index, "designation")}
+                                                placeholder="Insert or select designation"
+                                                readOnly={index === 0 || readOnly}
+                                                style={{ fontSize: "14px" }}
+                                                ref={(el) => (inputRefs.current[`designation-${index}`] = el)}
+                                            />
+                                        </td>
+                                        <td>
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-inp-attend"
+                                                checked={row.presence === "Present"}
+                                                onChange={(e) => {
+                                                    const updatedRow = {
+                                                        ...rows[index], // Use original index
+                                                        presence: e.target.checked ? "Present" : "Absent"
+                                                    };
+                                                    const newRows = [...rows];
+                                                    newRows[index] = updatedRow;
+                                                    updateRows(newRows);
+                                                }}
+                                                disabled={readOnly}
+                                            />
+                                        </td>
+                                        {showColumns.includes("num") && (<td className="font-fam cent">
+                                            <input
+                                                type="text"
+                                                className="table-control font-fam"
+                                                value={row.num || ""}
+                                                style={{ fontSize: "14px" }}
+                                                onChange={(e) => handleInputChange(index, "num", e)}
+                                                placeholder="Insert company / ID number"
+                                                readOnly={readOnly}
+                                            />
+                                        </td>)}
+                                        {!readOnly && (
+                                            <td className="procCent action-cell-auth-risk">
+                                                <button
+                                                    className="remove-row-button font-fam"
+                                                    onClick={() => {
+                                                        if (index !== 0) {
+                                                            removeRow(index); // Prevent removal of the first row
+                                                        } else {
+                                                            toast.dismiss();
+                                                            toast.clearWaitingQueue();
+                                                            toast.warn("The Facilitator cannot be removed.", {
+                                                                closeButton: false,
+                                                                autoClose: 2000,
+                                                                style: { textAlign: 'center' }
+                                                            });
+                                                        }
+                                                    }}
+                                                    title="Remove Row"
+                                                    type="button"
+                                                >
+                                                    <FontAwesomeIcon icon={faTrash} />
+                                                </button>
+                                                <button
+                                                    className="insert-row-button-sig font-fam"
+                                                    onClick={() => insertRowAt(index + 1)} // Use original index
+                                                    title="Add row"
+                                                    type="button"
+                                                    style={{ fontSize: "15px" }}
+                                                >
+                                                    <FontAwesomeIcon icon={faPlusCircle} />
+                                                </button>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                )}
             </div>
 
             {/* Floating Dropdown - Rendered outside the table structure */}

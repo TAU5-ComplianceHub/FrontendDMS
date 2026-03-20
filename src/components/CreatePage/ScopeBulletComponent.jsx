@@ -12,9 +12,9 @@ import {
     faChevronUp
 } from "@fortawesome/free-solid-svg-icons";
 
-const RiskAimComponent = ({
+const ScopeBulletComponent = ({
     readOnly,
-    aims = [{ type: "text", text: "" }],
+    scopes = [{ type: "text", text: "" }],
     errors = [],
     loadingIndex = null,
     rewriteHistory,
@@ -24,18 +24,19 @@ const RiskAimComponent = ({
     onHelp,
     onAiRewrite,
     onUndo,
-    onAddAim,
-    onRemoveAim,
-    onRemoveAimSection,
+    onAddScope,
+    onRemoveScope,
+    onRemoveScopeSection,
     onAddBullet,
     onRemoveBullet,
-    collapsible = false
+    collapsible = false,
+    type = "procedure"
 }) => {
     const [collapsed, setCollapsed] = useState(true);
     const isCollapsed = collapsible ? collapsed : false;
-    const lastType = aims?.length ? aims[aims.length - 1]?.type : "text";
+    const lastType = scopes?.length ? scopes[scopes.length - 1]?.type : "text";
     const nextType = lastType === "text" ? "bullet" : "text";
-    const sectionCount = aims.filter((item) => item?.type === "text").length;
+    const sectionCount = scopes.filter((item) => item?.type === "text").length;
     const bulletRefs = useRef({});
 
     const toggleCollapse = () => {
@@ -43,15 +44,15 @@ const RiskAimComponent = ({
         setCollapsed(newState);
     };
 
-    const handleBulletKeyDown = (e, aimIndex, bulletIndex) => {
+    const handleBulletKeyDown = (e, scopeIndex, bulletIndex) => {
         if (e.key === "Enter") {
             e.preventDefault();
 
-            onAddBullet(aimIndex, bulletIndex);
+            onAddBullet(scopeIndex, bulletIndex);
 
             // wait for React render
             setTimeout(() => {
-                const nextKey = `${aimIndex}-${bulletIndex + 1}`;
+                const nextKey = `${scopeIndex}-${bulletIndex + 1}`;
                 const nextTextarea = bulletRefs.current[nextKey];
                 if (nextTextarea) {
                     nextTextarea.focus();
@@ -77,7 +78,7 @@ const RiskAimComponent = ({
                 </button>
 
                 <h3 className="font-fam-labels">
-                    Aim <span className="required-field">*</span>
+                    Scope <span className="required-field">*</span>
                 </h3>
 
                 {collapsible && (<button
@@ -93,22 +94,22 @@ const RiskAimComponent = ({
                 {(!isCollapsed) && (
                     <>
                         {
-                            aims.map((aim, index) => {
-                                const isLast = index === aims.length - 1;
+                            scopes.map((scope, index) => {
+                                const isLast = index === scopes.length - 1;
                                 const hasError = !!errors[index];
-                                const isTextType = (aim?.type || "text") === "text";
-                                const isBulletType = aim?.type === "bullet";
-                                const bullets = Array.isArray(aim?.bullets) ? aim.bullets : [];
+                                const isTextType = (scope?.type || "text") === "text";
+                                const isBulletType = scope?.type === "bullet";
+                                const bullets = Array.isArray(scope?.bullets) ? scope.bullets : [];
 
                                 return (
                                     <React.Fragment key={index}>
                                         <div className={`aim-textarea-stack-item ${hasError ? "error-create" : ""}`}>
-                                            {isTextType && !readOnly && aims.length > 1 && isLast && (
+                                            {isTextType && !readOnly && scopes.length > 1 && isLast && (
                                                 <button
                                                     type="button"
                                                     className="top-right-button-aim-delete"
-                                                    title="Remove Aim"
-                                                    onClick={() => onRemoveAim(index)}
+                                                    title="Remove Scope"
+                                                    onClick={() => onRemoveScope(index)}
                                                 >
                                                     <FontAwesomeIcon icon={faTrash} />
                                                 </button>
@@ -116,12 +117,12 @@ const RiskAimComponent = ({
 
                                             {isTextType ? (
                                                 <>
-                                                    {!readOnly && aims[index + 1]?.type === "bullet" && sectionCount > 1 && (
+                                                    {!readOnly && scopes[index + 1]?.type === "bullet" && sectionCount > 1 && (
                                                         <button
                                                             type="button"
                                                             className="top-right-button-aim-delete top-right-button-aim-delete-section"
                                                             title="Remove Section"
-                                                            onClick={() => onRemoveAimSection(index)}
+                                                            onClick={() => onRemoveScopeSection(index)}
                                                         >
                                                             <FontAwesomeIcon icon={faTrash} />
                                                         </button>
@@ -133,9 +134,9 @@ const RiskAimComponent = ({
                                                         className="aim-textarea-risk-create-ibra font-fam aim-textarea-text"
                                                         onChange={(e) => onChange(index, e.target.value)}
                                                         onFocus={() => onFocus?.(index)}
-                                                        value={aim?.text || ""}
+                                                        value={scope?.text || ""}
                                                         rows={1}
-                                                        placeholder="Clearly state the goal of the risk assessment, focusing on what the assessment intends to achieve or address. Keep it specific, relevant, and outcome-driven."
+                                                        placeholder="Insert the scope of the document"
                                                         readOnly={readOnly}
                                                     />
 
@@ -163,8 +164,8 @@ const RiskAimComponent = ({
                                                                 onClick={() => onUndo(index)}
                                                                 style={{
                                                                     marginLeft: "8px",
-                                                                    opacity: rewriteHistory?.aim?.[index]?.length ? 1 : 0.3,
-                                                                    cursor: rewriteHistory?.aim?.[index]?.length ? "pointer" : "not-allowed",
+                                                                    opacity: rewriteHistory?.scope?.[index]?.length ? 1 : 0.3,
+                                                                    cursor: rewriteHistory?.scope?.[index]?.length ? "pointer" : "not-allowed",
                                                                     fontSize: "15px"
                                                                 }}
                                                             />
@@ -173,15 +174,15 @@ const RiskAimComponent = ({
                                                 </>
                                             ) : (
                                                 <div
-                                                    className={`aim-bullet-section-box ${!readOnly && aims.length > 1 && isLast ? "aim-bullet-section-box-with-delete" : ""
+                                                    className={`aim-bullet-section-box ${!readOnly && scopes.length > 1 && isLast ? "aim-bullet-section-box-with-delete" : ""
                                                         }`}
                                                 >
-                                                    {!readOnly && aims.length > 1 && isLast && (
+                                                    {!readOnly && scopes.length > 1 && isLast && (
                                                         <button
                                                             type="button"
                                                             className="top-right-button-aim-delete"
-                                                            title="Remove Aim"
-                                                            onClick={() => onRemoveAim(index)}
+                                                            title="Remove Scope"
+                                                            onClick={() => onRemoveScope(index)}
                                                         >
                                                             <FontAwesomeIcon icon={faTrash} />
                                                         </button>
@@ -209,7 +210,7 @@ const RiskAimComponent = ({
                                                                     value={bullet?.text || ""}
                                                                     rows={1}
                                                                     style={{ minHeight: "0px" }}
-                                                                    placeholder="Clearly state a key point related to the aim of the risk assessment."
+                                                                    placeholder={`Clearly state a key point related to the scope of the ${type}.`}
                                                                     readOnly={readOnly}
                                                                 />
 
@@ -250,7 +251,7 @@ const RiskAimComponent = ({
                                 <button
                                     type="button"
                                     className="add-aim-button"
-                                    onClick={onAddAim}
+                                    onClick={onAddScope}
                                 >
                                     {nextType === "bullet" ? "Add Bullets" : "Add Paragraph"}
                                 </button>
@@ -263,4 +264,4 @@ const RiskAimComponent = ({
     );
 };
 
-export default RiskAimComponent;
+export default ScopeBulletComponent;

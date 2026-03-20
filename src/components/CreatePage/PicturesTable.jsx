@@ -2,8 +2,20 @@ import React, { useState, useEffect } from "react";
 import "./PicturesTable.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrash, faTrashCan, faPlusCircle } from '@fortawesome/free-solid-svg-icons';
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const PicturesTable = ({ picturesRows, addPicRow, removePicRow, updatePicRow, readOnly = false }) => {
+const PicturesTable = ({ collapsible = false, picturesRows, addPicRow, removePicRow, updatePicRow, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
+
     const handleInputChange = (index, field, value) => {
         // 1) Compute a per‐cell figure number:
         const cellNumber = field === "pic1"
@@ -37,62 +49,77 @@ const PicturesTable = ({ picturesRows, addPicRow, removePicRow, updatePicRow, re
 
 
     return (
-        <div className="input-row">
-            <div className="pic-box">
+        <div className="input-row" style={{ position: "relative" }}>
+            <div className="pic-box" style={{ position: "relative" }}>
                 <h3 className="font-fam-labels">Figures and Graphs</h3>
-                {picturesRows.length > 0 && (
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                <th className="picColCen picOne">Picture Name</th>
-                                <th className="picColCen picTwo">Picture Name</th>
-                                {!readOnly && (<th className="picColCen picBut">Action</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {picturesRows.map((row, index) => (
-                                <tr key={index}>
-                                    <td>
-                                        <input
-                                            type="text"
-                                            className="table-control"
-                                            style={{ fontSize: "14px" }}
-                                            value={row.pic1}
-                                            readOnly={readOnly}
-                                            onChange={(e) => handleInputChange(index, "pic1", e.target.value)}
-                                        />
-                                    </td>
-                                    <td>
-                                        <input
-                                            type="text"
-                                            className="table-control"
-                                            style={{ fontSize: "14px" }}
-                                            value={row.pic2}
-                                            readOnly={readOnly}
-                                            onChange={(e) => handleInputChange(index, "pic2", e.target.value)}
-                                        />
-                                    </td>
-                                    {!readOnly && (<td className="ref-but-row procCent">
-                                        <button className="remove-row-button" onClick={() => removePicRow(index)}>
-                                            <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                                        </button>
-                                    </td>)}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
 
-                {(picturesRows.length === 0 && !readOnly) && (
-                    <button className="add-row-button-pic" onClick={addPicRow}>
-                        Add
-                    </button>
-                )}
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                {(picturesRows.length > 0 && !readOnly) && (
-                    <button className="add-row-button-pic-plus" onClick={addPicRow}>
-                        <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
-                    </button>
+                {(!isCollapsed) && (
+                    <>
+                        {picturesRows.length > 0 && (
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        <th className="picColCen picOne">Picture Name</th>
+                                        <th className="picColCen picTwo">Picture Name</th>
+                                        {!readOnly && (<th className="picColCen picBut">Action</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {picturesRows.map((row, index) => (
+                                        <tr key={index}>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="table-control"
+                                                    style={{ fontSize: "14px" }}
+                                                    value={row.pic1}
+                                                    readOnly={readOnly}
+                                                    onChange={(e) => handleInputChange(index, "pic1", e.target.value)}
+                                                />
+                                            </td>
+                                            <td>
+                                                <input
+                                                    type="text"
+                                                    className="table-control"
+                                                    style={{ fontSize: "14px" }}
+                                                    value={row.pic2}
+                                                    readOnly={readOnly}
+                                                    onChange={(e) => handleInputChange(index, "pic2", e.target.value)}
+                                                />
+                                            </td>
+                                            {!readOnly && (<td className="ref-but-row procCent">
+                                                <button className="remove-row-button" onClick={() => removePicRow(index)}>
+                                                    <FontAwesomeIcon icon={faTrash} title="Remove Row" />
+                                                </button>
+                                            </td>)}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+
+                        {(picturesRows.length === 0 && !readOnly) && (
+                            <button className="add-row-button-pic" onClick={addPicRow}>
+                                Add
+                            </button>
+                        )}
+
+                        {(picturesRows.length > 0 && !readOnly) && (
+                            <button className="add-row-button-pic-plus" onClick={addPicRow}>
+                                <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
         </div>

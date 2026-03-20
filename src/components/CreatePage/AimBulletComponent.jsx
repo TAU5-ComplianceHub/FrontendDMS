@@ -12,7 +12,7 @@ import {
     faChevronUp
 } from "@fortawesome/free-solid-svg-icons";
 
-const RiskAimComponent = ({
+const AimBulletComponent = ({
     readOnly,
     aims = [{ type: "text", text: "" }],
     errors = [],
@@ -29,7 +29,8 @@ const RiskAimComponent = ({
     onRemoveAimSection,
     onAddBullet,
     onRemoveBullet,
-    collapsible = false
+    collapsible = false,
+    type = "procedure"
 }) => {
     const [collapsed, setCollapsed] = useState(true);
     const isCollapsed = collapsible ? collapsed : false;
@@ -135,7 +136,7 @@ const RiskAimComponent = ({
                                                         onFocus={() => onFocus?.(index)}
                                                         value={aim?.text || ""}
                                                         rows={1}
-                                                        placeholder="Clearly state the goal of the risk assessment, focusing on what the assessment intends to achieve or address. Keep it specific, relevant, and outcome-driven."
+                                                        placeholder={`Clearly state the goal of the ${type}, focusing on what the ${type} intends to achieve or address. Keep it specific, relevant, and outcome-driven.`}
                                                         readOnly={readOnly}
                                                     />
 
@@ -209,7 +210,7 @@ const RiskAimComponent = ({
                                                                     value={bullet?.text || ""}
                                                                     rows={1}
                                                                     style={{ minHeight: "0px" }}
-                                                                    placeholder="Clearly state a key point related to the aim of the risk assessment."
+                                                                    placeholder={`Clearly state a key point related to the aim of the ${type}.`}
                                                                     readOnly={readOnly}
                                                                 />
 
@@ -263,4 +264,4 @@ const RiskAimComponent = ({
     );
 };
 
-export default RiskAimComponent;
+export default AimBulletComponent;

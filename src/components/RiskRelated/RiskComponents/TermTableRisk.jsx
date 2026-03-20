@@ -5,8 +5,14 @@ import { faSpinner, faTrash, faTrashCan, faX, faSearch, faHistory, faPlus, faPen
 import RiskTermPopup from "../RiskValueChanges/RiskTermPopup";
 import ManageRiskDefinitions from "../RiskValueChanges/ManageRiskDefinitions";
 import ModifySuggestedDefinitions from "../../ValueChanges/ModifySuggestedDefinitions";
+import {
+  faChevronDown,
+  faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const TermTableRisk = ({ risk, formData, setFormData, usedTermCodes, setUsedTermCodes, error, userID, setError, readOnly = false }) => {
+const TermTableRisk = ({ collapsible = false, risk, formData, setFormData, usedTermCodes, setUsedTermCodes, error, userID, setError, readOnly = false }) => {
+  const [collapsed, setCollapsed] = useState(true);
+  const isCollapsed = collapsible ? collapsed : false;
   const [termData, setTermData] = useState([]);
   const [originalData, setOriginalData] = useState([])
   const [popupVisible, setPopupVisible] = useState(false);
@@ -17,6 +23,11 @@ const TermTableRisk = ({ risk, formData, setFormData, usedTermCodes, setUsedTerm
   const [termUpdate, setTermUpdate] = useState("");
   const [defUpdate, setDefUpdate] = useState("");
   const [updatePopup, setUpdatePopup] = useState(false);
+
+  const toggleCollapse = () => {
+    const newState = !collapsed;
+    setCollapsed(newState);
+  };
 
   useEffect(() => {
     setSelectedTerms(new Set(usedTermCodes));
@@ -290,79 +301,92 @@ const TermTableRisk = ({ risk, formData, setFormData, usedTermCodes, setUsedTerm
           </div>
         )}
 
-        {selectedTerms.size > 0 && (
-          <table className="vcr-table table-borders">
-            <thead className="cp-table-header">
-              <tr>
-                <th className="col-term-term" style={{ textAlign: "center" }}>Term</th>
-                <th className="col-term-desc" style={{ textAlign: "center" }}>Definition</th>
-                {!readOnly && (<th className="col-term-act" style={{ textAlign: "center" }}>Action</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {formData.termRows.map((row, index) => (
-                <tr key={index}>
-                  <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.term}</td>
-                  <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.definition}</td>
-                  {!readOnly && (
-                    <td className="procCent " style={{ paddingBottom: "10px" }}>
-                      <div className="term-action-buttons">
-                        <button
-                          className="remove-row-button"
-                          style={{ paddingRight: "6px" }}
-                          onClick={() => {
-                            const cleanTerm = row.term.replace(/\s*\*$/, "");
-                            // Remove abbreviation from table and the selected abbreviations set
-                            setFormData({
-                              ...formData,
-                              termRows: formData.termRows.filter((_, i) => i !== index),
-                            });
-                            setUsedTermCodes(
-                              usedTermCodes.filter((term) => term !== cleanTerm)
-                            );
+        {collapsible && (<button
+          className="top-right-button-ibra"
+          title={collapsed ? "Expand Section" : "Collapse Section"}
+          onClick={toggleCollapse}
+          style={{ color: "gray" }}
+          type="button"
+        >
+          <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+        </button>)}
 
-                            // Update the selectedAbbrs state to reflect the removal
-                            const newSelectedTerms = new Set(selectedTerms);
-                            newSelectedTerms.delete(cleanTerm);
-                            setSelectedTerms(newSelectedTerms);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                        </button>
-                        <button
-                          className="edit-terms-row-button"
-                          style={{ paddingLeft: "6px" }}
-                          onClick={() => {
-                            if (originalData.some(item => item.term === row.term && item.definition === row.definition)) { openManagePopup(row.term) }
-                            else {
-                              openUpdate(row.term, row.definition)
+        {(!isCollapsed) && (
+          <>
+            {selectedTerms.size > 0 && (
+              <table className="vcr-table table-borders">
+                <thead className="cp-table-header">
+                  <tr>
+                    <th className="col-term-term" style={{ textAlign: "center" }}>Term</th>
+                    <th className="col-term-desc" style={{ textAlign: "center" }}>Definition</th>
+                    {!readOnly && (<th className="col-term-act" style={{ textAlign: "center" }}>Action</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.termRows.map((row, index) => (
+                    <tr key={index}>
+                      <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.term}</td>
+                      <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.definition}</td>
+                      {!readOnly && (
+                        <td className="procCent " style={{ paddingBottom: "10px" }}>
+                          <div className="term-action-buttons">
+                            <button
+                              className="remove-row-button"
+                              style={{ paddingRight: "6px" }}
+                              onClick={() => {
+                                const cleanTerm = row.term.replace(/\s*\*$/, "");
+                                // Remove abbreviation from table and the selected abbreviations set
+                                setFormData({
+                                  ...formData,
+                                  termRows: formData.termRows.filter((_, i) => i !== index),
+                                });
+                                setUsedTermCodes(
+                                  usedTermCodes.filter((term) => term !== cleanTerm)
+                                );
 
-                            }
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faEdit} title="Modify Term" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                                // Update the selectedAbbrs state to reflect the removal
+                                const newSelectedTerms = new Set(selectedTerms);
+                                newSelectedTerms.delete(cleanTerm);
+                                setSelectedTerms(newSelectedTerms);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrash} title="Remove Row" />
+                            </button>
+                            <button
+                              className="edit-terms-row-button"
+                              style={{ paddingLeft: "6px" }}
+                              onClick={() => {
+                                if (originalData.some(item => item.term === row.term && item.definition === row.definition)) { openManagePopup(row.term) }
+                                else {
+                                  openUpdate(row.term, row.definition)
+
+                                }
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faEdit} title="Modify Term" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {(selectedTerms.size === 0 && !readOnly) && (
+              <button className="add-row-button-terms" onClick={handlePopupToggle}>
+                Select
+              </button>
+            )}
+
+            {(selectedTerms.size > 0 && !readOnly) && (
+              <button className="add-row-button-terms-plus" onClick={handlePopupToggle}>
+                <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
+              </button>
+            )}
+          </>
         )}
-
-        {(selectedTerms.size === 0 && !readOnly) && (
-          <button className="add-row-button-terms" onClick={handlePopupToggle}>
-            Select
-          </button>
-        )}
-
-        {(selectedTerms.size > 0 && !readOnly) && (
-          <button className="add-row-button-terms-plus" onClick={handlePopupToggle}>
-            <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
-          </button>
-        )}
-
       </div>
 
       {updatePopup && (<ModifySuggestedDefinitions term={termUpdate} definition={defUpdate} closePopup={closeUpdate} onAdd={handleUpdateTerm} setTermData={setTermData} />)}

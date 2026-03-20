@@ -3,10 +3,21 @@ import "./SupportingDocumentTable.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faPlusCircle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 import { toast } from "react-toastify";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) => {
+const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const isCollapsed = collapsible ? collapsed : false;
     const fileInputRef = useRef(null);
     const [selectedFiles, setSelectedFiles] = useState([]);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const removeFileExtension = (fileName) => {
         return fileName.replace(/\.[^/.]+$/, "");
@@ -103,41 +114,55 @@ const SupportingDocumentTable = ({ formData, setFormData, readOnly = false }) =>
 
                 <h3 className="font-fam-labels">External Support Documents</h3>
 
-                {formData.supportingDocuments.length > 0 && (
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
-                                <th className="refColCen refRef" style={{ width: "90%" }}>Name</th>
-                                {!readOnly && (<th className="refColCen refBut" style={{ width: "5%" }}>Action</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {formData.supportingDocuments.map((row, index) => (
-                                <tr key={index}>
-                                    <td className="refCent" style={{ fontSize: "14px" }}>{row.nr}</td>
-                                    <td className="refCent" style={{ fontSize: "14px", textAlign: "left" }}>{removeFileExtension(row.name)}</td>
-                                    {!readOnly && (<td className="ref-but-row procCent">
-                                        <button className="remove-row-button" onClick={() => handleRemoveFile(index)}>
-                                            <FontAwesomeIcon icon={faTrash} title="Remove File" />
-                                        </button>
-                                    </td>)}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-
-                <input
-                    type="file"
-                    multiple
-                    style={{ display: 'none' }}
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                />
-                {!readOnly && (<button className="add-row-button-ref" onClick={() => fileInputRef.current.click()}>
-                    Select
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
                 </button>)}
+
+                {(!isCollapsed) && (
+                    <>
+                        {formData.supportingDocuments.length > 0 && (
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
+                                        <th className="refColCen refRef" style={{ width: "90%" }}>Name</th>
+                                        {!readOnly && (<th className="refColCen refBut" style={{ width: "5%" }}>Action</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.supportingDocuments.map((row, index) => (
+                                        <tr key={index}>
+                                            <td className="refCent" style={{ fontSize: "14px" }}>{row.nr}</td>
+                                            <td className="refCent" style={{ fontSize: "14px", textAlign: "left" }}>{removeFileExtension(row.name)}</td>
+                                            {!readOnly && (<td className="ref-but-row procCent">
+                                                <button className="remove-row-button" onClick={() => handleRemoveFile(index)}>
+                                                    <FontAwesomeIcon icon={faTrash} title="Remove File" />
+                                                </button>
+                                            </td>)}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+
+                        <input
+                            type="file"
+                            multiple
+                            style={{ display: 'none' }}
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                        />
+                        {!readOnly && (<button className="add-row-button-ref" onClick={() => fileInputRef.current.click()}>
+                            Select
+                        </button>)}
+                    </>
+                )}
             </div>
         </div>
     );

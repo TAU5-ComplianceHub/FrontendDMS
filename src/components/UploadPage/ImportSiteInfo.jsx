@@ -6,7 +6,7 @@ import { faSpinner, faTrash, faDownload } from '@fortawesome/free-solid-svg-icon
 import { toast, ToastContainer } from 'react-toastify';
 import axios from "axios";
 
-const ImportSiteInfo = ({ onClose }) => {
+const ImportSiteInfo = ({ onClose, onFileSelected }) => {
     const [file, setFile] = useState(null);
     const [additionalFiles, setAdditionalFiles] = useState([]); // State for multiple files
     const [message, setMessage] = useState("");
@@ -130,51 +130,7 @@ const ImportSiteInfo = ({ onClose }) => {
             return;
         }
 
-        const formData = new FormData();
-        formData.append("excel", file);
-
-        try {
-            setLoading(true);
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/siteInfo/upload-single-sheet-excel/`, {
-                method: "POST",
-                headers: {
-                    Authorization: `Bearer ${localStorage.getItem("token")}`,
-                },
-                body: formData,
-            });
-
-            const result = await response.json();
-            if (response.ok) {
-                toast.success("Values have been successfully imported", {
-                    closeButton: false,
-                    autoClose: 800,
-                    style: {
-                        textAlign: 'center'
-                    }
-                })
-
-                onClose(); // Close the popup after successful upload
-            } else {
-                toast.error(`Excel document formatting modified. Refer to template or contact administrator.`, {
-                    closeButton: false,
-                    autoClose: 800,
-                    style: {
-                        textAlign: 'center'
-                    }
-                })
-            }
-
-            setLoading(false);
-        } catch (error) {
-            setLoading(false);
-            toast.error("Excel document formatting modified. Refer to template or contact administrator.", {
-                closeButton: false,
-                autoClose: 800,
-                style: {
-                    textAlign: 'center'
-                }
-            })
-        }
+        onFileSelected(file);
     };
 
     return (

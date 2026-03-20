@@ -6,8 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { toast } from "react-toastify";
 import axios from "axios";
 import DatePicker from "react-multi-date-picker";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = false }) => {
+const IntroTaskInfo = ({ collapsible = false, formData, setFormData, error, setErrors, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
     const [groupedAreas, setGroupedAreas] = useState({});
     const [mainAreas, setMainAreas] = useState([]);
     const [riskSources, setRiskSources] = useState([]);
@@ -32,6 +38,11 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
     const [showFilesDropdown, setShowFilesDropdown] = useState(false);
     const filesInputRef = useRef(null);
     const [files, setFiles] = useState([]);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const removeFileExtension = (fileName) => {
         return fileName.replace(/\.[^/.]+$/, "");
@@ -538,422 +549,437 @@ const IntroTaskInfo = ({ formData, setFormData, error, setErrors, readOnly = fal
         <div className={`input-row`}>
             <div className={`input-box-ref ${error ? 'error-create' : ''}`}>
                 <h3 className="font-fam-labels">JRA Task Information  <span className="required-field">*</span></h3>
-                <table className="table-borders-jra-info">
-                    <tbody>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Task Description</th>
-                            <td>
-                                <textarea
-                                    className="jra-info-popup-page-textarea"
-                                    value={formData.introInfo.description}
-                                    placeholder="Insert a brief description of the task that is addressed in this JRA."
-                                    onChange={e =>
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            introInfo: {
-                                                ...prev.introInfo,
-                                                description: e.target.value
-                                            }
-                                        }))
-                                    }
-                                    onFocus={() => {
-                                        if (error) {
-                                            setErrors(prev => ({ ...prev, introInfo: false }));
-                                        }
-                                    }}
-                                    readOnly={readOnly}
-                                    style={{ resize: "none" }}
-                                />
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Task Start</th>
-                            <td>
-                                <textarea
-                                    className="jra-info-popup-page-textarea"
-                                    value={formData.introInfo.start}
-                                    placeholder="Insert how the task will be started."
-                                    onChange={e =>
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            introInfo: {
-                                                ...prev.introInfo,
-                                                start: e.target.value
-                                            }
-                                        }))
-                                    }
-                                    onFocus={() => {
-                                        if (error) {
-                                            setErrors(prev => ({ ...prev, introInfo: false }));
-                                        }
-                                    }}
-                                    readOnly={readOnly}
-                                    style={{ resize: "none" }}
-                                />
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Task End</th>
-                            <td>
-                                <textarea
-                                    className="jra-info-popup-page-textarea"
-                                    value={formData.introInfo.end}
-                                    placeholder="Insert how the task will be ended."
-                                    onChange={e =>
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            introInfo: {
-                                                ...prev.introInfo,
-                                                end: e.target.value
-                                            }
-                                        }))
-                                    }
-                                    onFocus={() => {
-                                        if (error) {
-                                            setErrors(prev => ({ ...prev, introInfo: false }));
-                                        }
-                                    }}
-                                    readOnly={readOnly}
-                                    style={{ resize: "none" }}
-                                />
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Main Operational Area Where Task is Conducted</th>
-                            <td>
-                                <div className="jra-intro-info-popup-page-select-container">
-                                    <textarea
-                                        type="text"
-                                        value={formData.introInfo.mainArea}
-                                        className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
-                                        ref={mainAreasInputRef}
-                                        placeholder="Select Main Area"
-                                        onChange={e => handleMainAreaInput(e.target.value)}
-                                        onFocus={handleMainAreasFocus}
-                                        readOnly={readOnly}
-                                        style={{ resize: "none" }}
-                                    />
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Sub Operational Area Where Task is Conducted</th>
-                            <td>
-                                <div className="jra-intro-info-popup-page-select-container">
-                                    <textarea
-                                        type="text"
-                                        value={formData.introInfo.subArea}
-                                        className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
-                                        ref={subAreasInputRef}
-                                        placeholder="Select Sub Area"
-                                        onChange={e => handleSubAreaInput(e.target.value)}
-                                        onFocus={handleSubAreasFocus}
-                                        readOnly={readOnly}
-                                        style={{ resize: "none" }}
-                                    />
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Functional Ownership</th>
-                            <td>
-                                <div className="jra-intro-info-popup-page-select-container">
-                                    <textarea
-                                        type="text"
-                                        value={formData.introInfo.owner}
-                                        className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
-                                        ref={ownerInputRef}
-                                        placeholder="Select Functional Owner"
-                                        onChange={e => handleOwnerInput(e.target.value)}
-                                        onFocus={handleOwnerFocus}
-                                        readOnly={readOnly}
-                                        style={{ resize: "none" }}
-                                    />
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th scope="row" className="jra-info-table-header">Person in Charge of Work</th>
-                            <td>
-                                <div className="jra-intro-info-popup-page-select-container">
-                                    <textarea
-                                        type="text"
-                                        value={formData.introInfo.inCharge}
-                                        className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
-                                        ref={leaderInputRef}
-                                        placeholder="Select Person in Charge"
-                                        onChange={e => handleLeaderInput(e.target.value)}
-                                        onFocus={handleLeaderFocus}
-                                        readOnly={readOnly}
-                                        style={{ resize: "none" }}
-                                    />
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div className="jra-info-scope-group" style={{ marginTop: "15px" }}>
-                    <div className="risk-scope-popup-page-additional-row ">
-                        <div className="risk-popup-page-column-half-scope">
-                            <div className="other-activities-group">
-                                <label style={{ marginRight: "78px" }} className="jra-info-risk-label">Are there any activities affected by this JRA task? <span className="required-field">*</span></label>
-                                <div className="yes-no-checkboxes-2">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.introInfo.otherAffected === 'yes'}
-                                            onChange={() => {
+
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
+
+                {(!isCollapsed) && (
+                    <>
+                        <table className="table-borders-jra-info">
+                            <tbody>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Task Description</th>
+                                    <td>
+                                        <textarea
+                                            className="jra-info-popup-page-textarea"
+                                            value={formData.introInfo.description}
+                                            placeholder="Insert a brief description of the task that is addressed in this JRA."
+                                            onChange={e =>
                                                 setFormData(prev => ({
                                                     ...prev,
                                                     introInfo: {
                                                         ...prev.introInfo,
-                                                        otherAffected:
-                                                            prev.introInfo.otherAffected === 'yes'
-                                                                ? ''
-                                                                : 'yes'
+                                                        description: e.target.value
                                                     }
-                                                }));
-
-                                                if (error) {
-                                                    setErrors(prev => ({ ...prev, introInfo: false }));
-                                                }
-                                            }}
-                                            disabled={readOnly}
-                                        />
-                                        Yes
-                                    </label>
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.introInfo.otherAffected === 'no'}
-                                            onChange={() => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    introInfo: {
-                                                        ...prev.introInfo,
-                                                        otherAffected:
-                                                            prev.introInfo.otherAffected === 'no'
-                                                                ? ''
-                                                                : 'no',
-                                                        howAffected: '' // Reset howAffected when switching to 'no'
-                                                    }
-                                                }));
-
-
-                                                if (error) {
-                                                    setErrors(prev => ({ ...prev, introInfo: false }));
-                                                }
-                                            }}
-                                            disabled={readOnly}
-                                        />
-                                        No
-                                    </label>
-                                </div>
-                            </div>
-
-                            {formData.introInfo.otherAffected === 'yes' && (
-                                <textarea
-                                    spellcheck="true"
-                                    name="scope"
-                                    className="jra-info-popup-page-textarea font-fam"
-                                    rows="5"   // Adjust the number of rows for initial height
-                                    placeholder="If yes, which activity is affected and how?" // Optional placeholder text
-                                    onChange={e =>
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            introInfo: {
-                                                ...prev.introInfo,
-                                                howAffected: e.target.value
+                                                }))
                                             }
-                                        }))
-                                    }
-                                    value={formData.introInfo.howAffected}
-                                    readOnly={formData.introInfo.otherAffected !== 'yes' || readOnly}
-                                    style={{ resize: "none" }}
-                                />
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="jra-info-scope-group" style={{ marginTop: "15px" }}>
-                    <div className="risk-scope-popup-page-additional-row ">
-                        <div className="risk-popup-page-column-half-scope">
-                            <div className="other-activities-group">
-                                <label className="jra-info-risk-label">Is there an existing procedure/ SOP available for this JRA? <span className="required-field">*</span></label>
-                                <div className="yes-no-checkboxes">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.introInfo.isProcedure === 'yes'}
-                                            onChange={() => {
-                                                setFormData(prev => ({
-                                                    ...prev,
-                                                    introInfo: {
-                                                        ...prev.introInfo,
-                                                        isProcedure:
-                                                            prev.introInfo.isProcedure === 'yes'
-                                                                ? ''
-                                                                : 'yes'
-                                                    }
-                                                }));
-
-
-
+                                            onFocus={() => {
                                                 if (error) {
                                                     setErrors(prev => ({ ...prev, introInfo: false }));
                                                 }
                                             }}
-                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            style={{ resize: "none" }}
                                         />
-                                        Yes
-                                    </label>
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.introInfo.isProcedure === 'no'}
-                                            onChange={() => {
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Task Start</th>
+                                    <td>
+                                        <textarea
+                                            className="jra-info-popup-page-textarea"
+                                            value={formData.introInfo.start}
+                                            placeholder="Insert how the task will be started."
+                                            onChange={e =>
                                                 setFormData(prev => ({
                                                     ...prev,
                                                     introInfo: {
                                                         ...prev.introInfo,
-                                                        isProcedure:
-                                                            prev.introInfo.isProcedure === 'no'
-                                                                ? ''
-                                                                : 'no',
+                                                        start: e.target.value
                                                     }
-                                                }));
-
-
-
+                                                }))
+                                            }
+                                            onFocus={() => {
                                                 if (error) {
                                                     setErrors(prev => ({ ...prev, introInfo: false }));
                                                 }
                                             }}
-                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            style={{ resize: "none" }}
                                         />
-                                        No
-                                    </label>
-                                </div>
-                            </div>
-                            {formData.introInfo.isProcedure === 'yes' && (
-                                <table>
-
-                                    <thead className="cp-table-header">
-                                        <tr>
-                                            <th style={{ textAlign: "center", width: "40%" }}>Name of Procedure</th>
-                                            <th style={{ textAlign: "center", width: "20%" }}>Reference Number</th>
-                                            <th style={{ textAlign: "center", width: "10%" }}>Version</th>
-                                            <th style={{ textAlign: "center", width: "10%" }}>Issue Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr key={formData.introInfo.procedures.id}>
-                                            <td>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Task End</th>
+                                    <td>
+                                        <textarea
+                                            className="jra-info-popup-page-textarea"
+                                            value={formData.introInfo.end}
+                                            placeholder="Insert how the task will be ended."
+                                            onChange={e =>
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    introInfo: {
+                                                        ...prev.introInfo,
+                                                        end: e.target.value
+                                                    }
+                                                }))
+                                            }
+                                            onFocus={() => {
+                                                if (error) {
+                                                    setErrors(prev => ({ ...prev, introInfo: false }));
+                                                }
+                                            }}
+                                            readOnly={readOnly}
+                                            style={{ resize: "none" }}
+                                        />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Main Operational Area Where Task is Conducted</th>
+                                    <td>
+                                        <div className="jra-intro-info-popup-page-select-container">
+                                            <textarea
+                                                type="text"
+                                                value={formData.introInfo.mainArea}
+                                                className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                ref={mainAreasInputRef}
+                                                placeholder="Select Main Area"
+                                                onChange={e => handleMainAreaInput(e.target.value)}
+                                                onFocus={handleMainAreasFocus}
+                                                readOnly={readOnly}
+                                                style={{ resize: "none" }}
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Sub Operational Area Where Task is Conducted</th>
+                                    <td>
+                                        <div className="jra-intro-info-popup-page-select-container">
+                                            <textarea
+                                                type="text"
+                                                value={formData.introInfo.subArea}
+                                                className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                ref={subAreasInputRef}
+                                                placeholder="Select Sub Area"
+                                                onChange={e => handleSubAreaInput(e.target.value)}
+                                                onFocus={handleSubAreasFocus}
+                                                readOnly={readOnly}
+                                                style={{ resize: "none" }}
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Functional Ownership</th>
+                                    <td>
+                                        <div className="jra-intro-info-popup-page-select-container">
+                                            <textarea
+                                                type="text"
+                                                value={formData.introInfo.owner}
+                                                className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                ref={ownerInputRef}
+                                                placeholder="Select Functional Owner"
+                                                onChange={e => handleOwnerInput(e.target.value)}
+                                                onFocus={handleOwnerFocus}
+                                                readOnly={readOnly}
+                                                style={{ resize: "none" }}
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th scope="row" className="jra-info-table-header">Person in Charge of Work</th>
+                                    <td>
+                                        <div className="jra-intro-info-popup-page-select-container">
+                                            <textarea
+                                                type="text"
+                                                value={formData.introInfo.inCharge}
+                                                className="jra-intro-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                ref={leaderInputRef}
+                                                placeholder="Select Person in Charge"
+                                                onChange={e => handleLeaderInput(e.target.value)}
+                                                onFocus={handleLeaderFocus}
+                                                readOnly={readOnly}
+                                                style={{ resize: "none" }}
+                                            />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div className="jra-info-scope-group" style={{ marginTop: "15px" }}>
+                            <div className="risk-scope-popup-page-additional-row ">
+                                <div className="risk-popup-page-column-half-scope">
+                                    <div className="other-activities-group">
+                                        <label style={{ marginRight: "78px" }} className="jra-info-risk-label">Are there any activities affected by this JRA task? <span className="required-field">*</span></label>
+                                        <div className="yes-no-checkboxes-2">
+                                            <label>
                                                 <input
-                                                    type="text"
-                                                    name="procedure"
-                                                    autoComplete="off"
-                                                    value={formData.introInfo.procedures.procedure}
-                                                    className="jra-info-popup-page-input-table jra-info-popup-page-row-input"
-                                                    placeholder="Insert the name of the procedure/ SOP that must accompany this JRA."
-                                                    ref={filesInputRef}
-                                                    onChange={e => handleProcedureInput(e.target.value)}
-                                                    onFocus={handleProcedureFocus}
-                                                    readOnly={readOnly}
-                                                />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="text"
-                                                    name="reference"
-                                                    autoComplete="off"
-                                                    value={formData.introInfo.procedures.ref}
-                                                    className="jra-info-popup-page-input-table jra-info-popup-page-row-input"
-                                                    placeholder="Insert Reference Number"
-                                                    onChange={e =>
+                                                    type="checkbox"
+                                                    checked={formData.introInfo.otherAffected === 'yes'}
+                                                    onChange={() => {
                                                         setFormData(prev => ({
                                                             ...prev,
                                                             introInfo: {
                                                                 ...prev.introInfo,
-                                                                procedures: {
-                                                                    ...prev.introInfo.procedures,
-                                                                    ref: e.target.value
-                                                                }
+                                                                otherAffected:
+                                                                    prev.introInfo.otherAffected === 'yes'
+                                                                        ? ''
+                                                                        : 'yes'
                                                             }
-                                                        }))
-                                                    }
-                                                    readOnly={readOnly}
-                                                />
-                                            </td>
-                                            <td>
-                                                <input
-                                                    type="text"
-                                                    name="version"
-                                                    autoComplete="off"
-                                                    value={formData.introInfo.procedures.version}
-                                                    className="jra-info-popup-page-input-table jra-info-popup-page-row-input"
-                                                    placeholder="Insert Version"
-                                                    onChange={e =>
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            introInfo: {
-                                                                ...prev.introInfo,
-                                                                procedures: {
-                                                                    ...prev.introInfo.procedures,
-                                                                    version: e.target.value
-                                                                }
-                                                            }
-                                                        }))
-                                                    }
-                                                    readOnly={readOnly}
-                                                />
-                                            </td>
-                                            <td style={{ position: "relative" }}>
-                                                <DatePicker
-                                                    value={formData.introInfo.procedures.issueDate || ""}
-                                                    format="YYYY-MM-DD"
-                                                    onChange={(val) =>
-                                                        setFormData(prev => ({
-                                                            ...prev,
-                                                            introInfo: {
-                                                                ...prev.introInfo,
-                                                                procedures: {
-                                                                    ...prev.introInfo.procedures,
-                                                                    issueDate: val?.format("YYYY-MM-DD")
-                                                                }
-                                                            }
-                                                        }))
-                                                    }
-                                                    rangeHover={false}
-                                                    highlightToday={false}
-                                                    editable={false}
-                                                    placeholder="YYYY-MM-DD"
-                                                    hideIcon={false}
-                                                    inputClass='jra-info-popup-page-input-table jra-info-popup-page-row-input'
-                                                    readOnly={readOnly}
-                                                    onFocus={() => {
-                                                        setErrors(prev => ({
-                                                            ...prev,
-                                                            dateConducted: false
-                                                        }))
+                                                        }));
+
+                                                        if (error) {
+                                                            setErrors(prev => ({ ...prev, introInfo: false }));
+                                                        }
                                                     }}
-                                                    onOpenPickNewDate={false}
+                                                    disabled={readOnly}
                                                 />
-                                                <FontAwesomeIcon
-                                                    icon={faCalendarDays}
-                                                    className="date-input-calendar-icon"
-                                                    style={{ right: "15px" }}
-                                                />
-                                            </td>
-                                        </tr>
-                                    </tbody>
+                                                Yes
+                                            </label>
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.introInfo.otherAffected === 'no'}
+                                                    onChange={() => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            introInfo: {
+                                                                ...prev.introInfo,
+                                                                otherAffected:
+                                                                    prev.introInfo.otherAffected === 'no'
+                                                                        ? ''
+                                                                        : 'no',
+                                                                howAffected: '' // Reset howAffected when switching to 'no'
+                                                            }
+                                                        }));
 
-                                </table>
-                            )}
+
+                                                        if (error) {
+                                                            setErrors(prev => ({ ...prev, introInfo: false }));
+                                                        }
+                                                    }}
+                                                    disabled={readOnly}
+                                                />
+                                                No
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {formData.introInfo.otherAffected === 'yes' && (
+                                        <textarea
+                                            spellcheck="true"
+                                            name="scope"
+                                            className="jra-info-popup-page-textarea font-fam"
+                                            rows="5"   // Adjust the number of rows for initial height
+                                            placeholder="If yes, which activity is affected and how?" // Optional placeholder text
+                                            onChange={e =>
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    introInfo: {
+                                                        ...prev.introInfo,
+                                                        howAffected: e.target.value
+                                                    }
+                                                }))
+                                            }
+                                            value={formData.introInfo.howAffected}
+                                            readOnly={formData.introInfo.otherAffected !== 'yes' || readOnly}
+                                            style={{ resize: "none" }}
+                                        />
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+
+                        <div className="jra-info-scope-group" style={{ marginTop: "15px" }}>
+                            <div className="risk-scope-popup-page-additional-row ">
+                                <div className="risk-popup-page-column-half-scope">
+                                    <div className="other-activities-group">
+                                        <label className="jra-info-risk-label">Is there an existing procedure/ SOP available for this JRA? <span className="required-field">*</span></label>
+                                        <div className="yes-no-checkboxes">
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.introInfo.isProcedure === 'yes'}
+                                                    onChange={() => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            introInfo: {
+                                                                ...prev.introInfo,
+                                                                isProcedure:
+                                                                    prev.introInfo.isProcedure === 'yes'
+                                                                        ? ''
+                                                                        : 'yes'
+                                                            }
+                                                        }));
+
+
+
+                                                        if (error) {
+                                                            setErrors(prev => ({ ...prev, introInfo: false }));
+                                                        }
+                                                    }}
+                                                    disabled={readOnly}
+                                                />
+                                                Yes
+                                            </label>
+                                            <label>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.introInfo.isProcedure === 'no'}
+                                                    onChange={() => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            introInfo: {
+                                                                ...prev.introInfo,
+                                                                isProcedure:
+                                                                    prev.introInfo.isProcedure === 'no'
+                                                                        ? ''
+                                                                        : 'no',
+                                                            }
+                                                        }));
+
+
+
+                                                        if (error) {
+                                                            setErrors(prev => ({ ...prev, introInfo: false }));
+                                                        }
+                                                    }}
+                                                    disabled={readOnly}
+                                                />
+                                                No
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {formData.introInfo.isProcedure === 'yes' && (
+                                        <table>
+
+                                            <thead className="cp-table-header">
+                                                <tr>
+                                                    <th style={{ textAlign: "center", width: "40%" }}>Name of Procedure</th>
+                                                    <th style={{ textAlign: "center", width: "20%" }}>Reference Number</th>
+                                                    <th style={{ textAlign: "center", width: "10%" }}>Version</th>
+                                                    <th style={{ textAlign: "center", width: "10%" }}>Issue Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr key={formData.introInfo.procedures.id}>
+                                                    <td>
+                                                        <input
+                                                            type="text"
+                                                            name="procedure"
+                                                            autoComplete="off"
+                                                            value={formData.introInfo.procedures.procedure}
+                                                            className="jra-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                            placeholder="Insert the name of the procedure/ SOP that must accompany this JRA."
+                                                            ref={filesInputRef}
+                                                            onChange={e => handleProcedureInput(e.target.value)}
+                                                            onFocus={handleProcedureFocus}
+                                                            readOnly={readOnly}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="text"
+                                                            name="reference"
+                                                            autoComplete="off"
+                                                            value={formData.introInfo.procedures.ref}
+                                                            className="jra-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                            placeholder="Insert Reference Number"
+                                                            onChange={e =>
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    introInfo: {
+                                                                        ...prev.introInfo,
+                                                                        procedures: {
+                                                                            ...prev.introInfo.procedures,
+                                                                            ref: e.target.value
+                                                                        }
+                                                                    }
+                                                                }))
+                                                            }
+                                                            readOnly={readOnly}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input
+                                                            type="text"
+                                                            name="version"
+                                                            autoComplete="off"
+                                                            value={formData.introInfo.procedures.version}
+                                                            className="jra-info-popup-page-input-table jra-info-popup-page-row-input"
+                                                            placeholder="Insert Version"
+                                                            onChange={e =>
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    introInfo: {
+                                                                        ...prev.introInfo,
+                                                                        procedures: {
+                                                                            ...prev.introInfo.procedures,
+                                                                            version: e.target.value
+                                                                        }
+                                                                    }
+                                                                }))
+                                                            }
+                                                            readOnly={readOnly}
+                                                        />
+                                                    </td>
+                                                    <td style={{ position: "relative" }}>
+                                                        <DatePicker
+                                                            value={formData.introInfo.procedures.issueDate || ""}
+                                                            format="YYYY-MM-DD"
+                                                            onChange={(val) =>
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    introInfo: {
+                                                                        ...prev.introInfo,
+                                                                        procedures: {
+                                                                            ...prev.introInfo.procedures,
+                                                                            issueDate: val?.format("YYYY-MM-DD")
+                                                                        }
+                                                                    }
+                                                                }))
+                                                            }
+                                                            rangeHover={false}
+                                                            highlightToday={false}
+                                                            editable={false}
+                                                            placeholder="YYYY-MM-DD"
+                                                            hideIcon={false}
+                                                            inputClass='jra-info-popup-page-input-table jra-info-popup-page-row-input'
+                                                            readOnly={readOnly}
+                                                            onFocus={() => {
+                                                                setErrors(prev => ({
+                                                                    ...prev,
+                                                                    dateConducted: false
+                                                                }))
+                                                            }}
+                                                            onOpenPickNewDate={false}
+                                                        />
+                                                        <FontAwesomeIcon
+                                                            icon={faCalendarDays}
+                                                            className="date-input-calendar-icon"
+                                                            style={{ right: "15px" }}
+                                                        />
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             {showMainAreasDropdown && filteredMainAreas.length > 0 && (

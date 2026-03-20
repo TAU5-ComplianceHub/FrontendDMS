@@ -6,8 +6,14 @@ import { v4 as uuidv4 } from "uuid";
 import ControlEAPopup from "./ControlEAPopup";
 import { saveAs } from "file-saver";
 import DeleteControlPopup from "./RiskComponents/DeleteControlPopup";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls, highlightedRows = [] }) => {
+const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls, highlightedRows = [] }) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const isCollapsed = collapsible ? collapsed : false;
     const [insertPopup, setInsertPopup] = useState();
     const [selectedRowData, setSelectedRowData] = useState();
     const ceaSavedWidthRef = useRef(null);
@@ -27,6 +33,11 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
     });
     const [showBlankFilterPopup, setShowBlankFilterPopup] = useState(false);
     const [blankFilterColumns, setBlankFilterColumns] = useState([]); // array of column ids
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const BLANK = "(Blanks)";
 
@@ -219,7 +230,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
             wrapper.removeEventListener('mouseup', mouseUpHandler);
             wrapper.removeEventListener('mousemove', mouseMoveHandler);
         };
-    }, []);
+    }, [isCollapsed]);
 
     useEffect(() => {
         const adjust = () => {
@@ -259,7 +270,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         // Adjust again after a short delay for sidebar transitions
         const timer = setTimeout(adjust, 350);
         return () => clearTimeout(timer);
-    }, [isSidebarVisible]);
+    }, [isSidebarVisible, isCollapsed]);
 
     const [showColumns, setShowColumns] = useState([
         "nr", "control", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", ...(readOnly ? [] : ["actions"])
@@ -968,17 +979,30 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
         setFilterMenu({ isOpen: false, anchorRect: null });
     };
 
-    const getFilterBtnClass = () => {
-        if (showFitButton && showResetButton) {
-            return "top-right-button-ibra5";
-        }
-
-        if (showFitButton || showResetButton) {
-            return "top-right-button-ibra4";
-        }
-
-        return "top-right-button-ibra3";
+    const getTopRightButtonClass = (slot) => {
+        return slot === 1
+            ? "top-right-button-ibra"
+            : `top-right-button-ibra${slot}`;
     };
+
+    let rightButtonSlot = 1;
+
+    const collapseBtnClass = collapsible
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const columnBtnClass = getTopRightButtonClass(rightButtonSlot++);
+    const downloadBtnClass = getTopRightButtonClass(rightButtonSlot++);
+
+    const fitBtnClass = showFitButton
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const resetBtnClass = showResetButton
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const filterBtnClass = getTopRightButtonClass(rightButtonSlot++);
 
     return (
         <div className="input-row-risk-create">
@@ -987,15 +1011,8 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                     Control Effectiveness Analysis (CEA)
                 </h3>
 
-                <div className="control-analysis-labels">
-                    <label className="control-analysis-label">Only the controls identified in the Risk Assessment are included in the table below.</label>
-                    <label className="control-analysis-label">The Facilitator and Risk Assessment Team may update control attributes where deemed necessary.</label>
-                    <label className="control-analysis-label">Open the popup  {<FontAwesomeIcon icon={faArrowUpRightFromSquare} />}  to edit or view more information regarding a control and its attributes.
-                    </label>
-                </div>
-
                 <button
-                    className="top-right-button-ar"
+                    className={columnBtnClass}
                     title="Show / Hide Columns"
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
                 >
@@ -1056,7 +1073,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                 )}
 
                 <button
-                    className="top-right-button-ar-2"
+                    className={downloadBtnClass}
                     title="Download CEA Table"
                 >
                     <FontAwesomeIcon icon={faDownload} className="icon-um-search" onClick={handleDownload} />
@@ -1064,7 +1081,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
                 {showFitButton && (
                     <button
-                        className="top-right-button-ibra3"
+                        className={fitBtnClass}
                         title="Fit To Width"
                         onClick={fitTableToWidth}
                     >
@@ -1074,7 +1091,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
 
                 {showResetButton && (
                     <button
-                        className={showFitButton ? "top-right-button-ibra4" : "top-right-button-ibra3"}
+                        className={resetBtnClass}
                         title="Reset to Default"
                         onClick={resetToDefaultColumnsAndFit}
                     >
@@ -1083,7 +1100,7 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                 )}
 
                 <button
-                    className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                    className={filterBtnClass}
                     title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
                     style={{
                         cursor: hasActiveFilters ? "pointer" : "default",
@@ -1102,248 +1119,193 @@ const ControlAnalysisTable = ({ rows, updateRows, ibra, addRow, removeRow, updat
                     />
                 </button>
 
-                {false && (<button
-                    className={showFitButton ? showResetButton ? "top-right-button-ibra5" : "top-right-button-ibra4" : showResetButton ? "top-right-button-ibra4" : "top-right-button-ibra3"}
-                    title="Filter blanks"
-                    onClick={() => setShowBlankFilterPopup(!showBlankFilterPopup)}
+                {collapsible && (<button
+                    className={collapseBtnClass}
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
                 >
-                    <FontAwesomeIcon icon={faFilter} className="icon-um-search" />
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
                 </button>)}
 
-                {showBlankFilterPopup && (
-                    <div className="column-selector-popup">
-                        <div className="column-selector-header">
-                            <h4>Filter Blanks</h4>
-                            <button
-                                className="close-popup-btn"
-                                onClick={() => setShowBlankFilterPopup(false)}
-                            >
-                                <FontAwesomeIcon icon={faTimes} />
-                            </button>
+                {(!isCollapsed) && (
+                    <>
+                        <div className="control-analysis-labels">
+                            <label className="control-analysis-label">Only the controls identified in the Risk Assessment are included in the table below.</label>
+                            <label className="control-analysis-label">The Facilitator and Risk Assessment Team may update control attributes where deemed necessary.</label>
+                            <label className="control-analysis-label">Open the popup  {<FontAwesomeIcon icon={faArrowUpRightFromSquare} />}  to edit or view more information regarding a control and its attributes.
+                            </label>
                         </div>
 
-                        <div className="column-selector-content">
-                            <p className="column-selector-note">
-                                Show rows where <b>any</b> selected column is blank.
-                            </p>
+                        <div className="table-wrapper-cea" ref={ceaTableWrapperRef}>
+                            <table className="table-borders-ibra-table" >
+                                <thead className="control-analysis-head">
+                                    <tr>
+                                        {displayColumns.map((columnId, idx) => {
+                                            const col = availableColumns.find(c => c.id === columnId);
+                                            if (col) {
+                                                const isFilterable = columnId !== "nr" && columnId !== "actions";
+                                                const width = columnWidths[columnId];
 
-                            <div className="select-all-container">
-                                <label className="select-all-checkbox">
-                                    <input
-                                        type="checkbox"
-                                        checked={areAllBlankFiltersSelected()}
-                                        onChange={(e) => setAllBlankFilterColumns(e.target.checked)}
-                                    />
-                                    <span className="select-all-text">Select All</span>
-                                </label>
-                            </div>
-
-                            <div className="column-checkbox-container">
-                                {availableColumns
-                                    .filter(c => c.id !== "nr" && c.id !== "actions")
-                                    .map(column => (
-                                        <div className="column-checkbox-item" key={column.id}>
-                                            <label>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={blankFilterColumns.includes(column.id)}
-                                                    onChange={() => toggleBlankFilterColumn(column.id)}
-                                                />
-                                                <span>{column.title}</span>
-                                            </label>
-                                        </div>
-                                    ))}
-                            </div>
-
-                            <div className="column-selector-footer">
-                                <p>{blankFilterColumns.length} columns selected</p>
-                                <div style={{ display: "flex", gap: "10px" }}>
-                                    <button
-                                        className="apply-columns-btn"
-                                        type="button"
-                                        onClick={() => setShowBlankFilterPopup(false)}
-                                    >
-                                        Apply
-                                    </button>
-                                    <button
-                                        className="apply-columns-btn"
-                                        type="button"
-                                        onClick={clearBlankFilters}
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="table-wrapper-cea" ref={ceaTableWrapperRef}>
-                    <table className="table-borders-ibra-table" >
-                        <thead className="control-analysis-head">
-                            <tr>
-                                {displayColumns.map((columnId, idx) => {
-                                    const col = availableColumns.find(c => c.id === columnId);
-                                    if (col) {
-                                        const isFilterable = columnId !== "nr" && columnId !== "actions";
-                                        const width = columnWidths[columnId];
-
-                                        return (
-                                            <th
-                                                key={idx}
-                                                className={`${col.className} ${isFilterable && (filters[columnId] || sortConfig.colId === columnId) ? '' : ''}`}
-                                                rowSpan={1}
-                                                onClick={
-                                                    isFilterable && !isResizingRef.current
-                                                        ? (e) => openExcelFilterPopup(columnId, e)
-                                                        : undefined
-                                                }
-                                                style={{
-                                                    cursor: isFilterable ? "pointer" : "default",
-                                                    width: width ? `${width}px` : undefined,
-                                                    position: "relative"
-                                                }}
-                                            >
-                                                <div
-                                                    style={{
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        gap: "10px"
-                                                    }}
-                                                >
-                                                    {col.icon ? <FontAwesomeIcon icon={col.icon} /> : col.title}
-                                                    {isFilterable && (filters[columnId] || sortConfig.colId === columnId) && (
-                                                        <FontAwesomeIcon
-                                                            icon={faFilter}
-                                                            className="active-filter-icon"
-                                                        />
-                                                    )}
-                                                </div>
-
-                                                {/* resize handle – skip for blanks */}
-                                                {columnId !== "nr" && columnId !== "actions" && (
-                                                    <div
-                                                        className="ibra-col-resizer"
-                                                        onMouseDown={(e) => startColumnResize(e, columnId)}
-                                                    />
-                                                )}
-                                            </th>
-                                        );
-                                    }
-                                    return (
-                                        <th key={idx} className="ibraCent ibraBlank" rowSpan={2} />
-                                    );
-                                })}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {rowsToDisplay.map((row, rowIndex) => (
-                                <tr
-                                    key={row.id}
-                                    className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${dragOverRowIndex === rowIndex ? 'drag-over' : ''}`}
-                                    draggable={armedDragRow === rowIndex}
-                                    onDragStart={armedDragRow === rowIndex ? (e) => handleDragStart(e, rowIndex) : undefined}
-                                    onDragOver={(e) => handleDragOver(e, rowIndex)}
-                                    onDragLeave={handleDragLeave}
-                                    onDrop={(e) => handleDrop(e, rowIndex)}
-                                    onDragEnd={armedDragRow === rowIndex ? handleDragEnd : undefined}
-                                    style={{
-                                        backgroundColor: highlightedRows.includes(row.id) ? '#fff9c4' : undefined // Apply yellow if ID is in list
-                                    }}
-                                >
-                                    {displayColumns.map((columnId, colIndex) => {
-                                        // Find the column meta
-                                        const colMeta = availableColumns.find(c => c.id === columnId);
-
-                                        // Blank filler columns
-                                        if (!colMeta) {
-                                            return <td key={colIndex} className="ibraCent ibraBlank" />;
-                                        }
-
-                                        // Pull the raw cell value
-                                        const value = row[columnId] ?? '';
-
-                                        // Special‐case the "nr" column (number + popup icon)
-                                        if (columnId === 'nr') {
-                                            return (
-                                                <td key={colIndex} className={colMeta.className} style={{ alignItems: 'center', gap: '0px' }}>
-                                                    <span style={{ fontSize: '14px', fontWeight: "normal" }}>{rowIndex + 1}</span>
-                                                    {!readOnly && (<FontAwesomeIcon
-                                                        icon={faArrowsUpDown}
-                                                        className="drag-handle"
-                                                        title="Drag to reorder"
-                                                        onMouseDown={() => setArmedDragRow(rowIndex)}
-                                                        onMouseUp={() => setArmedDragRow(null)}
-                                                        style={{ cursor: 'grab', marginRight: "2px", marginLeft: "4px" }}
-                                                    />)}
-                                                    <FontAwesomeIcon
-                                                        icon={faArrowUpRightFromSquare}
-                                                        style={{ fontSize: "14px", marginLeft: "2px", color: "black" }}
-                                                        className="ue-popup-icon"
-                                                        title="Evaluate Control"
-                                                        onClick={() => {
-                                                            setSelectedRowData(row);
-                                                            setInsertPopup(true);
+                                                return (
+                                                    <th
+                                                        key={idx}
+                                                        className={`${col.className} ${isFilterable && (filters[columnId] || sortConfig.colId === columnId) ? '' : ''}`}
+                                                        rowSpan={1}
+                                                        onClick={
+                                                            isFilterable && !isResizingRef.current
+                                                                ? (e) => openExcelFilterPopup(columnId, e)
+                                                                : undefined
+                                                        }
+                                                        style={{
+                                                            cursor: isFilterable ? "pointer" : "default",
+                                                            width: width ? `${width}px` : undefined,
+                                                            position: "relative"
                                                         }}
-                                                    />
-                                                </td>
-                                            );
-                                        }
-
-                                        // Special‐case the "action" column (remove button)
-                                        if (columnId === 'actions') {
-                                            return (
-                                                <td key={colIndex} className={`${colMeta.className} action-cell`} style={{
-                                                    width: columnWidths[columnId]
-                                                        ? `${columnWidths[columnId]}px`
-                                                        : undefined
-                                                }}>
-                                                    <button
-                                                        className="remove-row-button font-fam"
-                                                        title="Remove Row"
-                                                        type="button"
-                                                        onClick={() => openDeletePopup(row.id, row.control)}
                                                     >
-                                                        <FontAwesomeIcon icon={faTrash} />
-                                                    </button>
-                                                </td>
+                                                        <div
+                                                            style={{
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                                gap: "10px"
+                                                            }}
+                                                        >
+                                                            {col.icon ? <FontAwesomeIcon icon={col.icon} /> : col.title}
+                                                            {isFilterable && (filters[columnId] || sortConfig.colId === columnId) && (
+                                                                <FontAwesomeIcon
+                                                                    icon={faFilter}
+                                                                    className="active-filter-icon"
+                                                                />
+                                                            )}
+                                                        </div>
+
+                                                        {/* resize handle – skip for blanks */}
+                                                        {columnId !== "nr" && columnId !== "actions" && (
+                                                            <div
+                                                                className="ibra-col-resizer"
+                                                                onMouseDown={(e) => startColumnResize(e, columnId)}
+                                                            />
+                                                        )}
+                                                    </th>
+                                                );
+                                            }
+                                            return (
+                                                <th key={idx} className="ibraCent ibraBlank" rowSpan={2} />
                                             );
-                                        }
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rowsToDisplay.map((row, rowIndex) => (
+                                        <tr
+                                            key={row.id}
+                                            className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${dragOverRowIndex === rowIndex ? 'drag-over' : ''}`}
+                                            draggable={armedDragRow === rowIndex}
+                                            onDragStart={armedDragRow === rowIndex ? (e) => handleDragStart(e, rowIndex) : undefined}
+                                            onDragOver={(e) => handleDragOver(e, rowIndex)}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={(e) => handleDrop(e, rowIndex)}
+                                            onDragEnd={armedDragRow === rowIndex ? handleDragEnd : undefined}
+                                            style={{
+                                                backgroundColor: highlightedRows.includes(row.id) ? '#fff9c4' : undefined // Apply yellow if ID is in list
+                                            }}
+                                        >
+                                            {displayColumns.map((columnId, colIndex) => {
+                                                // Find the column meta
+                                                const colMeta = availableColumns.find(c => c.id === columnId);
 
-                                        // For all other columns, apply any styling you need
-                                        // e.g. 'critical' → highlight if "Yes", 'cer' → use getClass(...)
-                                        let cellClass = '';
-                                        if (columnId === 'critical' && value === 'Yes') {
-                                            cellClass = '';
-                                        } else if (columnId === 'cer') {
-                                            cellClass = getClass(value);
-                                        }
+                                                // Blank filler columns
+                                                if (!colMeta) {
+                                                    return <td key={colIndex} className="ibraCent ibraBlank" />;
+                                                }
 
-                                        // Center‐align certain columns
-                                        const centerColumns = ['critical', 'act', 'quality', 'cer', "activation", "hierarchy", "cons", "responsible", "dueDate"];
-                                        const textAlign = centerColumns.includes(columnId) ? 'center' : 'left';
+                                                // Pull the raw cell value
+                                                const value = row[columnId] ?? '';
 
-                                        return (
-                                            <td
-                                                key={colIndex}
-                                                className={cellClass}
-                                                style={{
-                                                    textAlign, fontSize: '14px',
-                                                    width: columnWidths[columnId]
-                                                        ? `${columnWidths[columnId]}px`
-                                                        : undefined
-                                                }}
-                                            >
-                                                {value}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                                // Special‐case the "nr" column (number + popup icon)
+                                                if (columnId === 'nr') {
+                                                    return (
+                                                        <td key={colIndex} className={colMeta.className} style={{ alignItems: 'center', gap: '0px' }}>
+                                                            <span style={{ fontSize: '14px', fontWeight: "normal" }}>{rowIndex + 1}</span>
+                                                            {!readOnly && (<FontAwesomeIcon
+                                                                icon={faArrowsUpDown}
+                                                                className="drag-handle"
+                                                                title="Drag to reorder"
+                                                                onMouseDown={() => setArmedDragRow(rowIndex)}
+                                                                onMouseUp={() => setArmedDragRow(null)}
+                                                                style={{ cursor: 'grab', marginRight: "2px", marginLeft: "4px" }}
+                                                            />)}
+                                                            <FontAwesomeIcon
+                                                                icon={faArrowUpRightFromSquare}
+                                                                style={{ fontSize: "14px", marginLeft: "2px", color: "black" }}
+                                                                className="ue-popup-icon"
+                                                                title="Evaluate Control"
+                                                                onClick={() => {
+                                                                    setSelectedRowData(row);
+                                                                    setInsertPopup(true);
+                                                                }}
+                                                            />
+                                                        </td>
+                                                    );
+                                                }
+
+                                                // Special‐case the "action" column (remove button)
+                                                if (columnId === 'actions') {
+                                                    return (
+                                                        <td key={colIndex} className={`${colMeta.className} action-cell`} style={{
+                                                            width: columnWidths[columnId]
+                                                                ? `${columnWidths[columnId]}px`
+                                                                : undefined
+                                                        }}>
+                                                            <button
+                                                                className="remove-row-button font-fam"
+                                                                title="Remove Row"
+                                                                type="button"
+                                                                onClick={() => openDeletePopup(row.id, row.control)}
+                                                            >
+                                                                <FontAwesomeIcon icon={faTrash} />
+                                                            </button>
+                                                        </td>
+                                                    );
+                                                }
+
+                                                // For all other columns, apply any styling you need
+                                                // e.g. 'critical' → highlight if "Yes", 'cer' → use getClass(...)
+                                                let cellClass = '';
+                                                if (columnId === 'critical' && value === 'Yes') {
+                                                    cellClass = '';
+                                                } else if (columnId === 'cer') {
+                                                    cellClass = getClass(value);
+                                                }
+
+                                                // Center‐align certain columns
+                                                const centerColumns = ['critical', 'act', 'quality', 'cer', "activation", "hierarchy", "cons", "responsible", "dueDate"];
+                                                const textAlign = centerColumns.includes(columnId) ? 'center' : 'left';
+
+                                                return (
+                                                    <td
+                                                        key={colIndex}
+                                                        className={cellClass}
+                                                        style={{
+                                                            textAlign, fontSize: '14px',
+                                                            width: columnWidths[columnId]
+                                                                ? `${columnWidths[columnId]}px`
+                                                                : undefined
+                                                        }}
+                                                    >
+                                                        {value}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )}
 
                 {excelFilter.open && (
                     <div

@@ -12,13 +12,20 @@ import CurrentControlsJRA from "./RiskInfo/CurrentControlsJRA";
 import JRAPopup from "./JRAPopup";
 import Go_Nogo from "./RiskInfo/Go_Nogo";
 
-const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, readOnly = false }) => {
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
+
+const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible, error, setErrors, readOnly = false }) => {
     const [rowData, setRowData] = useState([]);
     const [showJRAPopup, setShowJRAPopup] = useState(false);
     const ibraBoxRef = useRef(null);
     const tableWrapperRef = useRef(null);
     const [hoveredBody, setHoveredBody] = useState({ rowId: null, bodyIdx: null });
     const savedWidthRef = useRef(null);
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
 
     // Help Popups
     const [helpHazards, setHelpHazards] = useState(false);
@@ -102,6 +109,11 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         controls: { min: 250, max: 900 },
         go: { min: 100, max: 200 },
         action: { min: 50, max: 50 },
+    };
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
     };
 
     // --- Helper: Get Filter Values for a specific row/col ---
@@ -732,7 +744,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
             wrapper.removeEventListener('mouseup', mouseUpHandler);
             wrapper.removeEventListener('mousemove', mouseMoveHandler);
         };
-    }, []);
+    }, [isCollapsed]);
 
     useEffect(() => {
         const adjust = () => {
@@ -773,7 +785,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         // Adjust again after a short delay for sidebar transitions
         const timer = setTimeout(adjust, 350);
         return () => clearTimeout(timer);
-    }, [isSidebarVisible]);
+    }, [isSidebarVisible, isCollapsed]);
 
     const [showColumns, setShowColumns] = useState([
         "nr", "main", "hazards", "sub", "UE", "taskExecution", "controls", "go", ...(readOnly ? [] : ["action"]),
@@ -1092,24 +1104,41 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
         return "top-right-button-ibra3";
     };
 
-    const resetBtnClass = showFitButton && showResetButton
-        ? "top-right-button-ibra4"
-        : showFitButton
-            ? "top-right-button-ibra3"
-            : showResetButton
-                ? "top-right-button-ibra3"
-                : "top-right-button-ibra2";
-
     const toggleFlagFilter = () => {
         setShowFlagged(prev => !prev);
     };
+
+    const getTopRightButtonClass = (slot) => {
+        return slot === 1
+            ? "top-right-button-ibra"
+            : `top-right-button-ibra${slot}`;
+    };
+
+    let rightButtonSlot = 1;
+
+    const collapseBtnClass = collapsible
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const columnBtnClass = getTopRightButtonClass(rightButtonSlot++);
+
+    const fitBtnClass = showFitButton
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const resetBtnClass = showResetButton
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const flagBtnClass = getTopRightButtonClass(rightButtonSlot++);
+    const filterBtnClass = getTopRightButtonClass(rightButtonSlot++);
 
     return (
         <div className={`input-row-risk-ibra `}>
             <div className={`ibra-box ${error ? 'error-create' : ''}`} ref={ibraBoxRef}>
                 <h3 className="font-fam-labels">Job Risk Assessment (JRA)  <span className="required-field">*</span></h3>
                 <button
-                    className="top-right-button-ibra"
+                    className={columnBtnClass}
                     title="Show / Hide Columns"
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
                 >
@@ -1117,7 +1146,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 </button>
 
                 {showFitButton && (<button
-                    className="top-right-button-ibra2"
+                    className={fitBtnClass}
                     title="Fit to Width"
                     onClick={() => fitTableToWidth()}
                 >
@@ -1125,7 +1154,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 </button>)}
 
                 {showResetButton && (<button
-                    className={showFitButton ? "top-right-button-ibra3" : "top-right-button-ibra2"}
+                    className={resetBtnClass}
                     title="Reset To Default"
                     onClick={resetToDefaultColumnsAndWidths}
                 >
@@ -1133,7 +1162,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 </button>)}
 
                 <button
-                    className={`${resetBtnClass}`}
+                    className={flagBtnClass}
                     title={showFlagged ? "Show All Items" : "Show Flagged Items Only"}
                     onClick={toggleFlagFilter}
                 >
@@ -1141,7 +1170,7 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                 </button>
 
                 <button
-                    className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                    className={filterBtnClass}// Calculated class (e.g., ibra4, ibra5, ibra6)
                     title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
                     style={{
                         cursor: hasActiveFilters ? "pointer" : "default",
@@ -1213,370 +1242,381 @@ const JRATable = ({ formData, setFormData, isSidebarVisible, error, setErrors, r
                     </div>
                 )}
 
-                <div className="table-wrapper-jra" ref={tableWrapperRef}>
-                    <table className="table-borders-ibra-table">
-                        <thead className="ibra-table-header">
-                            <tr>
-                                {displayColumns.map((columnId, index) => {
-                                    const column = availableColumns.find(col => col.id === columnId);
-                                    if (!column) {
-                                        return <th key={index} className="ibraCent ibraBlank"></th>;
-                                    }
+                {collapsible && (<button
+                    className={collapseBtnClass}
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                                    const limits = columnSizeLimits[columnId] || {};
-                                    const width = columnWidths[columnId];
+                {(!isCollapsed) && (
+                    <div className="table-wrapper-jra" ref={tableWrapperRef}>
+                        <table className="table-borders-ibra-table">
+                            <thead className="ibra-table-header">
+                                <tr>
+                                    {displayColumns.map((columnId, index) => {
+                                        const column = availableColumns.find(col => col.id === columnId);
+                                        if (!column) {
+                                            return <th key={index} className="ibraCent ibraBlank"></th>;
+                                        }
 
-                                    return (
-                                        <th
-                                            key={index}
-                                            className={`${column.className} jra-header-cell ${filters[columnId] ? '' : ''}`}
-                                            style={{
-                                                position: 'relative',
-                                                width: width ? `${width}px` : undefined,
-                                                minWidth: limits.min ? `${limits.min}px` : undefined,
-                                                maxWidth: limits.max ? `${limits.max}px` : undefined,
-                                            }}
-                                            onClick={e => {
-                                                if (isResizingRef.current) return;
-                                                // Don't open if clicked icon or resize handle
-                                                if (e.target.closest('.header-icon') || e.target.closest('.ibra-col-resizer')) {
-                                                    return;
-                                                }
-                                                openExcelFilterPopup(columnId, e);
-                                            }}
-                                        >
-                                            {column.icon && (
-                                                <FontAwesomeIcon
-                                                    icon={column.icon}
-                                                    className="header-icon"
-                                                    onClick={e => {
-                                                        e.stopPropagation();
-                                                        openInfo(column.id);
-                                                    }}
-                                                />
-                                            )}
+                                        const limits = columnSizeLimits[columnId] || {};
+                                        const width = columnWidths[columnId];
 
-                                            <div>
-                                                {column.title.split('(')[0].trim()}
-                                                {(filters[columnId] || (sortConfig.colId === columnId && columnId !== "nr")) && (
-                                                    <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                                )}
-                                            </div>
-
-                                            {column.title.includes('(') && (
-                                                <div className="column-subtitle">
-                                                    ({column.title.split('(')[1].split(')')[0]})
-                                                </div>
-                                            )}
-
-                                            {!readOnly && (
-                                                <div
-                                                    className="ibra-col-resizer"
-                                                    onMouseDown={e => startColumnResize(e, columnId)}
-                                                />
-                                            )}
-                                        </th>
-                                    );
-                                })}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRows.map((row, rowIndex) => {
-                                const rowCount = row.jraBody.length;
-                                return (
-                                    <React.Fragment key={row.id}>
-                                        {row.jraBody.map((body, bodyIdx) => (
-                                            <tr
-                                                className={`jra-body-row ${row.nr % 2 === 0 ? 'weRow' : ''} ${dragOverRowId === row.id && bodyIdx === 0 ? "drag-over-top" : ""}`}
-                                                data-row-id={row.id}
-                                                key={`${row.id}-${body.idBody}`}
-                                                onMouseEnter={() => setHoveredBody({ rowId: row.id, bodyIdx })}
-                                                onMouseLeave={() => setHoveredBody({ rowId: null, bodyIdx: null })}
-                                                draggable={armedDragRow === row.id}
-                                                onDragStart={armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
-                                                onDragOver={e => handleDragOver(e, row.id)}
-                                                onDragLeave={handleDragLeave}
-                                                onDrop={e => handleDrop(e, row.id)}
-                                                onDragEnd={handleDragEnd}
+                                        return (
+                                            <th
+                                                key={index}
+                                                className={`${column.className} jra-header-cell ${filters[columnId] ? '' : ''}`}
+                                                style={{
+                                                    position: 'relative',
+                                                    width: width ? `${width}px` : undefined,
+                                                    minWidth: limits.min ? `${limits.min}px` : undefined,
+                                                    maxWidth: limits.max ? `${limits.max}px` : undefined,
+                                                }}
+                                                onClick={e => {
+                                                    if (isResizingRef.current) return;
+                                                    // Don't open if clicked icon or resize handle
+                                                    if (e.target.closest('.header-icon') || e.target.closest('.ibra-col-resizer')) {
+                                                        return;
+                                                    }
+                                                    openExcelFilterPopup(columnId, e);
+                                                }}
                                             >
-                                                {displayColumns.map((colId, colIdx) => {
-                                                    if ((colId === 'nr' || colId === 'main') && bodyIdx > 0) {
-                                                        return null;
-                                                    }
+                                                {column.icon && (
+                                                    <FontAwesomeIcon
+                                                        icon={column.icon}
+                                                        className="header-icon"
+                                                        onClick={e => {
+                                                            e.stopPropagation();
+                                                            openInfo(column.id);
+                                                        }}
+                                                    />
+                                                )}
 
-                                                    const meta = availableColumns.find(c => c.id === colId);
-                                                    const cls = meta?.className || "";
-                                                    const limits = columnSizeLimits[colId] || {};
-                                                    const width = columnWidths[colId];
-                                                    const commonCellStyle = {
-                                                        width: width ? `${width}px` : undefined,
-                                                        minWidth: limits.min ? `${limits.min}px` : undefined,
-                                                        maxWidth: limits.max ? `${limits.max}px` : undefined,
-                                                    };
+                                                <div>
+                                                    {column.title.split('(')[0].trim()}
+                                                    {(filters[columnId] || (sortConfig.colId === columnId && columnId !== "nr")) && (
+                                                        <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
+                                                    )}
+                                                </div>
 
-                                                    if (colId === "nr" && bodyIdx === 0) {
-                                                        return (
-                                                            <td key={colIdx} rowSpan={rowCount} className={cls} style={{ ...commonCellStyle, position: "relative" }}>
-                                                                {getRowFlagStatus(row) && (<span
-                                                                    className={
-                                                                        "ibra-main-flag-icon" +
-                                                                        (getRowFlagStatus(row) ? " active" : "")
-                                                                    }
-                                                                >
-                                                                    <FontAwesomeIcon icon={faFlag} />
-                                                                </span>)}
-                                                                <span>{row.nr}</span>
-                                                                {!readOnly && (<FontAwesomeIcon
-                                                                    icon={faArrowsUpDown}
-                                                                    className="drag-handle"
-                                                                    onMouseDown={() => setArmedDragRow(row.id)}
-                                                                    onMouseUp={() => setArmedDragRow(null)}
-                                                                    style={{ cursor: 'grab', marginRight: "2px", marginLeft: "4px" }}
-                                                                />)}
-                                                                <FontAwesomeIcon
-                                                                    icon={faArrowUpRightFromSquare}
-                                                                    style={{ fontSize: "14px", marginLeft: "2px", color: "black" }}
-                                                                    className="ue-popup-icon"
-                                                                    title="Evaluate Unwanted Event"
-                                                                    onClick={() => {
-                                                                        openJRAPopup(row.id);
-                                                                        if (error) {
-                                                                            setErrors(prev => ({ ...prev, jra: false }));
+                                                {column.title.includes('(') && (
+                                                    <div className="column-subtitle">
+                                                        ({column.title.split('(')[1].split(')')[0]})
+                                                    </div>
+                                                )}
+
+                                                {!readOnly && (
+                                                    <div
+                                                        className="ibra-col-resizer"
+                                                        onMouseDown={e => startColumnResize(e, columnId)}
+                                                    />
+                                                )}
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredRows.map((row, rowIndex) => {
+                                    const rowCount = row.jraBody.length;
+                                    return (
+                                        <React.Fragment key={row.id}>
+                                            {row.jraBody.map((body, bodyIdx) => (
+                                                <tr
+                                                    className={`jra-body-row ${row.nr % 2 === 0 ? 'weRow' : ''} ${dragOverRowId === row.id && bodyIdx === 0 ? "drag-over-top" : ""}`}
+                                                    data-row-id={row.id}
+                                                    key={`${row.id}-${body.idBody}`}
+                                                    onMouseEnter={() => setHoveredBody({ rowId: row.id, bodyIdx })}
+                                                    onMouseLeave={() => setHoveredBody({ rowId: null, bodyIdx: null })}
+                                                    draggable={armedDragRow === row.id}
+                                                    onDragStart={armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
+                                                    onDragOver={e => handleDragOver(e, row.id)}
+                                                    onDragLeave={handleDragLeave}
+                                                    onDrop={e => handleDrop(e, row.id)}
+                                                    onDragEnd={handleDragEnd}
+                                                >
+                                                    {displayColumns.map((colId, colIdx) => {
+                                                        if ((colId === 'nr' || colId === 'main') && bodyIdx > 0) {
+                                                            return null;
+                                                        }
+
+                                                        const meta = availableColumns.find(c => c.id === colId);
+                                                        const cls = meta?.className || "";
+                                                        const limits = columnSizeLimits[colId] || {};
+                                                        const width = columnWidths[colId];
+                                                        const commonCellStyle = {
+                                                            width: width ? `${width}px` : undefined,
+                                                            minWidth: limits.min ? `${limits.min}px` : undefined,
+                                                            maxWidth: limits.max ? `${limits.max}px` : undefined,
+                                                        };
+
+                                                        if (colId === "nr" && bodyIdx === 0) {
+                                                            return (
+                                                                <td key={colIdx} rowSpan={rowCount} className={cls} style={{ ...commonCellStyle, position: "relative" }}>
+                                                                    {getRowFlagStatus(row) && (<span
+                                                                        className={
+                                                                            "ibra-main-flag-icon" +
+                                                                            (getRowFlagStatus(row) ? " active" : "")
                                                                         }
-                                                                    }}
-                                                                />
-                                                            </td>
-                                                        );
-                                                    }
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faFlag} />
+                                                                    </span>)}
+                                                                    <span>{row.nr}</span>
+                                                                    {!readOnly && (<FontAwesomeIcon
+                                                                        icon={faArrowsUpDown}
+                                                                        className="drag-handle"
+                                                                        onMouseDown={() => setArmedDragRow(row.id)}
+                                                                        onMouseUp={() => setArmedDragRow(null)}
+                                                                        style={{ cursor: 'grab', marginRight: "2px", marginLeft: "4px" }}
+                                                                    />)}
+                                                                    <FontAwesomeIcon
+                                                                        icon={faArrowUpRightFromSquare}
+                                                                        style={{ fontSize: "14px", marginLeft: "2px", color: "black" }}
+                                                                        className="ue-popup-icon"
+                                                                        title="Evaluate Unwanted Event"
+                                                                        onClick={() => {
+                                                                            openJRAPopup(row.id);
+                                                                            if (error) {
+                                                                                setErrors(prev => ({ ...prev, jra: false }));
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </td>
+                                                            );
+                                                        }
 
-                                                    if (colId === "main") {
-                                                        return (
-                                                            <td
-                                                                key={colIdx}
-                                                                rowSpan={rowCount}
-                                                                className={`${[cls, 'main-cell'].join(' ')}  correct-wrap-ibra`}
-                                                                style={commonCellStyle}
-                                                            >
-                                                                <div className="main-cell-content">
-                                                                    <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{row.main}</div>
-                                                                </div>
-                                                                {!readOnly && (<>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="insert-mainrow-button"
-                                                                        title="Add Main Step Here"
+                                                        if (colId === "main") {
+                                                            return (
+                                                                <td
+                                                                    key={colIdx}
+                                                                    rowSpan={rowCount}
+                                                                    className={`${[cls, 'main-cell'].join(' ')}  correct-wrap-ibra`}
+                                                                    style={commonCellStyle}
+                                                                >
+                                                                    <div className="main-cell-content">
+                                                                        <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{row.main}</div>
+                                                                    </div>
+                                                                    {!readOnly && (<>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="insert-mainrow-button"
+                                                                            title="Add Main Step Here"
+                                                                            onClick={() => insertMainRow(row.id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faPlus} />
+                                                                        </button>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            className="delete-mainrow-button"
+                                                                            title="Delete Main Step"
+                                                                            onClick={() => removeRow(row.id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
+                                                                        </button>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            className="duplicate-mainrow-button"
+                                                                            title="Duplicate Main Step"
+                                                                            onClick={() => handleDuplicateRow(row.id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faCopy} />
+                                                                        </button>
+                                                                    </>)}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "action") {
+                                                            return (
+                                                                <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
+                                                                    <FontAwesomeIcon
+                                                                        icon={faPlusCircle}
+                                                                        style={{ marginBottom: "0px", fontSize: "15px" }}
+                                                                        className="insert-row-button-sig-risk font-fam"
+                                                                        title="Add sub & control here"
                                                                         onClick={() => insertMainRow(row.id)}
+                                                                    />
+
+                                                                    {bodyIdx !== 0 && (
+                                                                        <FontAwesomeIcon icon={faTrash} style={{ marginBottom: "0px", marginTop: "10px" }} className="control-icon-action font-fam"
+                                                                            title={
+                                                                                row.jraBody.length > 1
+                                                                                    ? "Delete Sub-step"
+                                                                                    : "Delete Row"
+                                                                            }
+                                                                            onClick={() =>
+                                                                                removeBodyRow(row.id, body.idBody)
+                                                                            } />
+                                                                    )}
+
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "hazards") {
+                                                            return (
+                                                                <td key={colIdx} className={`hazard-cell`} style={commonCellStyle}>
+                                                                    {body.hazards.map((hObj, hIdx) => {
+                                                                        return (
+                                                                            <div key={hIdx} className="static-cell hazard-static jra-normal-text">
+                                                                                {hObj.hazard}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                    {!readOnly && (<button
+                                                                        type="button"
+                                                                        className="insert-subrow-button"
+                                                                        onClick={() => insertBodyRow(row.id, bodyIdx + 1)}
+                                                                        title="Add sub-step here"
                                                                     >
                                                                         <FontAwesomeIcon icon={faPlus} />
-                                                                    </button>
+                                                                    </button>)}
+                                                                </td>
+                                                            );
+                                                        }
 
-                                                                    <button
-                                                                        type="button"
-                                                                        className="delete-mainrow-button"
-                                                                        title="Delete Main Step"
-                                                                        onClick={() => removeRow(row.id)}
-                                                                    >
-                                                                        <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
-                                                                    </button>
+                                                        if (colId === "UE") {
+                                                            return (
+                                                                <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
+                                                                    {body.UE.map((uObj, uIdx) => {
+                                                                        return (
+                                                                            <div key={uIdx} className="jra-normal-text">
+                                                                                {uObj.ue}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </td>
+                                                            );
+                                                        }
 
-                                                                    <button
-                                                                        type="button"
-                                                                        className="duplicate-mainrow-button"
-                                                                        title="Duplicate Main Step"
-                                                                        onClick={() => handleDuplicateRow(row.id)}
-                                                                    >
-                                                                        <FontAwesomeIcon icon={faCopy} />
-                                                                    </button>
-                                                                </>)}
-                                                            </td>
-                                                        );
-                                                    }
+                                                        if (colId === "sub") {
+                                                            return (
+                                                                <td key={colIdx} className={`${cls}  correct-wrap-ibra`} style={commonCellStyle}>
+                                                                    {body.sub.map((sObj, sIdx) => (
+                                                                        <div className="test-jra"
+                                                                            key={sObj.id}
+                                                                            ref={el => {
+                                                                                const key = `${rowIndex}-${bodyIdx}-${sIdx}`;
+                                                                                let arr = syncGroups.current[key] || [];
 
-                                                    if (colId === "action") {
-                                                        return (
-                                                            <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
-                                                                <FontAwesomeIcon
-                                                                    icon={faPlusCircle}
-                                                                    style={{ marginBottom: "0px", fontSize: "15px" }}
-                                                                    className="insert-row-button-sig-risk font-fam"
-                                                                    title="Add sub & control here"
-                                                                    onClick={() => insertMainRow(row.id)}
-                                                                />
+                                                                                if (el) {
+                                                                                    if (!arr.includes(el)) arr.push(el);
+                                                                                } else {
+                                                                                    arr = arr.filter(node => node.isConnected);
+                                                                                }
 
-                                                                {bodyIdx !== 0 && (
-                                                                    <FontAwesomeIcon icon={faTrash} style={{ marginBottom: "0px", marginTop: "10px" }} className="control-icon-action font-fam"
-                                                                        title={
-                                                                            row.jraBody.length > 1
-                                                                                ? "Delete Sub-step"
-                                                                                : "Delete Row"
-                                                                        }
-                                                                        onClick={() =>
-                                                                            removeBodyRow(row.id, body.idBody)
-                                                                        } />
-                                                                )}
-
-                                                            </td>
-                                                        );
-                                                    }
-
-                                                    if (colId === "hazards") {
-                                                        return (
-                                                            <td key={colIdx} className={`hazard-cell`} style={commonCellStyle}>
-                                                                {body.hazards.map((hObj, hIdx) => {
-                                                                    return (
-                                                                        <div key={hIdx} className="static-cell hazard-static jra-normal-text">
-                                                                            {hObj.hazard}
+                                                                                syncGroups.current[key] = arr;
+                                                                            }}
+                                                                        >
+                                                                            <div className="control-with-icons" key={colIdx}>
+                                                                                <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{sObj.task}</div>
+                                                                            </div>
                                                                         </div>
-                                                                    );
-                                                                })}
-                                                                {!readOnly && (<button
-                                                                    type="button"
-                                                                    className="insert-subrow-button"
-                                                                    onClick={() => insertBodyRow(row.id, bodyIdx + 1)}
-                                                                    title="Add sub-step here"
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPlus} />
-                                                                </button>)}
-                                                            </td>
-                                                        );
-                                                    }
+                                                                    ))}
 
-                                                    if (colId === "UE") {
-                                                        return (
-                                                            <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
-                                                                {body.UE.map((uObj, uIdx) => {
-                                                                    return (
-                                                                        <div key={uIdx} className="jra-normal-text">
-                                                                            {uObj.ue}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "taskExecution") {
+                                                            return (
+                                                                <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
+                                                                    {body.taskExecution.map((teObj, teIdx) => (
+                                                                        <div className="test-jra"
+                                                                            key={teObj.id}
+                                                                            ref={el => {
+                                                                                const key = `${rowIndex}-${bodyIdx}-${teIdx}`;
+                                                                                let arr = syncGroups.current[key] || [];
+
+                                                                                if (el) {
+                                                                                    if (!arr.includes(el)) arr.push(el);
+                                                                                } else {
+                                                                                    arr = arr.filter(node => node.isConnected);
+                                                                                }
+
+                                                                                syncGroups.current[key] = arr;
+                                                                            }}
+                                                                        >
+                                                                            <div className="select-wrapper" style={{ marginBottom: "5px" }}>
+                                                                                <label className={`select-label-proc`}>R:</label>
+
+                                                                                <div className="jra-te-label">{teObj.R}</div>
+                                                                            </div>
                                                                         </div>
-                                                                    );
-                                                                })}
-                                                            </td>
-                                                        );
-                                                    }
+                                                                    ))}
+                                                                </td>
+                                                            );
+                                                        }
 
-                                                    if (colId === "sub") {
-                                                        return (
-                                                            <td key={colIdx} className={`${cls}  correct-wrap-ibra`} style={commonCellStyle}>
-                                                                {body.sub.map((sObj, sIdx) => (
-                                                                    <div className="test-jra"
-                                                                        key={sObj.id}
-                                                                        ref={el => {
-                                                                            const key = `${rowIndex}-${bodyIdx}-${sIdx}`;
-                                                                            let arr = syncGroups.current[key] || [];
+                                                        if (colId === "controls") {
+                                                            return (
+                                                                <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
+                                                                    {body.controls.map((cObj, cIdx) => (
+                                                                        <div className="test-jra"
+                                                                            key={cObj.id}
+                                                                            ref={el => {
+                                                                                const key = `${rowIndex}-${bodyIdx}-${cIdx}`;
+                                                                                let arr = syncGroups.current[key] || [];
 
-                                                                            if (el) {
-                                                                                if (!arr.includes(el)) arr.push(el);
-                                                                            } else {
-                                                                                arr = arr.filter(node => node.isConnected);
-                                                                            }
+                                                                                if (el) {
+                                                                                    if (!arr.includes(el)) arr.push(el);
+                                                                                } else {
+                                                                                    arr = arr.filter(node => node.isConnected);
+                                                                                }
 
-                                                                            syncGroups.current[key] = arr;
-                                                                        }}
-                                                                    >
-                                                                        <div className="control-with-icons" key={colIdx}>
-                                                                            <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{sObj.task}</div>
+                                                                                syncGroups.current[key] = arr;
+                                                                            }}
+                                                                        >
+                                                                            <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{cObj.control}</div>
                                                                         </div>
-                                                                    </div>
-                                                                ))}
+                                                                    ))}
+                                                                </td>
+                                                            );
+                                                        }
 
-                                                            </td>
-                                                        );
-                                                    }
+                                                        if (colId === "go") {
+                                                            return (
+                                                                <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
+                                                                    {body.go_noGo.map((goObj, goIdx) => (
+                                                                        <div className="test-jra"
+                                                                            key={goObj.id}
+                                                                            ref={el => {
+                                                                                const key = `${rowIndex}-${bodyIdx}-${goIdx}`;
+                                                                                let arr = syncGroups.current[key] || [];
 
-                                                    if (colId === "taskExecution") {
-                                                        return (
-                                                            <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
-                                                                {body.taskExecution.map((teObj, teIdx) => (
-                                                                    <div className="test-jra"
-                                                                        key={teObj.id}
-                                                                        ref={el => {
-                                                                            const key = `${rowIndex}-${bodyIdx}-${teIdx}`;
-                                                                            let arr = syncGroups.current[key] || [];
+                                                                                if (el) {
+                                                                                    if (!arr.includes(el)) arr.push(el);
+                                                                                } else {
+                                                                                    arr = arr.filter(node => node.isConnected);
+                                                                                }
 
-                                                                            if (el) {
-                                                                                if (!arr.includes(el)) arr.push(el);
-                                                                            } else {
-                                                                                arr = arr.filter(node => node.isConnected);
-                                                                            }
+                                                                                syncGroups.current[key] = arr;
+                                                                            }}
+                                                                        >
 
-                                                                            syncGroups.current[key] = arr;
-                                                                        }}
-                                                                    >
-                                                                        <div className="select-wrapper" style={{ marginBottom: "5px" }}>
-                                                                            <label className={`select-label-proc`}>R:</label>
-
-                                                                            <div className="jra-te-label">{teObj.R}</div>
+                                                                            <div style={{ display: "block", textAlign: "center" }}>{goObj.go}</div>
                                                                         </div>
-                                                                    </div>
-                                                                ))}
-                                                            </td>
-                                                        );
-                                                    }
-
-                                                    if (colId === "controls") {
-                                                        return (
-                                                            <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
-                                                                {body.controls.map((cObj, cIdx) => (
-                                                                    <div className="test-jra"
-                                                                        key={cObj.id}
-                                                                        ref={el => {
-                                                                            const key = `${rowIndex}-${bodyIdx}-${cIdx}`;
-                                                                            let arr = syncGroups.current[key] || [];
-
-                                                                            if (el) {
-                                                                                if (!arr.includes(el)) arr.push(el);
-                                                                            } else {
-                                                                                arr = arr.filter(node => node.isConnected);
-                                                                            }
-
-                                                                            syncGroups.current[key] = arr;
-                                                                        }}
-                                                                    >
-                                                                        <div style={{ display: "block", textAlign: "left", whiteSpace: "pre-wrap" }}>{cObj.control}</div>
-                                                                    </div>
-                                                                ))}
-                                                            </td>
-                                                        );
-                                                    }
-
-                                                    if (colId === "go") {
-                                                        return (
-                                                            <td key={colIdx} className={`${cls}`} style={commonCellStyle}>
-                                                                {body.go_noGo.map((goObj, goIdx) => (
-                                                                    <div className="test-jra"
-                                                                        key={goObj.id}
-                                                                        ref={el => {
-                                                                            const key = `${rowIndex}-${bodyIdx}-${goIdx}`;
-                                                                            let arr = syncGroups.current[key] || [];
-
-                                                                            if (el) {
-                                                                                if (!arr.includes(el)) arr.push(el);
-                                                                            } else {
-                                                                                arr = arr.filter(node => node.isConnected);
-                                                                            }
-
-                                                                            syncGroups.current[key] = arr;
-                                                                        }}
-                                                                    >
-
-                                                                        <div style={{ display: "block", textAlign: "center" }}>{goObj.go}</div>
-                                                                    </div>
-                                                                ))}
-                                                            </td>
-                                                        );
-                                                    }
-                                                    return <td key={colIdx} />;
-                                                })}
-                                            </tr>
-                                        ))}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-
-                </div>
+                                                                    ))}
+                                                                </td>
+                                                            );
+                                                        }
+                                                        return <td key={colIdx} />;
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {/* Excel-style Filter Popup */}

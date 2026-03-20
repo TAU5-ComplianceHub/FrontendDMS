@@ -27,6 +27,9 @@ import DraftPopup from "./Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../utils/auth";
 import ApproversPopup from "./VisitorsInduction/InductionCreation/ApproversPopup";
 import ApproveApprovalProcessPopup from "./Popups/ApproveApprovalProcessPopup";
+import { v4 as uuidv4 } from "uuid";
+import AimBulletComponent from "./CreatePage/AimBulletComponent";
+import ScopeBulletComponent from "./CreatePage/ScopeBulletComponent";
 
 const ReviewPage = () => {
     const navigate = useNavigate();
@@ -62,6 +65,8 @@ const ReviewPage = () => {
     const [inApproval, setInApproval] = useState(false);
     const [inReview, setInReview] = useState(false);
     const [approveState, setApproveState] = useState(false);
+    const [loadingAimIndex, setLoadingAimIndex] = useState(null);
+    const [loadingScope, setLoadingScope] = useState(false);
 
     const openApproval = () => {
         setApproval(true);
@@ -82,6 +87,11 @@ const ReviewPage = () => {
     const closeDraftNote = () => {
         setDraftNote(false);
     }
+
+    const [rewriteHistory, setRewriteHistory] = useState({
+        aim: {},
+        scope: {}
+    });
 
     const openSaveAs = () => {
         if (!titleSet) {
@@ -136,8 +146,8 @@ const ReviewPage = () => {
     const [formData, setFormData] = useState({
         title: "",
         documentType: type,
-        aim: "The aim of the document is ",
-        scope: "",
+        aim: [{ type: "text", text: "The aim of the document is " }],
+        scope: [{ type: "text", text: "" }],
         date: new Date().toLocaleDateString(),
         version: "1",
         rows: [
@@ -419,7 +429,9 @@ const ReviewPage = () => {
                 ...rawForm,
                 supportingDocuments: Array.isArray(rawForm.supportingDocuments)
                     ? rawForm.supportingDocuments
-                    : []
+                    : [],
+                aim: normalizeProcedureAim(rawForm.aim),
+                scope: normalizeProcedureScope(rawForm.scope)
             };
             setFormData(normalizedForm);
             setFormData(prev => ({ ...prev }));
@@ -612,8 +624,12 @@ const ReviewPage = () => {
 
         if (!formData.title) newErrors.title = true;
         if (!formData.documentType) newErrors.documentType = true;
-        if (!formData.aim) newErrors.aim = true;
-        if (!formData.scope) newErrors.scope = true;
+        const validAim = sanitizeAimForValidation(formData.aim);
+        if (validAim.length === 0) {
+            newErrors.aim = true;
+        }
+        const validScope = sanitizeScopeForStorage(normalizeProcedureScope(formData.scope));
+        if (validScope.length === 0) newErrors.scope = true;
         if (!formData.reviewDate) newErrors.reviewDate = true;
         if (formData.abbrRows.length === 0) newErrors.abbrs = true;
         if (formData.termRows.length === 0) newErrors.terms = true;
@@ -857,6 +873,44 @@ const ReviewPage = () => {
         });
     };
 
+    const sanitizeAimForStorage = (items = []) => {
+        if (!Array.isArray(items)) return [];
+
+        return items
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text.trim() : ""
+                    };
+                }
+
+                const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+                    .map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter((b) => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map((b) => b.text).join("\n")
+                };
+            })
+            .filter((item) => item.text.trim() !== "");
+    };
+
+    const getSanitizedFormData = (sourceFormData) => ({
+        ...sourceFormData,
+        aim: sanitizeAimForStorage(normalizeProcedureAim(sourceFormData.aim)),
+        scope: sanitizeScopeForStorage(normalizeProcedureScope(sourceFormData.scope))
+    });
+
     // Send data to backend to generate a Word document
     const handleGeneratePDF = async () => {
         const documentName = (formData.title) + ' ' + formData.documentType;
@@ -901,7 +955,7 @@ const ReviewPage = () => {
                 usedEquipment,
                 usedMobileMachine,
                 usedMaterials,
-                formData: updatedFormData, // Use the updated formData here
+                formData: getSanitizedFormData(updatedFormData),
                 userID,
                 azureFN,
                 flowchartImages: flowchartImages
@@ -1090,7 +1144,7 @@ const ReviewPage = () => {
             }
         }
         const dataToStore = {
-            formData: generateData,
+            formData: getSanitizedFormData(generateData),
             flowchartImages: flowchartImages
         };
 
@@ -1116,6 +1170,624 @@ const ReviewPage = () => {
         } catch (error) {
             console.error("Error generating document:", error);
             setLoading(false);
+        }
+    };
+
+    const createAimBulletRow = () => ({
+        id: uuidv4(),
+        text: ""
+    });
+
+    const normalizeProcedureAim = (value) => {
+        if (Array.isArray(value) && value.length > 0) {
+            return value.map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        type: "text",
+                        text: item?.text || ""
+                    };
+                }
+
+                const bullets = Array.isArray(item?.bullets)
+                    ? item.bullets.map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: b?.text || ""
+                    }))
+                    : String(item?.text || "")
+                        .split(/\r?\n/)
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line) => ({
+                            id: uuidv4(),
+                            text: line
+                        }));
+
+                return {
+                    type: "bullet",
+                    bullets: bullets.length > 0 ? bullets : [createAimBulletRow()],
+                    text: bullets.map((b) => b.text).join("\n")
+                };
+            });
+        }
+
+        if (typeof value === "string" && value.trim() !== "") {
+            return [{ type: "text", text: value }];
+        }
+
+        return [{ type: "text", text: "" }];
+    };
+
+    const sanitizeAimForValidation = (items = []) => {
+        if (!Array.isArray(items)) return [];
+
+        return items
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text.trim() : ""
+                    };
+                }
+
+                const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+                    .map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter((b) => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map((b) => b.text).join("\n")
+                };
+            })
+            .filter((item) => item.text.trim() !== "");
+    };
+
+    const pushAimRewriteHistory = (index, oldValue) => {
+        setRewriteHistory((prev) => ({
+            ...prev,
+            aim: {
+                ...prev.aim,
+                [index]: [...(prev.aim[index] || []), oldValue]
+            }
+        }));
+    };
+
+    const undoAimRewrite = (index) => {
+        setRewriteHistory((prev) => {
+            const currentHistory = [...(prev.aim[index] || [])];
+            if (currentHistory.length === 0) return prev;
+
+            const lastValue = currentHistory.pop();
+
+            setFormData((fd) => ({
+                ...fd,
+                aim: fd.aim.map((item, i) =>
+                    i === index ? { ...item, text: lastValue } : item
+                )
+            }));
+
+            return {
+                ...prev,
+                aim: {
+                    ...prev.aim,
+                    [index]: currentHistory
+                }
+            };
+        });
+    };
+
+    const handleAimChange = (index, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) =>
+                i === index ? { ...item, text: value } : item
+            )
+        }));
+    };
+
+    const handleAimBulletChange = (itemIndex, bulletId, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).map((bullet) =>
+                    bullet.id === bulletId ? { ...bullet, text: value } : bullet
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const handleAddAim = () => {
+        setFormData((prev) => {
+            const currentAims =
+                Array.isArray(prev.aim) && prev.aim.length > 0
+                    ? prev.aim
+                    : [{ type: "text", text: "" }];
+
+            const lastType = currentAims[currentAims.length - 1]?.type || "text";
+            const nextType = lastType === "text" ? "bullet" : "text";
+
+            return {
+                ...prev,
+                aim: [
+                    ...currentAims,
+                    nextType === "bullet"
+                        ? { type: "bullet", bullets: [createAimBulletRow()], text: "" }
+                        : { type: "text", text: "" }
+                ]
+            };
+        });
+    };
+
+    const handleRemoveAim = (indexToRemove) => {
+        setFormData((prev) => {
+            const currentAims = Array.isArray(prev.aim) ? prev.aim : [];
+            const updatedAims = currentAims.filter((_, index) => index !== indexToRemove);
+
+            return {
+                ...prev,
+                aim: updatedAims.length > 0 ? updatedAims : [{ type: "text", text: "" }]
+            };
+        });
+    };
+
+    const handleRemoveAimSection = (textIndex) => {
+        setFormData((prev) => {
+            const currentAims = Array.isArray(prev.aim) ? prev.aim : [];
+
+            const textIndexes = currentAims
+                .map((item, index) => (item?.type === "text" ? index : null))
+                .filter((index) => index !== null);
+
+            if (textIndexes.length <= 1) {
+                return prev;
+            }
+
+            const updatedAims = currentAims.filter((_, index) => {
+                return index !== textIndex && index !== textIndex + 1;
+            });
+
+            return {
+                ...prev,
+                aim: updatedAims.length > 0 ? updatedAims : [{ type: "text", text: "" }]
+            };
+        });
+    };
+
+    const handleAddAimBullet = (itemIndex, insertAtIndex = null) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const currentBullets = Array.isArray(item.bullets) ? item.bullets : [];
+                const newBullet = createAimBulletRow();
+
+                if (
+                    insertAtIndex === null ||
+                    insertAtIndex < 0 ||
+                    insertAtIndex > currentBullets.length
+                ) {
+                    return {
+                        ...item,
+                        bullets: [...currentBullets, newBullet]
+                    };
+                }
+
+                return {
+                    ...item,
+                    bullets: [
+                        ...currentBullets.slice(0, insertAtIndex + 1),
+                        newBullet,
+                        ...currentBullets.slice(insertAtIndex + 1)
+                    ]
+                };
+            })
+        }));
+    };
+
+    const handleRemoveAimBullet = (itemIndex, bulletId) => {
+        setFormData((prev) => ({
+            ...prev,
+            aim: prev.aim.map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).filter(
+                    (bullet) => bullet.id !== bulletId
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const AiRewriteAim = async (index) => {
+        try {
+            const currentAim = formData.aim?.[index];
+            const prompt = currentAim?.text || "";
+
+            if (!prompt.trim()) {
+                toast.warn("Please enter some aim text before using AI rewrite.", {
+                    closeButton: true,
+                    autoClose: 1000,
+                    style: { textAlign: "center" }
+                });
+                return;
+            }
+
+            pushAimRewriteHistory(index, prompt);
+            setLoadingAimIndex(index);
+
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatAim/procedure`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify({ prompt }),
+            });
+
+            const data = await response.json();
+            const newText = data?.response || "";
+
+            setFormData((fd) => ({
+                ...fd,
+                aim: fd.aim.map((item, i) =>
+                    i === index ? { ...item, text: newText } : item
+                )
+            }));
+        } catch (error) {
+            console.error("Error rewriting aim:", error);
+            toast.error("AI rewrite failed.", {
+                closeButton: true,
+                autoClose: 1200,
+                style: { textAlign: "center" }
+            });
+        } finally {
+            setLoadingAimIndex(null);
+        }
+    };
+
+    const createScopeBulletRow = () => ({
+        id: uuidv4(),
+        text: ""
+    });
+
+    const normalizeProcedureScope = (value) => {
+        if (Array.isArray(value) && value.length > 0) {
+            return value.map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        type: "text",
+                        text: item?.text || ""
+                    };
+                }
+
+                const bullets = Array.isArray(item?.bullets)
+                    ? item.bullets.map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: b?.text || ""
+                    }))
+                    : String(item?.text || "")
+                        .split(/\r?\n/)
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((line) => ({
+                            id: uuidv4(),
+                            text: line
+                        }));
+
+                return {
+                    type: "bullet",
+                    bullets: bullets.length > 0 ? bullets : [createScopeBulletRow()],
+                    text: bullets.map((b) => b.text).join("\n")
+                };
+            });
+        }
+
+        if (typeof value === "string" && value.trim() !== "") {
+            return [{ type: "text", text: value }];
+        }
+
+        return [{ type: "text", text: "" }];
+    };
+
+    const sanitizeScopeForValidation = (items = []) => {
+        if (!Array.isArray(items)) return [];
+
+        return items
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text.trim() : ""
+                    };
+                }
+
+                const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+                    .map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter((b) => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map((b) => b.text).join("\n")
+                };
+            })
+            .filter((item) => item.text.trim() !== "");
+    };
+
+    const sanitizeScopeForStorage = (items = []) => {
+        if (!Array.isArray(items)) return [];
+
+        return items
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text.trim() : ""
+                    };
+                }
+
+                const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+                    .map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter((b) => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map((b) => b.text).join("\n")
+                };
+            })
+            .filter((item) => item.text.trim() !== "");
+    };
+
+    const pushScopeRewriteHistory = (index, oldValue) => {
+        setRewriteHistory((prev) => ({
+            ...prev,
+            scope: {
+                ...prev.scope,
+                [index]: [...(prev.scope[index] || []), oldValue]
+            }
+        }));
+    };
+
+    const undoScopeRewrite = (index) => {
+        setRewriteHistory((prev) => {
+            const currentHistory = [...(prev.scope[index] || [])];
+            if (currentHistory.length === 0) return prev;
+
+            const lastValue = currentHistory.pop();
+
+            setFormData((fd) => ({
+                ...fd,
+                scope: fd.scope.map((item, i) =>
+                    i === index ? { ...item, text: lastValue } : item
+                )
+            }));
+
+            return {
+                ...prev,
+                scope: {
+                    ...prev.scope,
+                    [index]: currentHistory
+                }
+            };
+        });
+    };
+
+    const handleScopeChange = (index, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            scope: prev.scope.map((item, i) =>
+                i === index ? { ...item, text: value } : item
+            )
+        }));
+    };
+
+    const handleScopeBulletChange = (itemIndex, bulletId, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            scope: prev.scope.map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).map((bullet) =>
+                    bullet.id === bulletId ? { ...bullet, text: value } : bullet
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const handleAddScope = () => {
+        setFormData((prev) => {
+            const currentScopes =
+                Array.isArray(prev.scope) && prev.scope.length > 0
+                    ? prev.scope
+                    : [{ type: "text", text: "" }];
+
+            const lastType = currentScopes[currentScopes.length - 1]?.type || "text";
+            const nextType = lastType === "text" ? "bullet" : "text";
+
+            return {
+                ...prev,
+                scope: [
+                    ...currentScopes,
+                    nextType === "bullet"
+                        ? { type: "bullet", bullets: [createScopeBulletRow()], text: "" }
+                        : { type: "text", text: "" }
+                ]
+            };
+        });
+    };
+
+    const handleRemoveScope = (indexToRemove) => {
+        setFormData((prev) => {
+            const currentScopes = Array.isArray(prev.scope) ? prev.scope : [];
+            const updatedScopes = currentScopes.filter((_, index) => index !== indexToRemove);
+
+            return {
+                ...prev,
+                scope: updatedScopes.length > 0 ? updatedScopes : [{ type: "text", text: "" }]
+            };
+        });
+    };
+
+    const handleRemoveScopeSection = (textIndex) => {
+        setFormData((prev) => {
+            const currentScopes = Array.isArray(prev.scope) ? prev.scope : [];
+
+            const textIndexes = currentScopes
+                .map((item, index) => (item?.type === "text" ? index : null))
+                .filter((index) => index !== null);
+
+            if (textIndexes.length <= 1) {
+                return prev;
+            }
+
+            const updatedScopes = currentScopes.filter((_, index) => {
+                return index !== textIndex && index !== textIndex + 1;
+            });
+
+            return {
+                ...prev,
+                scope: updatedScopes.length > 0 ? updatedScopes : [{ type: "text", text: "" }]
+            };
+        });
+    };
+
+    const handleAddScopeBullet = (itemIndex, insertAtIndex = null) => {
+        setFormData((prev) => ({
+            ...prev,
+            scope: prev.scope.map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const currentBullets = Array.isArray(item.bullets) ? item.bullets : [];
+                const newBullet = createScopeBulletRow();
+
+                if (
+                    insertAtIndex === null ||
+                    insertAtIndex < 0 ||
+                    insertAtIndex > currentBullets.length
+                ) {
+                    return {
+                        ...item,
+                        bullets: [...currentBullets, newBullet]
+                    };
+                }
+
+                return {
+                    ...item,
+                    bullets: [
+                        ...currentBullets.slice(0, insertAtIndex + 1),
+                        newBullet,
+                        ...currentBullets.slice(insertAtIndex + 1)
+                    ]
+                };
+            })
+        }));
+    };
+
+    const handleRemoveScopeBullet = (itemIndex, bulletId) => {
+        setFormData((prev) => ({
+            ...prev,
+            scope: prev.scope.map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).filter(
+                    (bullet) => bullet.id !== bulletId
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const AiRewriteScope = async (index) => {
+        try {
+            const currentScope = formData.scope?.[index];
+            const prompt = currentScope?.text || "";
+
+            if (!prompt.trim()) {
+                toast.warn("Please enter some scope text before using AI rewrite.", {
+                    closeButton: true,
+                    autoClose: 1000,
+                    style: { textAlign: "center" }
+                });
+                return;
+            }
+
+            pushScopeRewriteHistory(index, prompt);
+            setLoadingScope(index);
+
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatScope/procedure`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify({ prompt }),
+            });
+
+            const data = await response.json();
+            const newText = data?.response || "";
+
+            setFormData((fd) => ({
+                ...fd,
+                scope: fd.scope.map((item, i) =>
+                    i === index ? { ...item, text: newText } : item
+                )
+            }));
+        } catch (error) {
+            console.error("Error rewriting scope:", error);
+            toast.error("AI rewrite failed.", {
+                closeButton: true,
+                autoClose: 1200,
+                style: { textAlign: "center" }
+            });
+        } finally {
+            setLoadingScope(null);
         }
     };
 
@@ -1218,38 +1890,65 @@ const ReviewPage = () => {
 
                     <DocumentSignaturesTable readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
 
-                    <div className="input-row">
-                        <div className={`input-box-aim-cp ${errors.aim ? "error-create" : ""}`}>
-                            <h3 className="font-fam-labels">Aim <span className="required-field">*</span></h3>
-                            <textarea
-                                spellcheck="true"
-                                name="aim"
-                                className="aim-textarea font-fam"
-                                value={formData.aim}
-                                readOnly={readOnly}
-                                onChange={handleInputChange}
-                                rows="5"   // Adjust the number of rows for initial height
-                                placeholder="Insert the aim of the document here..." // Optional placeholder text
-                            />
-                        </div>
-                    </div>
+                    <AimBulletComponent
+                        readOnly={readOnly}
+                        aims={formData.aim}
+                        errors={errors.aim || []}
+                        loadingIndex={loadingAimIndex}
+                        rewriteHistory={rewriteHistory}
+                        onChange={handleAimChange}
+                        onBulletChange={handleAimBulletChange}
+                        onFocus={(index) =>
+                            setErrors((prev) => {
+                                const nextAimErrors = [...(prev.aim || [])];
+                                nextAimErrors[index] = false;
 
-                    <div className="input-row">
-                        <div className={`input-box-aim-cp ${errors.scope ? "error-create" : ""}`}>
-                            <h3 className="font-fam-labels">Scope <span className="required-field">*</span></h3>
-                            <textarea
-                                style={{ fontSize: "14px" }}
-                                spellcheck="true"
-                                name="scope"
-                                className="aim-textarea font-fam expanding-textarea"
-                                value={formData.scope}
-                                readOnly={readOnly}
-                                onChange={handleInputChange}
-                                rows="5"   // Adjust the number of rows for initial height
-                                placeholder="Insert the scope of the document" // Optional placeholder text
-                            />
-                        </div>
-                    </div>
+                                return {
+                                    ...prev,
+                                    aim: nextAimErrors
+                                };
+                            })
+                        }
+                        onHelp={() => { }}
+                        onAiRewrite={AiRewriteAim}
+                        onUndo={undoAimRewrite}
+                        onAddAim={handleAddAim}
+                        onRemoveAim={handleRemoveAim}
+                        onRemoveAimSection={handleRemoveAimSection}
+                        onAddBullet={handleAddAimBullet}
+                        onRemoveBullet={handleRemoveAimBullet}
+                        collapsible={false}
+                    />
+
+                    <ScopeBulletComponent
+                        readOnly={readOnly}
+                        scopes={formData.scope}
+                        errors={errors.scope || []}
+                        loadingIndex={loadingScope}
+                        rewriteHistory={rewriteHistory}
+                        onChange={handleScopeChange}
+                        onBulletChange={handleScopeBulletChange}
+                        onFocus={(index) =>
+                            setErrors((prev) => {
+                                const nextScopeErrors = [...(prev.scope || [])];
+                                nextScopeErrors[index] = false;
+
+                                return {
+                                    ...prev,
+                                    scope: nextScopeErrors
+                                };
+                            })
+                        }
+                        onHelp={() => { }}
+                        onAiRewrite={AiRewriteScope}
+                        onUndo={undoScopeRewrite}
+                        onAddScope={handleAddScope}
+                        onRemoveScope={handleRemoveScope}
+                        onRemoveScopeSection={handleRemoveScopeSection}
+                        onAddBullet={handleAddScopeBullet}
+                        onRemoveBullet={handleRemoveScopeBullet}
+                        collapsible={false}
+                    />
 
                     <PPETable readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
                     <HandToolTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />

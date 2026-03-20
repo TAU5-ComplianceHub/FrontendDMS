@@ -34,7 +34,10 @@ const FutureEnhancementPage = () => {
     };
 
     return (
-        <div className="future-enhancement-page-container">
+        <div
+            className="future-enhancement-page-container"
+            style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
+        >
             <section
                 ref={sectionRefs[0]}
                 className="future-enhancement-page-section future-enhancement-page-section-1"
@@ -49,66 +52,31 @@ const FutureEnhancementPage = () => {
             </section>
 
             <section
-                ref={sectionRefs[1]}
-                className="future-enhancement-page-section future-enhancement-page-section-2"
-            >
-                <h2 className="future-enhancement-page-section-2-header">What’s Next
-                </h2>
-                <p className="future-enhancement-page-section-2-line">_______</p>
-                <div className="future-enhancement-page-section-2-blocks">
-                    {/* Block 1 */}
-                    <div className="future-enhancement-page-section-2-block">
-                        <div className='fi-card'>
-                            <img
-                                src={`${process.env.PUBLIC_URL}/TM.png`}
-                                alt="Training Management System (TMS)"
-                                className="future-enhancement-page-section-2-block-image"
-                            />
-                        </div>
-                        <h3 className="future-enhancement-page-section-2-block-title">
-                            Training Management System (TMS)
-                        </h3>
-                        <p className="future-enhancement-page-section-2-block-description">
-                            The Training Management System will streamline training processes by
-                            linking training content directly to procedure content, standardizing
-                            onboarding, and automating training tracking.
-                        </p>
-                    </div>
-
-                    {/* vertical divider */}
-                    <div className="future-enhancement-page-section-2-divider" />
-
-                    {/* Block 2 */}
-                    <div className="future-enhancement-page-section-2-block">
-                        <div className='fi-card'>
-                            <img
-                                src={`${process.env.PUBLIC_URL}/CM.png`}
-                                alt="Compliance Management System (CMS)"
-                                className="future-enhancement-page-section-2-block-image-2"
-                            />
-                        </div>
-                        <h3 className="future-enhancement-page-section-2-block-title">
-                            Compliance Management System (CMS)
-                        </h3>
-                        <p className="future-enhancement-page-section-2-block-description">
-                            The Compliance Management System will enhance audit efficiency and
-                            regulatory adherence. It will allow users to extract and organize
-                            compliance data quickly, track historical records, and generate
-                            audit-ready reports.
-                        </p>
-                    </div>
-                </div>
-            </section>
-
-            <section
                 ref={sectionRefs[2]}
                 className="future-enhancement-page-section future-enhancement-page-section-3"
+                style={{ flex: 1 }}
             >
                 <h2 className="future-enhancement-page-section-3-header">Coming Soon
                 </h2>
                 <p className="future-enhancement-page-section-3-line">_______</p>
                 <div className="future-enhancement-page-section-3-blocks">
                     {/* Block 1 */}
+                    <div className="future-enhancement-page-section-2-block">
+                        <div className='fi-card'>
+                            <img
+                                src={`${process.env.PUBLIC_URL}/CM.png`}
+                                alt="Training Management System (TMS)"
+                                className="future-enhancement-page-section-2-block-image-2"
+                            />
+                        </div>
+                        <h3 className="future-enhancement-page-section-3-block-title">
+                            Compliance Tracking System (CTS)
+                        </h3>
+                    </div>
+
+                    {/* vertical divider */}
+                    <div className="future-enhancement-page-section-3-divider" />
+
                     <div className="future-enhancement-page-section-3-block">
                         <div className='fi-card'>
                             <img

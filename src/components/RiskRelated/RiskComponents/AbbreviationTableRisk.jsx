@@ -5,8 +5,14 @@ import { faSpinner, faTrash, faTrashCan, faX, faSearch, faHistory, faPlus, faPen
 import RiskAbbreviationPopup from "../RiskValueChanges/RiskAbbreviationPopup";
 import ManageRiskAbbreviations from "../RiskValueChanges/ManageRiskAbbreviations";
 import ModifySuggestedAbbreviations from "../../ValueChanges/ModifySuggestedAbbreviations";
+import {
+  faChevronDown,
+  faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const AbbreviationTableRisk = ({ risk, formData, setFormData, usedAbbrCodes, setUsedAbbrCodes, error, userID, setError, readOnly = false }) => {
+const AbbreviationTableRisk = ({ collapsible = false, risk, formData, setFormData, usedAbbrCodes, setUsedAbbrCodes, error, userID, setError, readOnly = false }) => {
+  const [collapsed, setCollapsed] = useState(true);
+  const isCollapsed = collapsible ? collapsed : false;
   const [abbrData, setAbbrData] = useState([]);
   const [originalData, setOriginalData] = useState([])
   // State to control the popup and selected abbreviations
@@ -18,6 +24,11 @@ const AbbreviationTableRisk = ({ risk, formData, setFormData, usedAbbrCodes, set
   const [abbrUpdate, setAbbrUpdate] = useState("");
   const [meanUpdate, setMeanUpdate] = useState("");
   const [updatePopup, setUpdatePopup] = useState(false);
+
+  const toggleCollapse = () => {
+    const newState = !collapsed;
+    setCollapsed(newState);
+  };
 
   useEffect(() => {
     setSelectedAbbrs(new Set(usedAbbrCodes));
@@ -287,78 +298,91 @@ const AbbreviationTableRisk = ({ risk, formData, setFormData, usedAbbrCodes, set
           </div>
         )}
 
-        {/* Display selected abbreviations in a table */}
-        {selectedAbbrs.size > 0 && (
-          <table className="font-fam table-borders">
-            <thead className="cp-table-header">
-              <tr>
-                <th className="col-abbr-abbr" style={{ textAlign: "center" }}>Abbreviations</th>
-                <th className="col-abbr-desc" style={{ textAlign: "center" }}>Description</th>
-                {!readOnly && (<th className="col-abbr-act" style={{ textAlign: "center" }}>Action</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {formData.abbrRows.map((row, index) => (
-                <tr style={{ paddingTop: "1px", paddingBottom: "1px", height: "13px" }} key={index}>
-                  <td style={{ fontSize: "14px", paddingTop: "1px", paddingBottom: "1px", height: "13px" }} className="abbr-slim">{row.abbr}</td>
-                  <td style={{ fontSize: "14px", paddingTop: "1px", paddingBottom: "1px", height: "13px", whiteSpace: "pre-wrap" }} className="abbr-slim">{row.meaning}</td>
-                  {!readOnly && (
-                    <td className="procCent"
-                      style={{ paddingTop: "1px", paddingBottom: "1px", height: "13px" }}>
-                      <div className="term-action-buttons">
-                        <button
-                          className="remove-row-button"
-                          style={{ paddingRight: "6px" }}
-                          onClick={() => {
-                            // Remove abbreviation from table and the selected abbreviations set
-                            setFormData({
-                              ...formData,
-                              abbrRows: formData.abbrRows.filter((_, i) => i !== index),
-                            });
-                            setUsedAbbrCodes(
-                              usedAbbrCodes.filter((abbr) => abbr !== row.abbr)
-                            );
+        {collapsible && (<button
+          className="top-right-button-ibra"
+          title={collapsed ? "Expand Section" : "Collapse Section"}
+          onClick={toggleCollapse}
+          style={{ color: "gray" }}
+          type="button"
+        >
+          <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+        </button>)}
 
-                            // Update the selectedAbbrs state to reflect the removal
-                            const newSelectedAbbrs = new Set(selectedAbbrs);
-                            newSelectedAbbrs.delete(row.abbr);
-                            setSelectedAbbrs(newSelectedAbbrs);
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                        </button>
-                        <button
-                          className="edit-terms-row-button"
-                          style={{ paddingLeft: "6px" }}
-                          onClick={() => {
-                            if (originalData.some(item => item.abbr === row.abbr && item.meaning === row.meaning)) { openManagePopup(row.abbr) }
-                            else {
-                              openUpdate(row.abbr, row.meaning)
+        {(!isCollapsed) && (
+          <>
+            {selectedAbbrs.size > 0 && (
+              <table className="font-fam table-borders">
+                <thead className="cp-table-header">
+                  <tr>
+                    <th className="col-abbr-abbr" style={{ textAlign: "center" }}>Abbreviations</th>
+                    <th className="col-abbr-desc" style={{ textAlign: "center" }}>Description</th>
+                    {!readOnly && (<th className="col-abbr-act" style={{ textAlign: "center" }}>Action</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.abbrRows.map((row, index) => (
+                    <tr style={{ paddingTop: "1px", paddingBottom: "1px", height: "13px" }} key={index}>
+                      <td style={{ fontSize: "14px", paddingTop: "1px", paddingBottom: "1px", height: "13px" }} className="abbr-slim">{row.abbr}</td>
+                      <td style={{ fontSize: "14px", paddingTop: "1px", paddingBottom: "1px", height: "13px", whiteSpace: "pre-wrap" }} className="abbr-slim">{row.meaning}</td>
+                      {!readOnly && (
+                        <td className="procCent"
+                          style={{ paddingTop: "1px", paddingBottom: "1px", height: "13px" }}>
+                          <div className="term-action-buttons">
+                            <button
+                              className="remove-row-button"
+                              style={{ paddingRight: "6px" }}
+                              onClick={() => {
+                                // Remove abbreviation from table and the selected abbreviations set
+                                setFormData({
+                                  ...formData,
+                                  abbrRows: formData.abbrRows.filter((_, i) => i !== index),
+                                });
+                                setUsedAbbrCodes(
+                                  usedAbbrCodes.filter((abbr) => abbr !== row.abbr)
+                                );
 
-                            }
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faEdit} title="Modify Abbreviation" />
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+                                // Update the selectedAbbrs state to reflect the removal
+                                const newSelectedAbbrs = new Set(selectedAbbrs);
+                                newSelectedAbbrs.delete(row.abbr);
+                                setSelectedAbbrs(newSelectedAbbrs);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrash} title="Remove Row" />
+                            </button>
+                            <button
+                              className="edit-terms-row-button"
+                              style={{ paddingLeft: "6px" }}
+                              onClick={() => {
+                                if (originalData.some(item => item.abbr === row.abbr && item.meaning === row.meaning)) { openManagePopup(row.abbr) }
+                                else {
+                                  openUpdate(row.abbr, row.meaning)
 
-        {(selectedAbbrs.size === 0 && !readOnly) && (
-          <button className="add-row-button-abbrs" onClick={handlePopupToggle}>
-            Select
-          </button>
-        )}
+                                }
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faEdit} title="Modify Abbreviation" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
 
-        {(selectedAbbrs.size > 0 && !readOnly) && (
-          <button className="add-row-button-abbrs-plus" onClick={handlePopupToggle} title="Add Row">
-            <FontAwesomeIcon icon={faPlusCircle} />
-          </button>
+            {(selectedAbbrs.size === 0 && !readOnly) && (
+              <button className="add-row-button-abbrs" onClick={handlePopupToggle}>
+                Select
+              </button>
+            )}
+
+            {(selectedAbbrs.size > 0 && !readOnly) && (
+              <button className="add-row-button-abbrs-plus" onClick={handlePopupToggle} title="Add Row">
+                <FontAwesomeIcon icon={faPlusCircle} />
+              </button>
+            )}
+          </>
         )}
       </div>
 

@@ -1671,19 +1671,19 @@ const RiskManagementPageJRA = () => {
                     </div>
 
                     <DocumentSignaturesRiskTable readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} />
-                    <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
-                    <TermTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
-                    <IntroTaskInfo readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.introInfo} setErrors={setErrors} />
-                    <PPETableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
-                    <HandToolsTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
-                    <MaterialsTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
-                    <EquipmentTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
-                    <MobileMachineTableRisk readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
-                    <AttendanceTable title={formData.title} documentType={formData.documentType} readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
-                    <JRATable readOnly={readOnly} formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} error={errors.jra} setErrors={setErrors} />
-                    <OtherTeam formData={formData} />
-                    <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={false} />
+                    <AbbreviationTableRisk collapsible={false} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
+                    <TermTableRisk collapsible={false} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
+                    <IntroTaskInfo collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.introInfo} setErrors={setErrors} />
+                    <PPETableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
+                    <HandToolsTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
+                    <MaterialsTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
+                    <EquipmentTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
+                    <MobileMachineTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
+                    <AttendanceTable collapsible={false} title={formData.title} documentType={formData.documentType} readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
+                    <JRATable collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} error={errors.jra} setErrors={setErrors} />
+                    <OtherTeam collapsible={false} formData={formData} />
+                    <SupportingDocumentTable collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable collapsible={false} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={false} />
 
                     <div className="input-row-buttons-risk-create">
                         {/* Generate File Button */}

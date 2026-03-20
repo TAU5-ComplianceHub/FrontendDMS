@@ -9,8 +9,14 @@ import { v4 as uuidv4 } from 'uuid';
 import axios from "axios";
 import DatePicker from "react-multi-date-picker";
 import FilterRemovePopup from "../Popups/FilterRemovePopup";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false, relevantControls = [] }) => {
+const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false, relevantControls = [] }) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const isCollapsed = collapsible ? collapsed : false;
     const ibraBoxRef = useRef(null);
     const tableWrapperRef = useRef(null);
     const [ibraPopup, setIbraPopup] = useState(false);
@@ -32,6 +38,11 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
     const [wrapperWidth, setWrapperWidth] = useState(0);
     const [hasFittedOnce, setHasFittedOnce] = useState(false);
     const [showFlagged, setShowFlagged] = useState(false);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const excludedColumns = ["UE", "S", "H", "E", "C", "LR", "M", "R", "actions", "responsible", "dueDate"];
 
@@ -707,7 +718,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
             wrapper.removeEventListener('mouseup', mouseUpHandler);
             wrapper.removeEventListener('mousemove', mouseMoveHandler);
         };
-    }, []);
+    }, [isCollapsed]);
 
     useEffect(() => {
         const adjust = () => {
@@ -749,7 +760,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         // Adjust again after a short delay for sidebar transitions
         const timer = setTimeout(adjust, 350);
         return () => clearTimeout(timer);
-    }, [isSidebarVisible]);
+    }, [isSidebarVisible, isCollapsed]);
 
     const [showColumns, setShowColumns] = useState([
         "nr", "main", "hazards", "source", "UE", "controls", "riskRank", ...(readOnly ? [] : ["action"]),
@@ -1230,14 +1241,6 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         updateRow(newRows);
     };
 
-    const resetBtnClass = showFitButton && showResetButton
-        ? "top-right-button-ibra5"
-        : showFitButton
-            ? "top-right-button-ibra4"
-            : showResetButton
-                ? "top-right-button-ibra4"
-                : "top-right-button-ibra3";
-
     const toggleFlagFilter = () => {
         setShowFlagged(prev => !prev);
     };
@@ -1340,17 +1343,31 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
         setFilterMenu({ isOpen: false, anchorRect: null });
     };
 
-    const getFilterBtnClass = () => {
-        if (showFitButton && showResetButton) {
-            return "top-right-button-ibra6";
-        }
-
-        if (showFitButton || showResetButton) {
-            return "top-right-button-ibra5";
-        }
-
-        return "top-right-button-ibra4";
+    const getTopRightButtonClass = (slot) => {
+        return slot === 1
+            ? "top-right-button-ibra"
+            : `top-right-button-ibra${slot}`;
     };
+
+    let rightButtonSlot = 1;
+
+    const collapseBtnClass = collapsible
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const columnBtnClass = getTopRightButtonClass(rightButtonSlot++);
+    const downloadBtnClass = getTopRightButtonClass(rightButtonSlot++);
+
+    const fitBtnClass = showFitButton
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const resetBtnClass = showResetButton
+        ? getTopRightButtonClass(rightButtonSlot++)
+        : null;
+
+    const flagBtnClass = getTopRightButtonClass(rightButtonSlot++);
+    const filterBtnClass = getTopRightButtonClass(rightButtonSlot++);
 
     const getAvailableOptions = (colId) => {
         let filtered = rows;
@@ -1378,7 +1395,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
             <div className={`ibra-box ${error ? "error-create" : ""}`} ref={ibraBoxRef}>
                 <h3 className="font-fam-labels">Issue Based Risk Assessment (IBRA) <span className="required-field">*</span></h3>
                 <button
-                    className="top-right-button-ibra"
+                    className={columnBtnClass}
                     title="Show / Hide Columns"
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
                 >
@@ -1386,7 +1403,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 </button>
 
                 <button
-                    className="top-right-button-ibra2"
+                    className={downloadBtnClass}
                     title="Download IBRA"
                     onClick={generate}
                 >
@@ -1394,7 +1411,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 </button>
 
                 {showFitButton && (<button
-                    className="top-right-button-ibra3"
+                    className={fitBtnClass}
                     title="Fit To Width"
                     onClick={fitTableToWidth}
                 >
@@ -1402,7 +1419,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 </button>)}
 
                 {showResetButton && (<button
-                    className={showFitButton ? "top-right-button-ibra4" : "top-right-button-ibra3"}
+                    className={resetBtnClass}
                     title="Reset to Default"
                     onClick={resetToDefaultColumnsAndFit}
                 >
@@ -1410,7 +1427,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 </button>)}
 
                 <button
-                    className={`${resetBtnClass}`}
+                    className={flagBtnClass}
                     title={showFlagged ? "Show All Items" : "Show Flagged Items Only"}
                     onClick={toggleFlagFilter}
                 >
@@ -1418,7 +1435,7 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                 </button>
 
                 <button
-                    className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
+                    className={filterBtnClass}
                     title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}
                     style={{
                         cursor: hasActiveFilters ? "pointer" : "default",
@@ -1501,649 +1518,663 @@ const IBRATable = ({ rows, updateRows, addRow, removeRow, generate, updateRow, i
                     </div>
                 )}
 
-                <div className="table-wrapper-ibra" ref={tableWrapperRef}>
-                    <table className="table-borders-ibra-table"
-                        style={{
-                            width: tableWidth ? `${tableWidth}px` : '100%', // first paint fallback
-                            tableLayout: 'fixed',
-                        }}
-                    >
-                        <thead className="ibra-table-header">
-                            <tr>
-                                {displayColumns.map((columnId, idx) => {
-                                    // — “Risk Treatment” group header — 
-                                    if (columnId === 'actions') {
-                                        return (
-                                            <th key={idx} className="ibraCent ibraRM" colSpan={3}>
-                                                Risk Treatment
-                                            </th>
-                                        );
-                                    }
-                                    // — skip the two other children here —
-                                    if (columnId === 'responsible' || columnId === 'dueDate') {
-                                        return null;
-                                    }
-                                    // — everything else spans both rows —
-                                    const col = availableColumns.find(c => c.id === columnId);
-                                    if (col) {
-                                        const limits = columnSizeLimits[columnId] || {};
-                                        const width = columnWidths[columnId];
+                {collapsible && (<button
+                    className={collapseBtnClass}
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                                        return (
-                                            <th
-                                                key={idx}
-                                                className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
-                                                rowSpan={2}
-                                                onClick={e => {
-                                                    if (isResizingRef.current) return;
-                                                    // Prevent opening if the user specifically clicked the resize handle
-                                                    if (e.target.closest('.ibra-col-resizer')) return;
+                {(!isCollapsed) && (
+                    <>
+                        <div className="table-wrapper-ibra" ref={tableWrapperRef}>
+                            <table className="table-borders-ibra-table"
+                                style={{
+                                    width: tableWidth ? `${tableWidth}px` : '100%', // first paint fallback
+                                    tableLayout: 'fixed',
+                                }}
+                            >
+                                <thead className="ibra-table-header">
+                                    <tr>
+                                        {displayColumns.map((columnId, idx) => {
+                                            // — “Risk Treatment” group header — 
+                                            if (columnId === 'actions') {
+                                                return (
+                                                    <th key={idx} className="ibraCent ibraRM" colSpan={3}>
+                                                        Risk Treatment
+                                                    </th>
+                                                );
+                                            }
+                                            // — skip the two other children here —
+                                            if (columnId === 'responsible' || columnId === 'dueDate') {
+                                                return null;
+                                            }
+                                            // — everything else spans both rows —
+                                            const col = availableColumns.find(c => c.id === columnId);
+                                            if (col) {
+                                                const limits = columnSizeLimits[columnId] || {};
+                                                const width = columnWidths[columnId];
 
-                                                    openExcelFilterPopup(columnId, e);
-                                                }}
-                                                style={{
-                                                    position: 'relative',
-                                                    width: width ? `${width}px` : undefined,
-                                                    minWidth: limits.min ? `${limits.min}px` : undefined,
-                                                    maxWidth: limits.max ? `${limits.max}px` : undefined,
-                                                }}
-                                            >
-                                                <span style={{ width: "100%" }}>{col.title}</span>
-                                                {columnId !== "nr" &&
-                                                    (filters[columnId] || sortConfig.colId === columnId) && (
-                                                        <FontAwesomeIcon
-                                                            icon={faFilter}
-                                                            className="active-filter-icon"
-                                                            style={{ marginLeft: "10px" }}
-                                                        />
-                                                    )}
+                                                return (
+                                                    <th
+                                                        key={idx}
+                                                        className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
+                                                        rowSpan={2}
+                                                        onClick={e => {
+                                                            if (isResizingRef.current) return;
+                                                            // Prevent opening if the user specifically clicked the resize handle
+                                                            if (e.target.closest('.ibra-col-resizer')) return;
 
-                                                {/* Resize handle */}
-                                                {!readOnly && (
-                                                    <div
-                                                        className="ibra-col-resizer"
-                                                        onMouseDown={e => startColumnResize(e, columnId)}
-                                                    />
-                                                )}
-                                            </th>
-                                        );
-                                    }
-                                    // — blanks —
-                                    return (
-                                        <th key={idx} className="ibraCent ibraBlank" rowSpan={2} />
-                                    );
-                                })}
-                            </tr>
-                            <tr>
-                                {displayColumns.map((columnId, idx) => {
-                                    if (['actions', "responsible", 'dueDate'].includes(columnId)) {
-                                        const col = availableColumns.find(c => c.id === columnId);
-                                        const limits = columnSizeLimits[columnId] || {};
-                                        const width = columnWidths[columnId];
+                                                            openExcelFilterPopup(columnId, e);
+                                                        }}
+                                                        style={{
+                                                            position: 'relative',
+                                                            width: width ? `${width}px` : undefined,
+                                                            minWidth: limits.min ? `${limits.min}px` : undefined,
+                                                            maxWidth: limits.max ? `${limits.max}px` : undefined,
+                                                        }}
+                                                    >
+                                                        <span style={{ width: "100%" }}>{col.title}</span>
+                                                        {columnId !== "nr" &&
+                                                            (filters[columnId] || sortConfig.colId === columnId) && (
+                                                                <FontAwesomeIcon
+                                                                    icon={faFilter}
+                                                                    className="active-filter-icon"
+                                                                    style={{ marginLeft: "10px" }}
+                                                                />
+                                                            )}
 
-                                        return (
-                                            <th
-                                                key={idx}
-                                                className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
-                                                onClick={e => {
-                                                    if (isResizingRef.current) return;
-                                                    if (e.target.closest('.ibra-col-resizer')) return;
+                                                        {/* Resize handle */}
+                                                        {!readOnly && (
+                                                            <div
+                                                                className="ibra-col-resizer"
+                                                                onMouseDown={e => startColumnResize(e, columnId)}
+                                                            />
+                                                        )}
+                                                    </th>
+                                                );
+                                            }
+                                            // — blanks —
+                                            return (
+                                                <th key={idx} className="ibraCent ibraBlank" rowSpan={2} />
+                                            );
+                                        })}
+                                    </tr>
+                                    <tr>
+                                        {displayColumns.map((columnId, idx) => {
+                                            if (['actions', "responsible", 'dueDate'].includes(columnId)) {
+                                                const col = availableColumns.find(c => c.id === columnId);
+                                                const limits = columnSizeLimits[columnId] || {};
+                                                const width = columnWidths[columnId];
 
-                                                    openExcelFilterPopup(columnId, e);
-                                                }}
-                                                style={{
-                                                    position: 'relative',
-                                                    width: width ? `${width}px` : undefined,
-                                                    minWidth: limits.min ? `${limits.min}px` : undefined,
-                                                    maxWidth: limits.max ? `${limits.max}px` : undefined,
-                                                }}
-                                            >
-                                                {col.icon ? <FontAwesomeIcon icon={col.icon} /> : col.title}
-                                                {(filters[columnId] || (sortConfig.colId === col.id && col.id !== "nr")) && (
-                                                    <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                                )}
+                                                return (
+                                                    <th
+                                                        key={idx}
+                                                        className={`${col.className} ${!excludedColumns.includes(columnId) && filters[columnId] ? '' : ''}`}
+                                                        onClick={e => {
+                                                            if (isResizingRef.current) return;
+                                                            if (e.target.closest('.ibra-col-resizer')) return;
 
-                                                {!readOnly && (
-                                                    <div
-                                                        className="ibra-col-resizer"
-                                                        onMouseDown={e => startColumnResize(e, columnId)}
-                                                    />
-                                                )}
-                                            </th>
-                                        );
-                                    }
-                                    return null;
-                                })}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRows.map((row, rowIndex) => {
-                                // 1. fallback to a single empty possibility if none exist
-                                const possibilities = Array.isArray(row.possible) && row.possible.length > 0
-                                    ? row.possible
-                                    : [{ possible: "", actions: [], dueDate: [] }]
+                                                            openExcelFilterPopup(columnId, e);
+                                                        }}
+                                                        style={{
+                                                            position: 'relative',
+                                                            width: width ? `${width}px` : undefined,
+                                                            minWidth: limits.min ? `${limits.min}px` : undefined,
+                                                            maxWidth: limits.max ? `${limits.max}px` : undefined,
+                                                        }}
+                                                    >
+                                                        {col.icon ? <FontAwesomeIcon icon={col.icon} /> : col.title}
+                                                        {(filters[columnId] || (sortConfig.colId === col.id && col.id !== "nr")) && (
+                                                            <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
+                                                        )}
 
-                                return possibilities.map((p, pi) => {
-                                    const isFirst = pi === 0
-                                    const isDragOver = dragOverRowId === row.id && isFirst;
+                                                        {!readOnly && (
+                                                            <div
+                                                                className="ibra-col-resizer"
+                                                                onMouseDown={e => startColumnResize(e, columnId)}
+                                                            />
+                                                        )}
+                                                    </th>
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredRows.map((row, rowIndex) => {
+                                        // 1. fallback to a single empty possibility if none exist
+                                        const possibilities = Array.isArray(row.possible) && row.possible.length > 0
+                                            ? row.possible
+                                            : [{ possible: "", actions: [], dueDate: [] }]
 
-                                    return (
-                                        <tr
-                                            key={`${row.id}-${pi}`}
-                                            className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${isDragOver ? 'drag-over' : ''} ${dragOverRowId === row.id ? "drag-over-top" : ""}`}
-                                            draggable={isFirst && armedDragRow === row.id}
-                                            onDragStart={isFirst && armedDragRow === row.id
-                                                ? (e) => handleDragStart(e, row.id)
-                                                : undefined}
-                                            onDragOver={isFirst ? (e) => handleDragOver(e, row.id) : undefined}
-                                            onDragLeave={isFirst ? (e) => handleDragLeave(e) : undefined}
-                                            onDrop={isFirst ? (e) => handleDrop(e, row.id) : undefined}
-                                            onDragEnd={isFirst && armedDragRow === row.id ? handleDragEnd : undefined}
-                                        >
-                                            {displayColumns.map((colId, idx) => {
-                                                const columnMeta = availableColumns.find(c => c.id === colId)
-                                                const colClass = columnMeta?.className || ""
-                                                const limits = columnSizeLimits[colId] || {};
-                                                const width = columnWidths[colId];
-                                                const commonCellStyle = {
-                                                    width: width ? `${width}px` : undefined,
-                                                    minWidth: limits.min ? `${limits.min}px` : undefined,
-                                                    maxWidth: limits.max ? `${limits.max}px` : undefined,
-                                                };
+                                        return possibilities.map((p, pi) => {
+                                            const isFirst = pi === 0
+                                            const isDragOver = dragOverRowId === row.id && isFirst;
 
-                                                if (colId === "additional") {
-                                                    // only on the first “possible” row
-                                                    if (!isFirst) return null;
+                                            return (
+                                                <tr
+                                                    key={`${row.id}-${pi}`}
+                                                    className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${isDragOver ? 'drag-over' : ''} ${dragOverRowId === row.id ? "drag-over-top" : ""}`}
+                                                    draggable={isFirst && armedDragRow === row.id}
+                                                    onDragStart={isFirst && armedDragRow === row.id
+                                                        ? (e) => handleDragStart(e, row.id)
+                                                        : undefined}
+                                                    onDragOver={isFirst ? (e) => handleDragOver(e, row.id) : undefined}
+                                                    onDragLeave={isFirst ? (e) => handleDragLeave(e) : undefined}
+                                                    onDrop={isFirst ? (e) => handleDrop(e, row.id) : undefined}
+                                                    onDragEnd={isFirst && armedDragRow === row.id ? handleDragEnd : undefined}
+                                                >
+                                                    {displayColumns.map((colId, idx) => {
+                                                        const columnMeta = availableColumns.find(c => c.id === colId)
+                                                        const colClass = columnMeta?.className || ""
+                                                        const limits = columnSizeLimits[colId] || {};
+                                                        const width = columnWidths[colId];
+                                                        const commonCellStyle = {
+                                                            width: width ? `${width}px` : undefined,
+                                                            minWidth: limits.min ? `${limits.min}px` : undefined,
+                                                            maxWidth: limits.max ? `${limits.max}px` : undefined,
+                                                        };
 
-                                                    const additionalText = row.additional;
-                                                    return (
-                                                        <td key={idx} className={`${colClass}  ibra-main-cell`} rowSpan={possibilities.length} style={commonCellStyle}>
+                                                        if (colId === "additional") {
+                                                            // only on the first “possible” row
+                                                            if (!isFirst) return null;
 
-                                                            {additionalText
-                                                                ? <button
-                                                                    className="ibra-view-additional-button"
-                                                                    onClick={() => openNote(additionalText)}
-                                                                >
-                                                                    View
-                                                                </button>
-                                                                : null
-                                                            }
-                                                        </td>
-                                                    );
-                                                }
+                                                            const additionalText = row.additional;
+                                                            return (
+                                                                <td key={idx} className={`${colClass}  ibra-main-cell`} rowSpan={possibilities.length} style={commonCellStyle}>
 
-                                                if (colId === "actions") {
-                                                    return (
-                                                        <td key={idx} className={colClass} style={commonCellStyle}>
-                                                            {p.actions.map((a, ai) => (
-                                                                <div key={ai} style={{ marginBottom: '4px' }}>
-                                                                    <div className="control-with-icons" key={ai}>
-                                                                        <textarea
-                                                                            key={ai}
-                                                                            value={a.action}
-                                                                            placeholder="Insert Required Action"
-                                                                            onChange={e => handleActionChange(row.id, p.id, a.id, e.target.value)}
-                                                                            className="ibra-textarea-PI"
-                                                                            style={{ fontSize: "14px", resize: "none" }}
-                                                                            readOnly={readOnly}
-                                                                        />
-                                                                        {!readOnly && (<>
-                                                                            <FontAwesomeIcon
-                                                                                icon={faPlusCircle}
-                                                                                onClick={() => handleAddAction(row.id, p.id, a.id)}
-                                                                                className="control-icon-add-ibra magic-icon"
-                                                                                title="Add action required"
-                                                                                style={{ zIndex: 0 }}
-                                                                            />
-                                                                            {p.actions.length > 1 && (
-                                                                                <FontAwesomeIcon
-                                                                                    icon={faTrash}
-                                                                                    className="control-icon-remove-ibra magic-icon"
-                                                                                    onClick={() => handleRemoveAction(row.id, p.id, a.id)}
-                                                                                    title="Remove this action"
-                                                                                    style={{ zIndex: 0 }}
+                                                                    {additionalText
+                                                                        ? <button
+                                                                            className="ibra-view-additional-button"
+                                                                            onClick={() => openNote(additionalText)}
+                                                                        >
+                                                                            View
+                                                                        </button>
+                                                                        : null
+                                                                    }
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "actions") {
+                                                            return (
+                                                                <td key={idx} className={colClass} style={commonCellStyle}>
+                                                                    {p.actions.map((a, ai) => (
+                                                                        <div key={ai} style={{ marginBottom: '4px' }}>
+                                                                            <div className="control-with-icons" key={ai}>
+                                                                                <textarea
+                                                                                    key={ai}
+                                                                                    value={a.action}
+                                                                                    placeholder="Insert Required Action"
+                                                                                    onChange={e => handleActionChange(row.id, p.id, a.id, e.target.value)}
+                                                                                    className="ibra-textarea-PI"
+                                                                                    style={{ fontSize: "14px", resize: "none" }}
+                                                                                    readOnly={readOnly}
                                                                                 />
-                                                                            )}
-                                                                        </>)}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </td>
-                                                    );
-                                                }
+                                                                                {!readOnly && (<>
+                                                                                    <FontAwesomeIcon
+                                                                                        icon={faPlusCircle}
+                                                                                        onClick={() => handleAddAction(row.id, p.id, a.id)}
+                                                                                        className="control-icon-add-ibra magic-icon"
+                                                                                        title="Add action required"
+                                                                                        style={{ zIndex: 0 }}
+                                                                                    />
+                                                                                    {p.actions.length > 1 && (
+                                                                                        <FontAwesomeIcon
+                                                                                            icon={faTrash}
+                                                                                            className="control-icon-remove-ibra magic-icon"
+                                                                                            onClick={() => handleRemoveAction(row.id, p.id, a.id)}
+                                                                                            title="Remove this action"
+                                                                                            style={{ zIndex: 0 }}
+                                                                                        />
+                                                                                    )}
+                                                                                </>)}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </td>
+                                                            );
+                                                        }
 
-                                                // ─── Risk-Treatment children ───
-                                                if (colId === "responsible") {
-                                                    return (
-                                                        <td key={idx} className={colClass} style={commonCellStyle}>
-                                                            {p.responsible.map((d, di) => (
-                                                                <div key={di} style={{ marginBottom: '3px', marginTop: "1px" }}>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={d.person}
-                                                                        ref={el => {
-                                                                            const key = `${row.id}-${p.id}-${d.id}`;
-                                                                            if (el) {
-                                                                                responsibleInputRefs.current[key] = el;
-                                                                            } else {
-                                                                                delete responsibleInputRefs.current[key];
+                                                        // ─── Risk-Treatment children ───
+                                                        if (colId === "responsible") {
+                                                            return (
+                                                                <td key={idx} className={colClass} style={commonCellStyle}>
+                                                                    {p.responsible.map((d, di) => (
+                                                                        <div key={di} style={{ marginBottom: '3px', marginTop: "1px" }}>
+                                                                            <input
+                                                                                type="text"
+                                                                                value={d.person}
+                                                                                ref={el => {
+                                                                                    const key = `${row.id}-${p.id}-${d.id}`;
+                                                                                    if (el) {
+                                                                                        responsibleInputRefs.current[key] = el;
+                                                                                    } else {
+                                                                                        delete responsibleInputRefs.current[key];
+                                                                                    }
+                                                                                }}
+                                                                                onChange={e => handleResponsibleInput(row.id, p.id, d.id, e.target.value)}
+                                                                                onFocus={e => handleResponsibleFocus(row.id, p.id, d.id, e.target.value)}
+                                                                                className="ibra-textarea-PI"
+                                                                                style={{ fontSize: "14px" }}
+                                                                                placeholder="Insert or Select Responsible Person"
+                                                                                readOnly={readOnly}
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+
+                                                                </td>
+                                                            );
+                                                        }
+                                                        if (colId === "dueDate") {
+                                                            return (
+                                                                <td key={idx} className={colClass} style={commonCellStyle}>
+                                                                    {p.dueDate.map((d, di) => (
+                                                                        <div key={di} style={{ marginBottom: '3px', marginTop: "1px", position: "relative" }}>
+                                                                            <DatePicker
+                                                                                value={d.date || null}
+                                                                                format="YYYY-MM-DD"
+                                                                                onChange={(val) => handleDueDateChange(row.id, p.id, d.id, val?.format("YYYY-MM-DD"))}
+                                                                                highlightToday={false}       // 👈 disables automatic highlight
+                                                                                editable={false}
+                                                                                disabled={readOnly}
+                                                                                inputClass="ibra-input-date"
+                                                                                containerStyle={{ width: "100%" }}
+                                                                                placeholder="YYYY-MM-DD"
+                                                                                hideIcon={false}
+                                                                                style={{
+                                                                                    backgroundColor: "#fff",
+                                                                                    borderColor: "#BFBFBF",
+                                                                                    color: "#002060",         // text color
+                                                                                    "--rmdp-primary-color": "#002060",  // ← highlight color (selected day, header accent)
+                                                                                    "--rmdp-secondary-color": "#E6ECFF", // ← hover background color
+                                                                                    pointerEvents: "auto",
+                                                                                    zIndex: "5"
+                                                                                }}
+                                                                                onOpenPickNewDate={false}
+                                                                            />
+                                                                            {!!d.date ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="due-date-icon-btn"
+                                                                                    title="Clear date"
+                                                                                    disabled={readOnly}
+                                                                                    onMouseDown={(e) => {
+                                                                                        // prevent the datepicker opening and prevent wrapper drag
+                                                                                        e.preventDefault();
+                                                                                        e.stopPropagation();
+                                                                                    }}
+                                                                                    onClick={(e) => {
+                                                                                        e.preventDefault();
+                                                                                        e.stopPropagation();
+                                                                                        if (readOnly) return;
+                                                                                        handleDueDateChange(row.id, p.id, d.id, "");
+                                                                                    }}
+                                                                                >
+                                                                                    <FontAwesomeIcon icon={faX} />
+                                                                                </button>
+                                                                            ) : (
+                                                                                <span className="due-date-icon-span" aria-hidden="true">
+                                                                                    <FontAwesomeIcon icon={faCalendarDays} />
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        // ─── everything else only on the first nested row ───
+                                                        if (!isFirst) return null
+
+                                                        const cellData = row[colId]
+
+                                                        if (colId === "main") {
+                                                            if (!isFirst) return null;
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    className={`${colClass} ibra-main-cell correct-wrap-ibra`}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {/* Main text */}
+                                                                    {cellData}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "sub") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    className={`${colClass} ibra-main-cell correct-wrap-ibra`}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {cellData}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "owner") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    className={`${colClass} ibra-main-cell correct-wrap-ibra`}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {cellData}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "odds") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    className={`${colClass} ibra-main-cell correct-wrap-ibra`}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {cellData}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        // blank fillers
+                                                        if (colId.startsWith("blank-")) {
+                                                            return <td key={idx} rowSpan={possibilities.length}></td>
+                                                        }
+
+                                                        // Colour‐coded Max Risk Rank
+                                                        if (colId === "riskRank") {
+                                                            if (!isFirst) return null;
+                                                            // parse the leading number (fall back to 0)
+                                                            const num = parseInt(String(row.riskRank).split(" ")[0], 10) || 0;
+                                                            // pick the CSS class
+                                                            let colourClass = "";
+                                                            if (num >= 1 && num <= 5) colourClass = "ibra-popup-page-input-green";
+                                                            else if (num >= 6 && num <= 12) colourClass = "ibra-popup-page-input-yellow";
+                                                            else if (num >= 13 && num <= 20) colourClass = "ibra-popup-page-input-orange";
+                                                            else if (num >= 21) colourClass = "ibra-popup-page-input-red";
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    className={`${colClass} ${colourClass} ibra-main-cell correct-wrap-ibra`}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {row.riskRank}
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        if (colId === "priority") {
+                                                            if (!isFirst) return null;
+                                                            let colourClass = "";
+                                                            if (row.priority === "Yes") colourClass = "ibra-popup-page-input-orange";
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    className={`${colClass} ${colourClass} correct-wrap-ibra`}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {row.priority}
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        if (colId === "material") {
+                                                            if (!isFirst) return null;
+                                                            let colourClass = "";
+                                                            if (row.material === "Yes") colourClass = "ibra-popup-page-input-red";
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    className={`${colClass} ${colourClass} correct-wrap-ibra`}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
+                                                                >
+                                                                    {row.material}
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        if (colId === "maxConsequence") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, textAlign: "left", whiteSpace: "pre-wrap" }}
+                                                                    className="correct-wrap-ibra ibra-main-cell"
+                                                                >
+                                                                    {row.maxConsequence}
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        if (colId === "UE") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, textAlign: "left", whiteSpace: "pre-wrap" }}
+                                                                    className={`${colId === "UE" ? "unwanted-event-borders" : ""} correct-wrap-ibra  ibra-main-cell`}
+                                                                >
+                                                                    {row.UE}
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        if (colId === "source") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, textAlign: "left", whiteSpace: "pre-wrap" }}
+                                                                    className="correct-wrap-ibra  ibra-main-cell"
+                                                                >
+                                                                    {row.source}
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        // Nr column (with your arrow-icon logic)
+                                                        if (colId === "nr") {
+                                                            const isFlagged = !!row.mainFlag || !!row.subFlag || !!row.ownerFlag || !!row.oddsFlag || !!row.riskRankFlag || !!row.maxConsequenceFlag || !!row.controlFlag || !!row.hazardFlag || !!row.sourceFlag || !!row.ueFlag || !!row.additionalFlag;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    className={`${colClass} correct-wrap-ibra`}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={{ ...commonCellStyle, alignItems: 'center', gap: '0px', whiteSpace: "pre-wrap", position: "relative" }}
+                                                                >
+                                                                    {isFlagged && (<span
+                                                                        className={
+                                                                            "ibra-main-flag-icon" +
+                                                                            (isFlagged ? " active" : "")
+                                                                        }
+                                                                        title={isFlagged ? "Unflag main area" : "Flag main area"}
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faFlag} />
+                                                                    </span>)}
+                                                                    <span>{cellData}</span>
+                                                                    {!readOnly && (<FontAwesomeIcon
+                                                                        icon={faArrowsUpDown}
+                                                                        className="drag-handle"
+                                                                        onMouseDown={() => setArmedDragRow(row.id)}
+                                                                        onMouseUp={() => setArmedDragRow(null)}
+                                                                        style={{ cursor: 'grab', marginRight: "2px", marginLeft: "4px" }}
+                                                                    />)}
+                                                                    <FontAwesomeIcon
+                                                                        icon={faArrowUpRightFromSquare}
+                                                                        style={{ fontSize: "14px", marginLeft: "2px", color: "black" }}
+                                                                        className="ue-popup-icon"
+                                                                        title="Evaluate Unwanted Event"
+                                                                        onClick={() => {
+                                                                            setSelectedRowData(row)
+                                                                            setIbraPopup(true)
+                                                                            if (error) {
+                                                                                setErrors(prev => ({ ...prev, ibra: false })); // Clear IBRA error on click
                                                                             }
                                                                         }}
-                                                                        onChange={e => handleResponsibleInput(row.id, p.id, d.id, e.target.value)}
-                                                                        onFocus={e => handleResponsibleFocus(row.id, p.id, d.id, e.target.value)}
-                                                                        className="ibra-textarea-PI"
-                                                                        style={{ fontSize: "14px" }}
-                                                                        placeholder="Insert or Select Responsible Person"
-                                                                        readOnly={readOnly}
                                                                     />
-                                                                </div>
-                                                            ))}
 
-                                                        </td>
-                                                    );
-                                                }
-                                                if (colId === "dueDate") {
-                                                    return (
-                                                        <td key={idx} className={colClass} style={commonCellStyle}>
-                                                            {p.dueDate.map((d, di) => (
-                                                                <div key={di} style={{ marginBottom: '3px', marginTop: "1px", position: "relative" }}>
-                                                                    <DatePicker
-                                                                        value={d.date || null}
-                                                                        format="YYYY-MM-DD"
-                                                                        onChange={(val) => handleDueDateChange(row.id, p.id, d.id, val?.format("YYYY-MM-DD"))}
-                                                                        highlightToday={false}       // 👈 disables automatic highlight
-                                                                        editable={false}
-                                                                        disabled={readOnly}
-                                                                        inputClass="ibra-input-date"
-                                                                        containerStyle={{ width: "100%" }}
-                                                                        placeholder="YYYY-MM-DD"
-                                                                        hideIcon={false}
-                                                                        style={{
-                                                                            backgroundColor: "#fff",
-                                                                            borderColor: "#BFBFBF",
-                                                                            color: "#002060",         // text color
-                                                                            "--rmdp-primary-color": "#002060",  // ← highlight color (selected day, header accent)
-                                                                            "--rmdp-secondary-color": "#E6ECFF", // ← hover background color
-                                                                            pointerEvents: "auto",
-                                                                            zIndex: "5"
-                                                                        }}
-                                                                        onOpenPickNewDate={false}
-                                                                    />
-                                                                    {!!d.date ? (
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        // Action buttons
+                                                        if (colId === "action") {
+                                                            return (
+                                                                <td key={idx} className={colClass} rowSpan={possibilities.length} style={commonCellStyle}>
+                                                                    <div className="ibra-action-buttons">
                                                                         <button
-                                                                            type="button"
-                                                                            className="due-date-icon-btn"
-                                                                            title="Clear date"
-                                                                            disabled={readOnly}
-                                                                            onMouseDown={(e) => {
-                                                                                // prevent the datepicker opening and prevent wrapper drag
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                            }}
-                                                                            onClick={(e) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                if (readOnly) return;
-                                                                                handleDueDateChange(row.id, p.id, d.id, "");
+                                                                            className="ibra-remove-row-button"
+                                                                            title="Delete row"
+                                                                            onClick={() => removeRow(row.id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faTrash} />
+                                                                        </button>
+                                                                        <button
+                                                                            className="ibra-add-row-button"
+                                                                            title="Insert row below"
+                                                                            onClick={() => insertRowAt(row.id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faPlusCircle} />
+                                                                        </button>
+                                                                        <button
+                                                                            className="ibra-add-row-button"
+                                                                            title="Duplicate row"
+                                                                            onClick={() => handleDuplicateRow(row.id)}
+                                                                            style={{ display: 'block', marginTop: '4px' }}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faCopy} />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            )
+                                                        }
+
+                                                        if (colId === "hazards") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    className={`${colClass}  ibra-main-cell`}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={commonCellStyle}
+                                                                >
+                                                                    {/* Existing hazards list rendering */}
+                                                                    {Array.isArray(row.hazards) ? (
+                                                                        <ul
+                                                                            style={{
+                                                                                paddingLeft: "20px",
+                                                                                margin: 0,
+                                                                                marginRight: "10px",
+                                                                                textAlign: "left",
                                                                             }}
                                                                         >
-                                                                            <FontAwesomeIcon icon={faX} />
-                                                                        </button>
+                                                                            {row.hazards.map((item, i) => (
+                                                                                <li key={i} style={{ paddingLeft: "5px" }}>
+                                                                                    {typeof item === "string" ? item : item.hazard || ""}
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
                                                                     ) : (
-                                                                        <span className="due-date-icon-span" aria-hidden="true">
-                                                                            <FontAwesomeIcon icon={faCalendarDays} />
-                                                                        </span>
+                                                                        row.hazards
                                                                     )}
-                                                                </div>
-                                                            ))}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                // ─── everything else only on the first nested row ───
-                                                if (!isFirst) return null
-
-                                                const cellData = row[colId]
-
-                                                if (colId === "main") {
-                                                    if (!isFirst) return null;
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            className={`${colClass} ibra-main-cell correct-wrap-ibra`}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {/* Main text */}
-                                                            {cellData}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                if (colId === "sub") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            className={`${colClass} ibra-main-cell correct-wrap-ibra`}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {cellData}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                if (colId === "owner") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            className={`${colClass} ibra-main-cell correct-wrap-ibra`}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {cellData}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                if (colId === "odds") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            className={`${colClass} ibra-main-cell correct-wrap-ibra`}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {cellData}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                // blank fillers
-                                                if (colId.startsWith("blank-")) {
-                                                    return <td key={idx} rowSpan={possibilities.length}></td>
-                                                }
-
-                                                // Colour‐coded Max Risk Rank
-                                                if (colId === "riskRank") {
-                                                    if (!isFirst) return null;
-                                                    // parse the leading number (fall back to 0)
-                                                    const num = parseInt(String(row.riskRank).split(" ")[0], 10) || 0;
-                                                    // pick the CSS class
-                                                    let colourClass = "";
-                                                    if (num >= 1 && num <= 5) colourClass = "ibra-popup-page-input-green";
-                                                    else if (num >= 6 && num <= 12) colourClass = "ibra-popup-page-input-yellow";
-                                                    else if (num >= 13 && num <= 20) colourClass = "ibra-popup-page-input-orange";
-                                                    else if (num >= 21) colourClass = "ibra-popup-page-input-red";
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            className={`${colClass} ${colourClass} ibra-main-cell correct-wrap-ibra`}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {row.riskRank}
-                                                        </td>
-                                                    )
-                                                }
-
-                                                if (colId === "priority") {
-                                                    if (!isFirst) return null;
-                                                    let colourClass = "";
-                                                    if (row.priority === "Yes") colourClass = "ibra-popup-page-input-orange";
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            className={`${colClass} ${colourClass} correct-wrap-ibra`}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {row.priority}
-                                                        </td>
-                                                    )
-                                                }
-
-                                                if (colId === "material") {
-                                                    if (!isFirst) return null;
-                                                    let colourClass = "";
-                                                    if (row.material === "Yes") colourClass = "ibra-popup-page-input-red";
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            className={`${colClass} ${colourClass} correct-wrap-ibra`}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, whiteSpace: "pre-wrap" }}
-                                                        >
-                                                            {row.material}
-                                                        </td>
-                                                    )
-                                                }
-
-                                                if (colId === "maxConsequence") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, textAlign: "left", whiteSpace: "pre-wrap" }}
-                                                            className="correct-wrap-ibra ibra-main-cell"
-                                                        >
-                                                            {row.maxConsequence}
-                                                        </td>
-                                                    )
-                                                }
-
-                                                if (colId === "UE") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, textAlign: "left", whiteSpace: "pre-wrap" }}
-                                                            className={`${colId === "UE" ? "unwanted-event-borders" : ""} correct-wrap-ibra  ibra-main-cell`}
-                                                        >
-                                                            {row.UE}
-                                                        </td>
-                                                    )
-                                                }
-
-                                                if (colId === "source") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, textAlign: "left", whiteSpace: "pre-wrap" }}
-                                                            className="correct-wrap-ibra  ibra-main-cell"
-                                                        >
-                                                            {row.source}
-                                                        </td>
-                                                    )
-                                                }
-
-                                                // Nr column (with your arrow-icon logic)
-                                                if (colId === "nr") {
-                                                    const isFlagged = !!row.mainFlag || !!row.subFlag || !!row.ownerFlag || !!row.oddsFlag || !!row.riskRankFlag || !!row.maxConsequenceFlag || !!row.controlFlag || !!row.hazardFlag || !!row.sourceFlag || !!row.ueFlag || !!row.additionalFlag;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            className={`${colClass} correct-wrap-ibra`}
-                                                            rowSpan={possibilities.length}
-                                                            style={{ ...commonCellStyle, alignItems: 'center', gap: '0px', whiteSpace: "pre-wrap", position: "relative" }}
-                                                        >
-                                                            {isFlagged && (<span
-                                                                className={
-                                                                    "ibra-main-flag-icon" +
-                                                                    (isFlagged ? " active" : "")
-                                                                }
-                                                                title={isFlagged ? "Unflag main area" : "Flag main area"}
-                                                            >
-                                                                <FontAwesomeIcon icon={faFlag} />
-                                                            </span>)}
-                                                            <span>{cellData}</span>
-                                                            {!readOnly && (<FontAwesomeIcon
-                                                                icon={faArrowsUpDown}
-                                                                className="drag-handle"
-                                                                onMouseDown={() => setArmedDragRow(row.id)}
-                                                                onMouseUp={() => setArmedDragRow(null)}
-                                                                style={{ cursor: 'grab', marginRight: "2px", marginLeft: "4px" }}
-                                                            />)}
-                                                            <FontAwesomeIcon
-                                                                icon={faArrowUpRightFromSquare}
-                                                                style={{ fontSize: "14px", marginLeft: "2px", color: "black" }}
-                                                                className="ue-popup-icon"
-                                                                title="Evaluate Unwanted Event"
-                                                                onClick={() => {
-                                                                    setSelectedRowData(row)
-                                                                    setIbraPopup(true)
-                                                                    if (error) {
-                                                                        setErrors(prev => ({ ...prev, ibra: false })); // Clear IBRA error on click
-                                                                    }
-                                                                }}
-                                                            />
-
-                                                        </td>
-                                                    )
-                                                }
-
-                                                // Action buttons
-                                                if (colId === "action") {
-                                                    return (
-                                                        <td key={idx} className={colClass} rowSpan={possibilities.length} style={commonCellStyle}>
-                                                            <div className="ibra-action-buttons">
-                                                                <button
-                                                                    className="ibra-remove-row-button"
-                                                                    title="Delete row"
-                                                                    onClick={() => removeRow(row.id)}
-                                                                >
-                                                                    <FontAwesomeIcon icon={faTrash} />
-                                                                </button>
-                                                                <button
-                                                                    className="ibra-add-row-button"
-                                                                    title="Insert row below"
-                                                                    onClick={() => insertRowAt(row.id)}
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPlusCircle} />
-                                                                </button>
-                                                                <button
-                                                                    className="ibra-add-row-button"
-                                                                    title="Duplicate row"
-                                                                    onClick={() => handleDuplicateRow(row.id)}
-                                                                    style={{ display: 'block', marginTop: '4px' }}
-                                                                >
-                                                                    <FontAwesomeIcon icon={faCopy} />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    )
-                                                }
-
-                                                if (colId === "hazards") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            className={`${colClass}  ibra-main-cell`}
-                                                            rowSpan={possibilities.length}
-                                                            style={commonCellStyle}
-                                                        >
-                                                            {/* Existing hazards list rendering */}
-                                                            {Array.isArray(row.hazards) ? (
-                                                                <ul
-                                                                    style={{
-                                                                        paddingLeft: "20px",
-                                                                        margin: 0,
-                                                                        marginRight: "10px",
-                                                                        textAlign: "left",
-                                                                    }}
-                                                                >
-                                                                    {row.hazards.map((item, i) => (
-                                                                        <li key={i} style={{ paddingLeft: "5px" }}>
-                                                                            {typeof item === "string" ? item : item.hazard || ""}
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            ) : (
-                                                                row.hazards
-                                                            )}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                if (colId === "controls") {
-                                                    if (!isFirst) return null;
-
-                                                    return (
-                                                        <td
-                                                            key={idx}
-                                                            className={`${colClass}  ibra-main-cell`}
-                                                            rowSpan={possibilities.length}
-                                                            style={commonCellStyle}
-                                                        >
-                                                            {/* Existing controls list rendering */}
-                                                            {Array.isArray(row.controls) ? (
-                                                                <ul
-                                                                    style={{
-                                                                        paddingLeft: "20px",
-                                                                        margin: 0,
-                                                                        marginRight: "10px",
-                                                                        textAlign: "left",
-                                                                    }}
-                                                                >
-                                                                    {row.controls.map((item, i) => (
-                                                                        <li key={i} style={{ paddingLeft: "5px" }}>
-                                                                            {typeof item === "string" ? item : item.control || ""}
-                                                                        </li>
-                                                                    ))}
-                                                                </ul>
-                                                            ) : (
-                                                                row.controls
-                                                            )}
-                                                        </td>
-                                                    );
-                                                }
-
-                                                // Default: strings or arrays
-                                                return (
-                                                    <td key={idx} className={colClass} rowSpan={possibilities.length}>
-                                                        {Array.isArray(cellData)
-                                                            ? (
-                                                                <ul style={{ paddingLeft: '20px', margin: 0, marginRight: '10px', textAlign: "left" }}>
-                                                                    {cellData.map((item, i) => (
-                                                                        <li key={i} style={{ paddingLeft: '5px' }}>{item}</li>
-                                                                    ))}
-                                                                </ul>
-                                                            )
-                                                            : cellData
+                                                                </td>
+                                                            );
                                                         }
-                                                    </td>
-                                                )
-                                            })}
-                                        </tr>
-                                    )
-                                })
-                            })}
-                        </tbody>
+
+                                                        if (colId === "controls") {
+                                                            if (!isFirst) return null;
+
+                                                            return (
+                                                                <td
+                                                                    key={idx}
+                                                                    className={`${colClass}  ibra-main-cell`}
+                                                                    rowSpan={possibilities.length}
+                                                                    style={commonCellStyle}
+                                                                >
+                                                                    {/* Existing controls list rendering */}
+                                                                    {Array.isArray(row.controls) ? (
+                                                                        <ul
+                                                                            style={{
+                                                                                paddingLeft: "20px",
+                                                                                margin: 0,
+                                                                                marginRight: "10px",
+                                                                                textAlign: "left",
+                                                                            }}
+                                                                        >
+                                                                            {row.controls.map((item, i) => (
+                                                                                <li key={i} style={{ paddingLeft: "5px" }}>
+                                                                                    {typeof item === "string" ? item : item.control || ""}
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    ) : (
+                                                                        row.controls
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        // Default: strings or arrays
+                                                        return (
+                                                            <td key={idx} className={colClass} rowSpan={possibilities.length}>
+                                                                {Array.isArray(cellData)
+                                                                    ? (
+                                                                        <ul style={{ paddingLeft: '20px', margin: 0, marginRight: '10px', textAlign: "left" }}>
+                                                                            {cellData.map((item, i) => (
+                                                                                <li key={i} style={{ paddingLeft: '5px' }}>{item}</li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    )
+                                                                    : cellData
+                                                                }
+                                                            </td>
+                                                        )
+                                                    })}
+                                                </tr>
+                                            )
+                                        })
+                                    })}
+                                </tbody>
 
 
-                    </table>
+                            </table>
 
-                </div>
-                {!readOnly && (<button className="add-row-button-ds-risk font-fam" onClick={addRow}>
-                    <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
-                </button>)}
+                        </div>
+                        {!readOnly && (<button className="add-row-button-ds-risk font-fam" onClick={addRow}>
+                            <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
+                        </button>)}
+                    </>
+                )}
             </div>
             {showNote && (<IbraNote setClose={closeNote} text={noteText} />)}
             {ibraPopup && (<IBRAPopup onClose={closePopup} data={selectedRowData} onSave={handleSaveWithRiskTreatment} rowsData={rows} readOnly={readOnly} availableControls={relevantControls} />)}

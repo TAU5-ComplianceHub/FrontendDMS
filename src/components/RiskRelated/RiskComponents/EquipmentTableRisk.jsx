@@ -7,9 +7,15 @@ import { faSpinner, faTrash, faTrashCan, faX, faSearch, faHistory, faPlus, faPen
 import RiskEquipmentPopup from "../RiskValueChanges/RiskEquipmentPopup"
 import RiskManageEquipment from "../RiskValueChanges/RiskManageEquipment"
 import ModifySuggestedEquipment from "../../ValueChanges/ModifySuggestedEquipment";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const EquipmentTableRisk = ({ formData, setFormData, usedEquipment, setUsedEquipment, userID, readOnly = false }) => {
+const EquipmentTableRisk = ({ collapsible = false, formData, setFormData, usedEquipment, setUsedEquipment, userID, readOnly = false }) => {
     // State to control the popup and selected abbreviations
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
     const [eqpData, setEqpData] = useState([]);
     const [originalData, setOriginalData] = useState([])
     const [popupVisible, setPopupVisible] = useState(false);
@@ -20,6 +26,11 @@ const EquipmentTableRisk = ({ formData, setFormData, usedEquipment, setUsedEquip
     const [searchTerm, setSearchTerm] = useState("");
     const [eqpUpdate, setEqpUpdate] = useState("");
     const [updatePopup, setUpdatePopup] = useState(false);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const handlePopupToggle = () => {
         setSearchTerm("")
@@ -295,74 +306,87 @@ const EquipmentTableRisk = ({ formData, setFormData, usedEquipment, setUsedEquip
                     </div>
                 )}
 
-                {/* Display selected abbreviations in a table */}
-                {selectedEquipment.size > 0 && (
-                    <table className="vcr-table font-fam table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                <th className="col-eqp-eqp" style={{ textAlign: "center" }}>Equipment</th>
-                                {!readOnly && (<th className="col-eqp-act" style={{ textAlign: "center" }}>Action</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {formData.Equipment?.map((row, index) => (
-                                <tr key={index}>
-                                    <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.eqp}</td>
-                                    {!readOnly && (
-                                        <td className="procCent">
-                                            <div className="term-action-buttons">
-                                                <button
-                                                    className="remove-row-button"
-                                                    style={{ paddingRight: "6px" }}
-                                                    onClick={() => {
-                                                        // Remove abbreviation from table and the selected abbreviations set
-                                                        setFormData({
-                                                            ...formData,
-                                                            Equipment: formData.Equipment.filter((_, i) => i !== index),
-                                                        });
-                                                        setUsedEquipment(
-                                                            usedEquipment.filter((eqp) => eqp !== row.eqp)
-                                                        );
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                                                        // Update the selectedAbbrs state to reflect the removal
-                                                        const newSelectedEquipment = new Set(selectedEquipment);
-                                                        newSelectedEquipment.delete(row.eqp);
-                                                        setSelectedEquipment(newSelectedEquipment);
-                                                    }}
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                                                </button>
-                                                <button
-                                                    className="edit-terms-row-button"
-                                                    style={{ paddingLeft: "6px" }}
-                                                    onClick={() => {
-                                                        if (originalData.some(item => item.eqp === row.eqp)) { openManagePopup(row.eqp) }
-                                                        else {
-                                                            openUpdate(row.eqp);
-                                                        }
-                                                    }}
-                                                >
-                                                    <FontAwesomeIcon icon={faEdit} title="Modify Equipment" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                {(!isCollapsed) && (
+                    <>
+                        {selectedEquipment.size > 0 && (
+                            <table className="vcr-table font-fam table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        <th className="col-eqp-eqp" style={{ textAlign: "center" }}>Equipment</th>
+                                        {!readOnly && (<th className="col-eqp-act" style={{ textAlign: "center" }}>Action</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.Equipment?.map((row, index) => (
+                                        <tr key={index}>
+                                            <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.eqp}</td>
+                                            {!readOnly && (
+                                                <td className="procCent">
+                                                    <div className="term-action-buttons">
+                                                        <button
+                                                            className="remove-row-button"
+                                                            style={{ paddingRight: "6px" }}
+                                                            onClick={() => {
+                                                                // Remove abbreviation from table and the selected abbreviations set
+                                                                setFormData({
+                                                                    ...formData,
+                                                                    Equipment: formData.Equipment.filter((_, i) => i !== index),
+                                                                });
+                                                                setUsedEquipment(
+                                                                    usedEquipment.filter((eqp) => eqp !== row.eqp)
+                                                                );
 
-                {(selectedEquipment.size === 0 && isNA) && (
-                    <button className="add-row-button-eqp" onClick={handlePopupToggle} disabled={!isNA}>
-                        Select
-                    </button>
-                )}
+                                                                // Update the selectedAbbrs state to reflect the removal
+                                                                const newSelectedEquipment = new Set(selectedEquipment);
+                                                                newSelectedEquipment.delete(row.eqp);
+                                                                setSelectedEquipment(newSelectedEquipment);
+                                                            }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} title="Remove Row" />
+                                                        </button>
+                                                        <button
+                                                            className="edit-terms-row-button"
+                                                            style={{ paddingLeft: "6px" }}
+                                                            onClick={() => {
+                                                                if (originalData.some(item => item.eqp === row.eqp)) { openManagePopup(row.eqp) }
+                                                                else {
+                                                                    openUpdate(row.eqp);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faEdit} title="Modify Equipment" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
 
-                {(selectedEquipment.size > 0 && !readOnly) && (
-                    <button className="add-row-button-eqp-plus" onClick={handlePopupToggle} title="Add Row">
-                        <FontAwesomeIcon icon={faPlusCircle} />
-                    </button>
+                        {(selectedEquipment.size === 0 && isNA) && (
+                            <button className="add-row-button-eqp" onClick={handlePopupToggle} disabled={!isNA}>
+                                Select
+                            </button>
+                        )}
+
+                        {(selectedEquipment.size > 0 && !readOnly) && (
+                            <button className="add-row-button-eqp-plus" onClick={handlePopupToggle} title="Add Row">
+                                <FontAwesomeIcon icon={faPlusCircle} />
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
 

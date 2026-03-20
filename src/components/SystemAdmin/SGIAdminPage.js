@@ -9,6 +9,7 @@ import { saveAs } from "file-saver";
 import ImportSiteInfo from "../UploadPage/ImportSiteInfo";
 import ExportSIDPopup from "../Popups/ExportSIDPopup";
 import { getCurrentUser, can, isAdmin, canIn } from "../../utils/auth";
+import ChangeReasonSGI from "./ChangeReasonSGI";
 
 const SGIAdminPage = () => {
     const [error, setError] = useState(null);
@@ -19,6 +20,9 @@ const SGIAdminPage = () => {
     const [loggedInUserId, setloggedInUserId] = useState('');
     const [exportLoad, setExportLoad] = useState(false);
     const [importSI, setImportSI] = useState(false);
+    const [selectedImportFile, setSelectedImportFile] = useState(null);
+    const [changeReasonOpen, setChangeReasonOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
     const exportSID = async () => {
@@ -60,6 +64,79 @@ const SGIAdminPage = () => {
         }
     };
 
+    const handleSubmitImport = async (reason) => {
+        if (!selectedImportFile) {
+            toast.error("No file selected for upload.", {
+                closeButton: false,
+                autoClose: 800,
+                style: { textAlign: "center" }
+            });
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("excel", selectedImportFile);
+        formData.append("reason", reason);
+
+        try {
+            setLoading(true);
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/siteInfo/upload-single-sheet-excel/`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    },
+                    body: formData,
+                }
+            );
+
+            let result = null;
+            try {
+                result = await response.json();
+            } catch {
+                result = null;
+            }
+
+            if (response.ok) {
+                toast.success("Values have been successfully imported", {
+                    closeButton: false,
+                    autoClose: 800,
+                    style: { textAlign: "center" }
+                });
+
+                setChangeReasonOpen(false);
+                setSelectedImportFile(null);
+            } else {
+                console.error("Upload failed:", result);
+
+                toast.error(
+                    result?.message ||
+                    "Upload failed. The Excel format may be incorrect or has been modified.",
+                    {
+                        closeButton: false,
+                        autoClose: 1200,
+                        style: { textAlign: "center" }
+                    }
+                );
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+
+            toast.error(
+                "An error occurred while uploading. Please check your connection or try again.",
+                {
+                    closeButton: false,
+                    autoClose: 1200,
+                    style: { textAlign: "center" }
+                }
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const openImportSI = () => {
         setImportSI(true);
     };
@@ -86,9 +163,11 @@ const SGIAdminPage = () => {
         paddedDocs.push(null);
     }
 
-    if (error) {
-        return <div>Error: {error}</div>;
-    }
+    const handleImportFileSelected = (file) => {
+        setSelectedImportFile(file);
+        setImportSI(false);
+        setChangeReasonOpen(true);
+    };
 
     return (
         <div className="user-info-container">
@@ -104,7 +183,7 @@ const SGIAdminPage = () => {
 
 
                     <div className="sidebar-logo-dm-fi">
-                        <img src={`${process.env.PUBLIC_URL}/ddsAdmin2.svg`} alt="Logo" className="icon-risk-rm" />
+                        <img src={`/ddsAdmin2.svg`} alt="Logo" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"SGI Admin"}</p>
                     </div>
                 </div>
@@ -119,7 +198,17 @@ const SGIAdminPage = () => {
             )}
 
             <div className="main-box-user">
-                {importSI && (<ImportSiteInfo onClose={closeImportSI} />)}
+                {importSI && (<ImportSiteInfo onClose={closeImportSI} onFileSelected={handleImportFileSelected} />)}
+
+                {changeReasonOpen && (
+                    <ChangeReasonSGI
+                        isOpen={changeReasonOpen}
+                        onClose={() => setChangeReasonOpen(false)}
+                        onSubmit={handleSubmitImport}
+                        loading={loading}
+                    />
+                )}
+
                 <div className="top-section-um">
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
@@ -161,6 +250,17 @@ const SGIAdminPage = () => {
                                     <img src={`${process.env.PUBLIC_URL}/importSIDAdminHome2.svg`} className={"icon-dept"} />
                                 </div>
                                 <h3 className="document-title-fi-home">View Site General Information Backups</h3>
+                            </>
+                        </div>
+                    )}
+
+                    {(can(access, "RMS", "systemAdmin") || isAdmin(access) || can(access, "DDS", "systemAdmin")) && (
+                        <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/sgiVersionHistory")}>
+                            <>
+                                <div className="icon-dept">
+                                    <img src={`${process.env.PUBLIC_URL}/importSIDAdminHome2.svg`} className={"icon-dept"} />
+                                </div>
+                                <h3 className="document-title-fi-home">View Site General Information Version History</h3>
                             </>
                         </div>
                     )}

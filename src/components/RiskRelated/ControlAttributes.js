@@ -1311,7 +1311,7 @@ const ControlAttributes = () => {
                             <FontAwesomeIcon
                                 icon={faArrowsRotate}
                                 title="Reset column widths"
-                                className={showFitButton ? "top-right-button-control-att-3" : "top-right-button-control-att-3"}
+                                className={showFitButton ? "top-right-button-control-att-3-new" : "top-right-button-control-att-3-new"}
                                 onClick={resetColumnWidths}
                             />
                         )}

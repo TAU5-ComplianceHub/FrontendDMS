@@ -26,6 +26,7 @@ import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 import DuplicateName from "../Popups/DuplicateName";
+import PurposeBackgroundComponent from "../CreatePage/PurposeBackgroundComponent";
 
 const CreatePageSI = () => {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ const CreatePageSI = () => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const loadedIDRef = useRef('');
-  const [loadingAim, setLoadingAim] = useState(false);
+  const [loadingAimIndex, setLoadingAimIndex] = useState(null);
   const [offlineDraft, setOfflineDraft] = useState(false);
   const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
@@ -296,7 +297,7 @@ const CreatePageSI = () => {
   const [formData, setFormData] = useState({
     title: "",
     documentType: useParams().type,
-    aim: "",
+    aim: [{ type: "text", text: "" }],
     site: "",
     date: new Date().toLocaleDateString(),
     version: "1",
@@ -388,49 +389,222 @@ const CreatePageSI = () => {
   const closeLoadPopup = () => setLoadPopupOpen(false);
 
   const [rewriteHistory, setRewriteHistory] = useState({
-    aim: [],
+    aim: {}
   });
 
-  const pushAiRewriteHistory = (field) => {
-    setRewriteHistory(prev => ({
+  const pushAimRewriteHistory = (index, oldValue) => {
+    setRewriteHistory((prev) => ({
       ...prev,
-      [field]: [...prev[field], formData[field]]
+      aim: {
+        ...prev.aim,
+        [index]: [...(prev.aim[index] || []), oldValue]
+      }
     }));
   };
 
-  const AiRewriteAim = async () => {
-    try {
-      const prompt = formData.aim;
+  const undoAimRewrite = (index) => {
+    setRewriteHistory((prev) => {
+      const currentHistory = [...(prev.aim[index] || [])];
+      if (currentHistory.length === 0) return prev;
 
-      pushAiRewriteHistory('aim');
-      setLoadingAim(true);
+      const lastValue = currentHistory.pop();
+
+      setFormData((fd) => ({
+        ...fd,
+        aim: fd.aim.map((item, i) =>
+          i === index ? { ...item, text: lastValue } : item
+        )
+      }));
+
+      return {
+        ...prev,
+        aim: {
+          ...prev.aim,
+          [index]: currentHistory
+        }
+      };
+    });
+  };
+
+  const handleAimChange = (index, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      aim: prev.aim.map((item, i) =>
+        i === index ? { ...item, text: value } : item
+      )
+    }));
+  };
+
+  const handleAimBulletChange = (itemIndex, bulletId, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      aim: prev.aim.map((item, i) => {
+        if (i !== itemIndex || item?.type !== "bullet") return item;
+
+        const updatedBullets = (item.bullets || []).map((bullet) =>
+          bullet.id === bulletId ? { ...bullet, text: value } : bullet
+        );
+
+        return {
+          ...item,
+          bullets: updatedBullets
+        };
+      })
+    }));
+  };
+
+  const handleAddAim = () => {
+    setFormData((prev) => {
+      const currentAims =
+        Array.isArray(prev.aim) && prev.aim.length > 0
+          ? prev.aim
+          : [{ type: "text", text: "" }];
+
+      const lastType = currentAims[currentAims.length - 1]?.type || "text";
+      const nextType = lastType === "text" ? "bullet" : "text";
+
+      return {
+        ...prev,
+        aim: [
+          ...currentAims,
+          nextType === "bullet"
+            ? { type: "bullet", bullets: [createAimBulletRow()], text: "" }
+            : { type: "text", text: "" }
+        ]
+      };
+    });
+  };
+
+  const handleRemoveAim = (indexToRemove) => {
+    setFormData((prev) => {
+      const currentAims = Array.isArray(prev.aim) ? prev.aim : [];
+      const updatedAims = currentAims.filter((_, index) => index !== indexToRemove);
+
+      return {
+        ...prev,
+        aim: updatedAims.length > 0 ? updatedAims : [{ type: "text", text: "" }]
+      };
+    });
+  };
+
+  const handleRemoveAimSection = (textIndex) => {
+    setFormData((prev) => {
+      const currentAims = Array.isArray(prev.aim) ? prev.aim : [];
+
+      const textIndexes = currentAims
+        .map((item, index) => (item?.type === "text" ? index : null))
+        .filter((index) => index !== null);
+
+      if (textIndexes.length <= 1) {
+        return prev;
+      }
+
+      const updatedAims = currentAims.filter((_, index) => {
+        return index !== textIndex && index !== textIndex + 1;
+      });
+
+      return {
+        ...prev,
+        aim: updatedAims.length > 0 ? updatedAims : [{ type: "text", text: "" }]
+      };
+    });
+  };
+
+  const handleAddAimBullet = (itemIndex, insertAtIndex = null) => {
+    setFormData((prev) => ({
+      ...prev,
+      aim: prev.aim.map((item, i) => {
+        if (i !== itemIndex || item?.type !== "bullet") return item;
+
+        const currentBullets = Array.isArray(item.bullets) ? item.bullets : [];
+        const newBullet = createAimBulletRow();
+
+        if (
+          insertAtIndex === null ||
+          insertAtIndex < 0 ||
+          insertAtIndex > currentBullets.length
+        ) {
+          return {
+            ...item,
+            bullets: [...currentBullets, newBullet]
+          };
+        }
+
+        return {
+          ...item,
+          bullets: [
+            ...currentBullets.slice(0, insertAtIndex + 1),
+            newBullet,
+            ...currentBullets.slice(insertAtIndex + 1)
+          ]
+        };
+      })
+    }));
+  };
+
+  const handleRemoveAimBullet = (itemIndex, bulletId) => {
+    setFormData((prev) => ({
+      ...prev,
+      aim: prev.aim.map((item, i) => {
+        if (i !== itemIndex || item?.type !== "bullet") return item;
+
+        const updatedBullets = (item.bullets || []).filter(
+          (bullet) => bullet.id !== bulletId
+        );
+
+        return {
+          ...item,
+          bullets: updatedBullets
+        };
+      })
+    }));
+  };
+
+  const AiRewriteAim = async (index) => {
+    try {
+      const currentAim = formData.aim?.[index];
+      const prompt = currentAim?.text || "";
+
+      if (!prompt.trim()) {
+        toast.warn("Please enter some purpose and background text before using AI rewrite.", {
+          closeButton: true,
+          autoClose: 1000,
+          style: { textAlign: "center" }
+        });
+        return;
+      }
+
+      pushAimRewriteHistory(index, prompt);
+      setLoadingAimIndex(index);
 
       const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatAim/special`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
         },
         body: JSON.stringify({ prompt }),
       });
 
-      const { response: newText } = await response.json();
-      setLoadingAim(false);
-      setFormData(fd => ({ ...fd, aim: newText }));
-    } catch (error) {
-      setLoadingAim(false);
-      console.error('Error saving data:', error);
-    }
-  }
+      const data = await response.json();
+      const newText = data?.response || "";
 
-  const undoAiRewrite = (field) => {
-    setRewriteHistory(prev => {
-      const hist = [...prev[field]];
-      if (hist.length === 0) return prev;         // nothing to undo
-      const lastValue = hist.pop();
-      setFormData(fd => ({ ...fd, [field]: lastValue }));
-      return { ...prev, [field]: hist };
-    });
+      setFormData((fd) => ({
+        ...fd,
+        aim: fd.aim.map((item, i) =>
+          i === index ? { ...item, text: newText } : item
+        )
+      }));
+    } catch (error) {
+      console.error("Error rewriting purpose and background:", error);
+      toast.error("AI rewrite failed.", {
+        closeButton: true,
+        autoClose: 1200,
+        style: { textAlign: "center" }
+      });
+    } finally {
+      setLoadingAimIndex(null);
+    }
   };
 
   const handleSave = async () => {
@@ -751,7 +925,13 @@ const CreatePageSI = () => {
       setUsedTermCodes(storedData.usedTermCodes || []);
       setUserIDs(storedData.userIDs || []);
       setLockUser(storedData.lockOwner?.username);
-      setFormData(storedData.formData || {});
+      const rawForm = storedData.formData || {};
+      const normalizedForm = {
+        ...rawForm,
+        aim: normalizePurposeBackground(rawForm.aim)
+      };
+
+      setFormData(normalizedForm);
       setFormData(prev => ({ ...prev }));
       setTitleSet(true);
       loadedIDRef.current = loadID;
@@ -956,7 +1136,10 @@ const CreatePageSI = () => {
     if (!formData.title) newErrors.title = true;
     if (!formData.site) newErrors.site = true;
     if (!formData.dateConducted) newErrors.dateConducted = true;
-    if (!formData.aim) newErrors.aim = true;
+    const validAim = sanitizePurposeBackgroundForValidation(formData.aim);
+    if (validAim.length === 0) {
+      newErrors.aim = true;
+    }
     if (!formData.directed) newErrors.directed = true;
     if (!formData.directee) newErrors.directee = true;
 
@@ -1112,7 +1295,7 @@ const CreatePageSI = () => {
     const dataToStore = {
       usedAbbrCodes,       // your current state values
       usedTermCodes,
-      formData,
+      formData: getSanitizedFormData(formData),
       userID,
       azureFN: ""
     };
@@ -1148,7 +1331,7 @@ const CreatePageSI = () => {
     const dataToStore = {
       usedAbbrCodes,
       usedTermCodes,
-      formData,
+      formData: getSanitizedFormData(formData),
       userID,
       azureFN: "",
       draftID: loadedIDRef.current
@@ -1297,6 +1480,123 @@ const CreatePageSI = () => {
       loadData(draftId);
     }
   }, [draftId])
+
+  const createAimBulletRow = () => ({
+    id: uuidv4(),
+    text: ""
+  });
+
+  const normalizePurposeBackground = (value) => {
+    if (Array.isArray(value) && value.length > 0) {
+      return value.map((item) => {
+        const type = item?.type === "bullet" ? "bullet" : "text";
+
+        if (type === "text") {
+          return {
+            type: "text",
+            text: item?.text || ""
+          };
+        }
+
+        const bullets = Array.isArray(item?.bullets)
+          ? item.bullets.map((b) => ({
+            id: b?.id || uuidv4(),
+            text: b?.text || ""
+          }))
+          : String(item?.text || "")
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => ({
+              id: uuidv4(),
+              text: line
+            }));
+
+        return {
+          type: "bullet",
+          bullets: bullets.length > 0 ? bullets : [createAimBulletRow()],
+          text: bullets.map((b) => b.text).join("\n")
+        };
+      });
+    }
+
+    if (typeof value === "string" && value.trim() !== "") {
+      return [{ type: "text", text: value }];
+    }
+
+    return [{ type: "text", text: "" }];
+  };
+
+  const sanitizePurposeBackgroundForValidation = (items = []) => {
+    if (!Array.isArray(items)) return [];
+
+    return items
+      .map((item) => {
+        const type = item?.type === "bullet" ? "bullet" : "text";
+
+        if (type === "text") {
+          return {
+            ...item,
+            type: "text",
+            text: typeof item?.text === "string" ? item.text.trim() : ""
+          };
+        }
+
+        const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+          .map((b) => ({
+            id: b?.id || uuidv4(),
+            text: typeof b?.text === "string" ? b.text.trim() : ""
+          }))
+          .filter((b) => b.text !== "");
+
+        return {
+          ...item,
+          type: "bullet",
+          bullets: cleanedBullets,
+          text: cleanedBullets.map((b) => b.text).join("\n")
+        };
+      })
+      .filter((item) => item.text.trim() !== "");
+  };
+
+  const sanitizePurposeBackgroundForStorage = (items = []) => {
+    if (!Array.isArray(items)) return [];
+
+    return items
+      .map((item) => {
+        const type = item?.type === "bullet" ? "bullet" : "text";
+
+        if (type === "text") {
+          return {
+            ...item,
+            type: "text",
+            text: typeof item?.text === "string" ? item.text.trim() : ""
+          };
+        }
+
+        const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+          .map((b) => ({
+            id: b?.id || uuidv4(),
+            text: typeof b?.text === "string" ? b.text.trim() : ""
+          }))
+          .filter((b) => b.text !== "");
+
+        return {
+          ...item,
+          type: "bullet",
+          bullets: cleanedBullets,
+          text: cleanedBullets.map((b) => b.text).join("\n")
+        };
+      })
+      .filter((item) => item.text.trim() !== "");
+  };
+
+  const getSanitizedFormData = (sourceFormData) => ({
+    ...sourceFormData,
+    aim: sanitizePurposeBackgroundForStorage(
+      normalizePurposeBackground(sourceFormData.aim)
+    )
+  });
 
   return (
     <div className="file-create-container">
@@ -1603,50 +1903,35 @@ const CreatePageSI = () => {
 
           <DocumentSignaturesTableSI rows={formData.rows} handleRowChange={handleRowChange} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} setErrors={setErrors} readOnly={readOnly} />
 
-          <div className="input-row" style={{ position: 'relative' }}>
-            <div className={`input-box-aim-cp ${errors.aim ? "error-create" : ""}`}>
-              <h3 className="font-fam-labels">Purpose and Background <span className="required-field">*</span></h3>
-              <textarea
-                spellcheck="true"
-                name="aim"
-                className="aim-textarea-si font-fam"
-                value={formData.aim}
-                onChange={handleInputChange}
-                onFocus={() => setErrors(prev => ({
-                  ...prev,
-                  aim: false
-                }))}
-                rows="5"   // Adjust the number of rows for initial height
-                placeholder="Insert the purpose of this document and include any relevant background information regarding the topic." // Optional placeholder text
-                readOnly={readOnly}
-              />
-              {!readOnly && (
-                <>
-                  {loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-si spin-animation" />) : (
-                    <FontAwesomeIcon
-                      icon={faMagicWandSparkles}
-                      className="aim-textarea-icon-ibra"
-                      title="AI Rewrite"
-                      style={{ fontSize: "15px" }}
-                      onClick={() => AiRewriteAim()}
-                    />
-                  )}
+          <PurposeBackgroundComponent
+            readOnly={readOnly}
+            scopes={formData.aim}
+            errors={errors.aim || []}
+            loadingIndex={loadingAimIndex}
+            rewriteHistory={rewriteHistory}
+            onChange={handleAimChange}
+            onBulletChange={handleAimBulletChange}
+            onFocus={(index) =>
+              setErrors((prev) => {
+                const nextAimErrors = Array.isArray(prev.aim) ? [...prev.aim] : [];
+                nextAimErrors[index] = false;
 
-                  <FontAwesomeIcon
-                    icon={faRotateLeft}
-                    className="aim-textarea-icon-si-undo"
-                    title="Undo AI Rewrite"
-                    style={{
-                      marginLeft: '8px',
-                      opacity: rewriteHistory.aim.length ? 1 : 0.3,
-                      cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
-                      fontSize: "15px"
-                    }}
-                    onClick={() => undoAiRewrite("aim")}
-                  />
-                </>)}
-            </div>
-          </div>
+                return {
+                  ...prev,
+                  aim: nextAimErrors
+                };
+              })
+            }
+            onHelp={() => { }}
+            onAiRewrite={AiRewriteAim}
+            onUndo={undoAimRewrite}
+            onAddScope={handleAddAim}
+            onRemoveScope={handleRemoveAim}
+            onRemoveScopeSection={handleRemoveAimSection}
+            onAddBullet={handleAddAimBullet}
+            onRemoveBullet={handleRemoveAimBullet}
+            collapsible={false}
+          />
 
           <SpecialInstructionsTable formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} readOnly={readOnly} />
           <ChapterTable formData={formData} setFormData={setFormData} readOnly={readOnly} />

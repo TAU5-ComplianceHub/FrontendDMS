@@ -98,6 +98,8 @@ const RiskManagementPageIBRA = () => {
     const [approveState, setApproveState] = useState(false);
     const relevantControlsRef = useRef(null);
     const [isDuplicateName, setIsDuplicateName] = useState(false);
+    const [loadingScopeIRewriteIndex, setLoadingScopeIRewriteIndex] = useState(null);
+    const [loadingScopeERewriteIndex, setLoadingScopeERewriteIndex] = useState(null);
 
     const justLoadedDraftRef = useRef(false);
 
@@ -589,54 +591,6 @@ const RiskManagementPageIBRA = () => {
         }
     }
 
-    const AiRewriteScopeInclusions = async () => {
-        try {
-            const prompt = formData.scopeInclusions;
-
-            pushAiRewriteHistory('scopeInclusions');
-            setLoadingScopeI(true);
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatScopeI/ibra`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ prompt }),
-            });
-
-            const { response: newText } = await response.json();
-            setLoadingScopeI(false);
-            setFormData(fd => ({ ...fd, scopeInclusions: newText }));
-        } catch (error) {
-            setLoadingScopeI(false);
-            console.error('Error saving data:', error);
-        }
-    }
-
-    const AiRewriteScopeExlusions = async () => {
-        try {
-            const prompt = formData.scopeExclusions;
-
-            pushAiRewriteHistory('scopeExclusions');
-            setLoadingScopeE(true);
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/openai/chatScopeE/ibra`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ prompt }),
-            });
-
-            const { response: newText } = await response.json();
-            setLoadingScopeE(false);
-            setFormData(fd => ({ ...fd, scopeExclusions: newText }));
-        } catch (error) {
-            setLoadingScopeE(false);
-            console.error('Error saving data:', error);
-        }
-    }
-
     function normalizeIbraFormData(formData = {}) {
         if (!Array.isArray(formData.ibra)) return formData;
 
@@ -675,10 +629,15 @@ const RiskManagementPageIBRA = () => {
                 ? [{ type: "text", text: formData.aim }]
                 : [{ type: "text", text: "" }];
 
+        const normalizedScopeInclusions = normalizeStructuredScopeField(formData.scopeInclusions);
+        const normalizedScopeExclusions = normalizeStructuredScopeField(formData.scopeExclusions);
+
         // 1. Existing Normalization Logic (Keep this)
         const normalized = {
             ...formData,
             aim: normalizedAim,
+            scopeInclusions: normalizedScopeInclusions,
+            scopeExclusions: normalizedScopeExclusions,
             ibra: formData.ibra.map(row => {
                 // ... existing row mapping logic ...
                 const possible = Array.isArray(row.possible) ? row.possible : [];
@@ -789,7 +748,7 @@ const RiskManagementPageIBRA = () => {
         }
 
         normalized.execSummaryGen = normalized.execSummaryGen ?? "";
-        normalized.execSummary = normalized.execSummary ?? "";
+        normalized.execSummary = normalizeStructuredScopeField(normalized.execSummary);
 
         return normalized;
     }
@@ -921,11 +880,11 @@ const RiskManagementPageIBRA = () => {
         title: "",
         documentType: useParams().type,
         aim: [{ type: "text", text: "" }],
-        scopeExclusions: "",
         execSummaryGen: "",
-        execSummary: "",
-        scopeInclusions: "",
+        execSummary: [{ type: "text", text: "" }],
         scope: "",
+        scopeInclusions: [{ type: "text", text: "" }],
+        scopeExclusions: [{ type: "text", text: "" }],
         date: new Date().toLocaleDateString(),
         version: "1",
         site: "",
@@ -1105,8 +1064,8 @@ const RiskManagementPageIBRA = () => {
     const [rewriteHistory, setRewriteHistory] = useState({
         aim: {},
         scope: [],
-        scopeInclusions: [],
-        scopeExclusions: [],
+        scopeInclusions: {},
+        scopeExclusions: {},
     });
 
     const pushAimRewriteHistory = (index, oldValue) => {
@@ -1190,21 +1149,132 @@ const RiskManagementPageIBRA = () => {
         }
     };
 
-    const pushAiRewriteHistory = (field) => {
-        setRewriteHistory(prev => ({
-            ...prev,
-            [field]: [...prev[field], formData[field]]
-        }));
+    const pushAiRewriteHistory = (field, index = null) => {
+        setRewriteHistory(prev => {
+            if (index === null) {
+                const currentValue = formData[field];
+                const snapshot = Array.isArray(currentValue)
+                    ? JSON.parse(JSON.stringify(currentValue))
+                    : currentValue;
+
+                return {
+                    ...prev,
+                    [field]: [...prev[field], snapshot]
+                };
+            }
+
+            const currentItems = Array.isArray(formData[field]) ? formData[field] : [];
+            const currentItem = currentItems[index];
+
+            return {
+                ...prev,
+                [field]: {
+                    ...(prev[field] || {}),
+                    [index]: [
+                        ...((prev[field] && prev[field][index]) || []),
+                        currentItem?.text || ""
+                    ]
+                }
+            };
+        });
     };
 
-    const undoAiRewrite = (field) => {
+    const undoAiRewrite = (field, index = null) => {
+        if (index === null) {
+            setRewriteHistory(prev => {
+                const fieldHistory = prev[field];
+                if (!fieldHistory || fieldHistory.length === 0) return prev;
+
+                const previousValue = fieldHistory[fieldHistory.length - 1];
+
+                setFormData(current => ({
+                    ...current,
+                    [field]: previousValue
+                }));
+
+                return {
+                    ...prev,
+                    [field]: fieldHistory.slice(0, -1)
+                };
+            });
+
+            return;
+        }
+
         setRewriteHistory(prev => {
-            const hist = [...prev[field]];
-            if (hist.length === 0) return prev;         // nothing to undo
-            const lastValue = hist.pop();
-            setFormData(fd => ({ ...fd, [field]: lastValue }));
-            return { ...prev, [field]: hist };
+            const itemHistory = prev[field]?.[index] || [];
+            if (!itemHistory.length) return prev;
+
+            const previousText = itemHistory[itemHistory.length - 1];
+
+            setFormData(current => ({
+                ...current,
+                [field]: current[field].map((item, i) =>
+                    i === index ? { ...item, text: previousText } : item
+                )
+            }));
+
+            return {
+                ...prev,
+                [field]: {
+                    ...(prev[field] || {}),
+                    [index]: itemHistory.slice(0, -1)
+                }
+            };
         });
+    };
+
+    const AiRewriteScopeTextItem = async (sectionKey, index) => {
+        try {
+            const items = Array.isArray(formData[sectionKey]) ? formData[sectionKey] : [];
+            const item = items[index];
+
+            if (!item || item.type !== "text" || !item.text?.trim()) return;
+
+            pushAiRewriteHistory(sectionKey, index);
+
+            if (sectionKey === "scopeInclusions") {
+                setLoadingScopeI(true);
+                setLoadingScopeIRewriteIndex(index);
+            } else {
+                setLoadingScopeE(true);
+                setLoadingScopeERewriteIndex(index);
+            }
+
+            const endpoint =
+                sectionKey === "scopeInclusions"
+                    ? `${process.env.REACT_APP_URL}/api/openai/chatScopeI/ibra`
+                    : `${process.env.REACT_APP_URL}/api/openai/chatScopeE/ibra`;
+
+            const response = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify({ prompt: item.text }),
+            });
+
+            const data = await response.json();
+            const newText = data?.response || "";
+
+            setFormData(prev => ({
+                ...prev,
+                [sectionKey]: prev[sectionKey].map((row, i) =>
+                    i === index ? { ...row, text: newText } : row
+                )
+            }));
+        } catch (error) {
+            console.error("Error saving data:", error);
+        } finally {
+            if (sectionKey === "scopeInclusions") {
+                setLoadingScopeI(false);
+                setLoadingScopeIRewriteIndex(null);
+            } else {
+                setLoadingScopeE(false);
+                setLoadingScopeERewriteIndex(null);
+            }
+        }
     };
 
     const formDataRef = useRef(formData);
@@ -1756,13 +1826,50 @@ const RiskManagementPageIBRA = () => {
         }
     }, [unusedRelevantControlsHighlight]);
 
+    const sanitizeExecSummaryForValidation = (items = []) => {
+        if (!Array.isArray(items)) return [];
+
+        return items
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text.trim() : ""
+                    };
+                }
+
+                const cleanedBullets = (Array.isArray(item?.bullets) ? item.bullets : [])
+                    .map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter((b) => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map((b) => b.text).join("\n")
+                };
+            })
+            .filter((item) => item.text.trim() !== "");
+    };
+
+    const getSanitizedFormData = (sourceFormData) => ({
+        ...sourceFormData,
+        aim: sanitizeAimForStorage(sourceFormData.aim),
+        scopeInclusions: sanitizeStructuredScopeField(sourceFormData.scopeInclusions),
+        scopeExclusions: sanitizeStructuredScopeField(sourceFormData.scopeExclusions),
+        execSummary: sanitizeExecSummaryForValidation(sourceFormData.execSummary)
+    });
+
     // Send data to backend to generate a Word document
     const handleGenerateIBRADocument = async () => {
         const dataToStore = {
-            formData: {
-                ...formData,
-                aim: sanitizeAimForStorage(formData.aim)
-            }
+            formData: getSanitizedFormData(formData),
         };
 
         const documentName = (formData.title) + ' ' + formData.documentType;
@@ -1891,9 +1998,9 @@ const RiskManagementPageIBRA = () => {
 
     const handleIBRAPublish = async () => {
         const dataToStore = {
-            usedAbbrCodes,       // your current state values
+            usedAbbrCodes,
             usedTermCodes,
-            formData,
+            formData: getSanitizedFormData(formData),
             userID,
             azureFN: "",
             draftID: loadedIDRef.current,
@@ -1924,7 +2031,7 @@ const RiskManagementPageIBRA = () => {
             setLoading(false);
 
             setTimeout(() => {
-                navigate('/generatedIBRADocs'); // Redirect to the generated file info page
+                navigate('/FrontendDMS/generatedIBRADocs'); // Redirect to the generated file info page
             }, 1000);
         } catch (error) {
             console.error("Error generating document:", error);
@@ -2919,6 +3026,94 @@ const RiskManagementPageIBRA = () => {
         openImportPopup(); // same function used by Fetch Controls button
     };
 
+    const createScopeBulletRow = () => ({
+        id: uuidv4(),
+        text: ""
+    });
+
+    const normalizeStructuredScopeField = (value) => {
+        if (Array.isArray(value)) {
+            const normalizedItems = value.map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        type: "text",
+                        text: item?.text || ""
+                    };
+                }
+
+                const bullets = Array.isArray(item?.bullets)
+                    ? item.bullets.map((b) => ({
+                        id: b?.id || uuidv4(),
+                        text: b?.text || ""
+                    }))
+                    : String(item?.text || "")
+                        .split(/\r?\n/)
+                        .map(line => line.trim())
+                        .filter(Boolean)
+                        .map(line => ({
+                            id: uuidv4(),
+                            text: line
+                        }));
+
+                return {
+                    type: "bullet",
+                    bullets: bullets.length > 0 ? bullets : [createScopeBulletRow()],
+                    text: bullets.map(b => b.text).join("\n")
+                };
+            });
+
+            return normalizedItems.length > 0 ? normalizedItems : [{ type: "text", text: "" }];
+        }
+
+        if (typeof value === "string") {
+            return [{ type: "text", text: value }];
+        }
+
+        return [{ type: "text", text: "" }];
+    };
+
+    const sanitizeStructuredScopeField = (items = []) => {
+        if (!Array.isArray(items)) return [];
+
+        return items
+            .map((item) => {
+                const type = item?.type === "bullet" ? "bullet" : "text";
+
+                if (type === "text") {
+                    return {
+                        ...item,
+                        type: "text",
+                        text: typeof item?.text === "string" ? item.text : ""
+                    };
+                }
+
+                const bulletItems = Array.isArray(item?.bullets)
+                    ? item.bullets
+                    : typeof item?.text === "string"
+                        ? item.text
+                            .split(/\r?\n/)
+                            .map(line => ({ id: uuidv4(), text: line }))
+                        : [];
+
+                const cleanedBullets = bulletItems
+                    .map(b => ({
+                        id: b?.id || uuidv4(),
+                        text: typeof b?.text === "string" ? b.text.trim() : ""
+                    }))
+                    .filter(b => b.text !== "");
+
+                return {
+                    ...item,
+                    type: "bullet",
+                    bullets: cleanedBullets,
+                    text: cleanedBullets.map(b => b.text).join("\n")
+                };
+            })
+            .filter(item => item.text.trim() !== "");
+    };
+
     const createAimBulletRow = () => ({
         id: uuidv4(),
         text: ""
@@ -3093,6 +3288,135 @@ const RiskManagementPageIBRA = () => {
             return {
                 ...prev,
                 aim: updatedAim
+            };
+        });
+    };
+
+    const handleScopeSectionChange = (sectionKey, index, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            [sectionKey]: prev[sectionKey].map((item, i) =>
+                i === index ? { ...item, text: value } : item
+            )
+        }));
+    };
+
+    const handleScopeSectionBulletChange = (sectionKey, itemIndex, bulletId, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            [sectionKey]: prev[sectionKey].map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).map((bullet) =>
+                    bullet.id === bulletId ? { ...bullet, text: value } : bullet
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const handleAddScopeSectionItem = (sectionKey) => {
+        setFormData((prev) => {
+            const currentItems = Array.isArray(prev[sectionKey])
+                ? prev[sectionKey]
+                : [{ type: "text", text: "" }];
+
+            const lastType = currentItems[currentItems.length - 1]?.type || "text";
+            const nextType = lastType === "text" ? "bullet" : "text";
+
+            return {
+                ...prev,
+                [sectionKey]: [
+                    ...currentItems,
+                    nextType === "bullet"
+                        ? { type: "bullet", bullets: [createScopeBulletRow()], text: "" }
+                        : { type: "text", text: "" }
+                ]
+            };
+        });
+    };
+
+    const handleRemoveScopeSectionItem = (sectionKey, indexToRemove) => {
+        setFormData((prev) => {
+            const currentItems = Array.isArray(prev[sectionKey]) ? prev[sectionKey] : [];
+            const updatedItems = currentItems.filter((_, index) => index !== indexToRemove);
+
+            return {
+                ...prev,
+                [sectionKey]: updatedItems.length > 0 ? updatedItems : [{ type: "text", text: "" }]
+            };
+        });
+    };
+
+    const handleAddScopeSectionBullet = (sectionKey, itemIndex, insertAtIndex = null) => {
+        setFormData((prev) => ({
+            ...prev,
+            [sectionKey]: prev[sectionKey].map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const currentBullets = Array.isArray(item.bullets) ? item.bullets : [];
+                const newBullet = createScopeBulletRow();
+
+                if (insertAtIndex === null || insertAtIndex < 0 || insertAtIndex > currentBullets.length) {
+                    return {
+                        ...item,
+                        bullets: [...currentBullets, newBullet]
+                    };
+                }
+
+                return {
+                    ...item,
+                    bullets: [
+                        ...currentBullets.slice(0, insertAtIndex + 1),
+                        newBullet,
+                        ...currentBullets.slice(insertAtIndex + 1)
+                    ]
+                };
+            })
+        }));
+    };
+
+    const handleRemoveScopeSectionBullet = (sectionKey, itemIndex, bulletId) => {
+        setFormData((prev) => ({
+            ...prev,
+            [sectionKey]: prev[sectionKey].map((item, i) => {
+                if (i !== itemIndex || item?.type !== "bullet") return item;
+
+                const updatedBullets = (item.bullets || []).filter(
+                    (bullet) => bullet.id !== bulletId
+                );
+
+                return {
+                    ...item,
+                    bullets: updatedBullets
+                };
+            })
+        }));
+    };
+
+    const handleRemoveScopeSectionGroup = (sectionKey, textIndex) => {
+        setFormData((prev) => {
+            const currentItems = Array.isArray(prev[sectionKey]) ? prev[sectionKey] : [];
+
+            const sectionStartIndexes = currentItems
+                .map((item, index) => (item?.type === "text" ? index : null))
+                .filter(index => index !== null);
+
+            if (sectionStartIndexes.length <= 1) {
+                return prev;
+            }
+
+            const updatedItems = currentItems.filter((_, index) => {
+                return index !== textIndex && index !== textIndex + 1;
+            });
+
+            return {
+                ...prev,
+                [sectionKey]: updatedItems.length > 0 ? updatedItems : [{ type: "text", text: "" }]
             };
         });
     };
@@ -3357,6 +3681,7 @@ const RiskManagementPageIBRA = () => {
                         onRemoveAimSection={handleRemoveAimSection}
                         onAddBullet={handleAddAimBullet}
                         onRemoveBullet={handleRemoveAimBullet}
+                        collapsible={true}
                     />
 
                     <RiskScopeIE
@@ -3364,232 +3689,35 @@ const RiskManagementPageIBRA = () => {
                         error={errors.scope}
                         formData={formData}
                         setErrors={setErrors}
-                        onChange={handleInputChange}
+
+                        onIntroChange={handleInputChange}
+
+                        onSectionChange={handleScopeSectionChange}
+                        onSectionBulletChange={handleScopeSectionBulletChange}
+                        onAddSectionItem={handleAddScopeSectionItem}
+                        onRemoveSectionItem={handleRemoveScopeSectionItem}
+                        onRemoveSectionGroup={handleRemoveScopeSectionGroup}
+                        onAddSectionBullet={handleAddScopeSectionBullet}
+                        onRemoveSectionBullet={handleRemoveScopeSectionBullet}
+
                         onHelp={openHelpScope}
+
                         loadingScope={loadingScope}
+                        loadingScopeRewriteIndex={null}
                         loadingScopeI={loadingScopeI}
+                        loadingScopeIRewriteIndex={loadingScopeIRewriteIndex}
                         loadingScopeE={loadingScopeE}
+                        loadingScopeERewriteIndex={loadingScopeERewriteIndex}
+
                         rewriteHistory={rewriteHistory}
+
                         onAiRewriteScope={AiRewriteScope}
-                        onAiRewriteScopeInclusions={AiRewriteScopeInclusions}
-                        onAiRewriteScopeExclusions={AiRewriteScopeExlusions}
+                        onAiRewriteScopeTextItem={AiRewriteScopeTextItem}
                         onUndoScope={() => undoAiRewrite("scope")}
-                        onUndoScopeInclusions={() => undoAiRewrite("scopeInclusions")}
-                        onUndoScopeExclusions={() => undoAiRewrite("scopeExclusions")}
+                        onUndoScopeTextItem={(sectionKey, index) => undoAiRewrite(sectionKey, index)}
+
+                        collapsible={true}
                     />
-
-                    {false && (
-                        <>
-                            <div className="input-row-risk-create">
-                                <div className={`input-box-aim-risk-create ${errors.aim ? "error-create" : ""}`}>
-                                    <button
-                                        className="top-left-button-refs"
-                                        title="Information"
-                                    >
-                                        <FontAwesomeIcon icon={faInfoCircle} onClick={openHelpRA} style={{ cursor: 'pointer' }} className="icon-um-search" />
-                                    </button>
-                                    <h3 className="font-fam-labels">Aim <span className="required-field">*</span></h3>
-                                    <textarea
-                                        spellCheck="true"
-                                        name="aim"
-                                        className="aim-textarea-risk-create-ibra font-fam"
-                                        onChange={handleInputChange}
-                                        onFocus={() => {
-                                            setErrors(prev => ({
-                                                ...prev,
-                                                aim: false
-                                            }))
-                                        }}
-                                        value={formData.aim}
-                                        rows="5"   // Adjust the number of rows for initial height
-                                        placeholder="Clearly state the goal of the risk assessment, focusing on what the assessment intends to achieve or address. Keep it specific, relevant, and outcome-driven." // Optional placeholder text
-                                        readOnly={readOnly}
-                                    />
-
-                                    {!readOnly && (<>
-                                        {loadingAim ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
-                                            <FontAwesomeIcon
-                                                icon={faMagicWandSparkles}
-                                                className="aim-textarea-icon-ibra"
-                                                title="AI Rewrite"
-                                                style={{ fontSize: "15px" }}
-                                                onClick={() => AiRewriteAim()}
-                                            />
-                                        )}
-
-                                        <FontAwesomeIcon
-                                            icon={faRotateLeft}
-                                            className="aim-textarea-icon-ibra-undo"
-                                            title="Undo AI Rewrite"
-                                            onClick={() => undoAiRewrite('aim')}
-                                            style={{
-                                                marginLeft: '8px',
-                                                opacity: rewriteHistory.aim.length ? 1 : 0.3,
-                                                cursor: rewriteHistory.aim.length ? 'pointer' : 'not-allowed',
-                                                fontSize: "15px"
-                                            }}
-                                        />
-                                    </>)}
-                                </div>
-                            </div>
-
-                            <div className="input-row-risk-create">
-                                <div className={`input-box-aim-risk-scope ${errors.scope ? "error-create" : ""}`}>
-                                    <button
-                                        className="top-left-button-refs"
-                                        title="Information"
-                                    >
-                                        <FontAwesomeIcon icon={faInfoCircle} onClick={openHelpScope} style={{ cursor: 'pointer' }} className="icon-um-search" />
-                                    </button>
-                                    <h3 className="font-fam-labels">Scope <span className="required-field">*</span></h3>
-                                    <div className="risk-scope-group" style={{ marginBottom: "-10px" }}>
-                                        <div className="risk-execSummary-popup-page-additional-row ">
-                                            <div className="risk-popup-page-column-half-scope">
-                                                <label className="scope-risk-label">Introduction</label>
-                                                <textarea
-                                                    lang="en-ZA"
-                                                    spellCheck="true"
-                                                    name="scope"
-                                                    className="aim-textarea-risk-scope-2 font-fam"
-                                                    onChange={handleInputChange}
-                                                    value={formData.scope}
-                                                    rows="5"   // Adjust the number of rows for initial height
-                                                    placeholder="Insert a brief scope introduction (General scope notes and comments)." // Optional placeholder text
-                                                    onFocus={() => {
-                                                        setErrors(prev => ({
-                                                            ...prev,
-                                                            scope: false
-                                                        }))
-                                                    }}
-                                                    readOnly={readOnly}
-                                                />
-                                                {!readOnly && (
-                                                    <>
-                                                        {loadingScope ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />)
-                                                            : (
-                                                                <FontAwesomeIcon
-                                                                    icon={faMagicWandSparkles}
-                                                                    className="scope-textarea-icon"
-                                                                    title="AI Rewrite"
-                                                                    style={{ fontSize: "15px" }}
-                                                                    onClick={() => AiRewriteScope()}
-                                                                />
-                                                            )}
-
-                                                        <FontAwesomeIcon
-                                                            icon={faRotateLeft}
-                                                            className="scope-textarea-icon-undo"
-                                                            title="Undo AI Rewrite"
-                                                            onClick={() => undoAiRewrite('scope')}
-                                                            style={{
-                                                                marginLeft: '8px',
-                                                                opacity: rewriteHistory.scope.length ? 1 : 0.3,
-                                                                cursor: rewriteHistory.scope.length ? 'pointer' : 'not-allowed',
-                                                                fontSize: "15px"
-                                                            }}
-                                                        />
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="risk-scope-group">
-                                        <div className="risk-scope-popup-page-additional-row ">
-                                            <div className="risk-popup-page-column-half-scope">
-                                                <label className="scope-risk-label">Scope Inclusions</label>
-                                                <textarea
-                                                    spellCheck="true"
-                                                    name="scopeInclusions"
-                                                    className="aim-textarea-risk-scope font-fam"
-                                                    value={formData.scopeInclusions}
-                                                    onChange={handleInputChange}
-                                                    rows="5"   // Adjust the number of rows for initial height
-                                                    placeholder="Insert scope inclusions (List the specific items, activities, or areas covered in this risk assessment)."
-                                                    onFocus={() => {
-                                                        setErrors(prev => ({
-                                                            ...prev,
-                                                            scope: false
-                                                        }))
-                                                    }}
-                                                    readOnly={readOnly}
-                                                />
-                                                {!readOnly && (
-                                                    <>
-                                                        {loadingScopeI ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />)
-                                                            : (<FontAwesomeIcon
-                                                                icon={faMagicWandSparkles}
-                                                                className="scope-textarea-icon"
-                                                                title="AI Rewrite"
-                                                                style={{ fontSize: "15px" }}
-                                                                onClick={() => AiRewriteScopeInclusions()}
-                                                            />)}
-
-                                                        <FontAwesomeIcon
-                                                            icon={faRotateLeft}
-                                                            className="scope-textarea-icon-undo"
-                                                            title="Undo AI Rewrite"
-                                                            style={{
-                                                                marginLeft: '8px',
-                                                                opacity: rewriteHistory.scopeInclusions.length ? 1 : 0.3,
-                                                                cursor: rewriteHistory.scopeInclusions.length ? 'pointer' : 'not-allowed',
-                                                                fontSize: "15px"
-                                                            }}
-                                                            onClick={() => undoAiRewrite('scopeInclusions')}
-                                                        />
-                                                    </>
-                                                )}
-                                            </div>
-
-                                            <div className="risk-popup-page-column-half-scope">
-                                                <label className="scope-risk-label">Scope Exclusions</label>
-                                                <textarea
-                                                    spellCheck="true"
-                                                    name="scopeExclusions"
-                                                    className="aim-textarea-risk-scope font-fam"
-                                                    value={formData.scopeExclusions}
-                                                    onChange={handleInputChange}
-                                                    rows="5"   // Adjust the number of rows for initial height
-                                                    placeholder="Insert scope exclusions (List the specific items, activities, or areas not covered in this risk assessment)."
-                                                    onFocus={() => {
-                                                        setErrors(prev => ({
-                                                            ...prev,
-                                                            scope: false
-                                                        }))
-                                                    }}
-                                                    readOnly={readOnly}
-                                                />
-                                                {!readOnly && (
-                                                    <>
-                                                        {loadingScopeE ? (<FontAwesomeIcon icon={faSpinner} className="scope-textarea-icon spin-animation" />) :
-                                                            (< FontAwesomeIcon
-                                                                icon={faMagicWandSparkles}
-                                                                className="scope-textarea-icon"
-                                                                title="AI Rewrite"
-                                                                style={{ fontSize: "15px" }}
-                                                                onClick={() => AiRewriteScopeExlusions()}
-                                                            />)}
-
-                                                        < FontAwesomeIcon
-                                                            icon={faRotateLeft}
-                                                            className="scope-textarea-icon-undo"
-                                                            title="Undo AI Rewrite"
-                                                            style={{
-                                                                marginLeft: '8px',
-                                                                opacity: rewriteHistory.scopeExclusions.length ? 1 : 0.3,
-                                                                cursor: rewriteHistory.scopeExclusions.length ? 'pointer' : 'not-allowed',
-                                                                fontSize: "15px"
-                                                            }}
-                                                            onClick={() => undoAiRewrite('scopeExclusions')}
-                                                        />
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
 
                     <RelevantControlsTable
                         ref={relevantControlsRef}
@@ -3602,16 +3730,24 @@ const RiskManagementPageIBRA = () => {
                         highlightedControlNames={unusedRelevantControlsHighlight}
                     />
 
-                    <AbbreviationTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
-                    <TermTableRisk readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
-                    <AttendanceTable title={formData.title} documentType={formData.documentType} readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
-                    {formData.documentType === "IBRA" && (<IBRATable relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
-                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable readOnly={readOnly} error={errors.cea} rows={formData.cea} highlightedRows={highlightedRows} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
+                    <AbbreviationTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
+                    <TermTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
+                    <AttendanceTable collapsible={true} title={formData.title} documentType={formData.documentType} readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
+                    {formData.documentType === "IBRA" && (<IBRATable collapsible={true} relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
+                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable collapsible={true} readOnly={readOnly} error={errors.cea} rows={formData.cea} highlightedRows={highlightedRows} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
 
-                    <ExecutiveSummary readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.execSummary} handleInputChange={handleInputChange} />
-                    <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={false} />
-                    <PicturesTable readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+                    <ExecutiveSummary
+                        collapsible={true}
+                        readOnly={readOnly}
+                        formData={formData}
+                        setFormData={setFormData}
+                        setErrors={setErrors}
+                        error={errors.execSummary}
+                    />
+
+                    <SupportingDocumentTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable collapsible={true} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={false} />
+                    <PicturesTable collapsible={true} readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
 
                     <div className="input-row-buttons-risk-create">
                         {/* Generate File Button */}

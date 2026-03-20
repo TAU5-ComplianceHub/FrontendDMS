@@ -10,7 +10,7 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
     const [help, setHelp] = useState(false);
 
     // Initialize local state using the prop (defaults to false if undefined)
-    const [collapsed, setCollapsed] = useState(!!isCollapsed);
+    const [collapsed, setCollapsed] = useState(true);
 
     const openHelp = () => {
         setHelp(true);
@@ -30,12 +30,6 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
             isRelevantControlsCollapsed: newState
         }));
     };
-
-    useEffect(() => {
-        if (isCollapsed !== undefined) {
-            setCollapsed(isCollapsed);
-        }
-    }, [isCollapsed]);
 
     // Toggle the popup visibility
     const togglePopup = () => {
