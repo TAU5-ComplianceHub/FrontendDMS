@@ -983,3 +983,41 @@ th.ibraAct {
     color: #ffc107;
     /* whatever highlight you like */
 }
+
+.ibra-linked-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* center vertically within synced height */
+    padding-top: 12px;
+    padding-bottom: 12px;
+    box-sizing: border-box;
+}
+
+.ibra-linked-item.has-divider {
+    border-bottom: 1px solid #CCC;
+}
+
+.ibra-linked-item-content {
+    width: 100%;
+    text-align: left;
+    white-space: pre-wrap;
+}
+
+.ibra-linked-display {
+    width: 100%;
+    font-size: 14px;
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    padding: 0;
+    margin: 0;
+    min-height: auto;
+    white-space: pre-wrap;
+}
+
+.hide-tds td {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}

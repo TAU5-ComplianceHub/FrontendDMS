@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import './IBRATable.css';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faPlusCircle, faTableColumns, faTimes, faGripVertical, faInfoCircle, faArrowUpRightFromSquare, faCheck, faDownload, faArrowsUpDown, faCopy, faFilter, faCalendar, faCalendarDays, faArrowsLeftRight, faWindowRestore, faBorderNone, faRotateLeft, faArrowsRotate, faFlag, faFax, faX } from '@fortawesome/free-solid-svg-icons';
@@ -16,6 +16,7 @@ import {
 
 const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false, relevantControls = [] }) => {
     const [collapsed, setCollapsed] = useState(false);
+    const syncGroups = useRef({});
     const isCollapsed = collapsible ? collapsed : false;
     const ibraBoxRef = useRef(null);
     const tableWrapperRef = useRef(null);
@@ -49,6 +50,23 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
     // REMOVED: initialOrderRef and its useEffect. We rely on the array order now.
 
     const BLANK = "(Blanks)";
+
+    const getSelectedValuesForColumn = (colId) => {
+        const raw = filters[colId];
+        const selected = Array.isArray(raw) ? raw : raw?.selected;
+        return Array.isArray(selected) ? selected : null;
+    };
+
+    const isSelectedOrNoFilter = (colId, value) => {
+        const selected = getSelectedValuesForColumn(colId);
+        if (!selected) return true;
+
+        const v = value == null || String(value).trim() === ""
+            ? BLANK
+            : String(value).trim();
+
+        return selected.includes(v);
+    };
 
     // Return an array of "filter values" for a cell.
     const getFilterValuesForCell = (row, colId) => {
@@ -220,8 +238,38 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
         action: { min: 50, max: 50 },
     };
 
+    const getVisibleLinkedItems = (p) => {
+        const actions = p?.actions || [];
+        const responsible = p?.responsible || [];
+        const dueDate = p?.dueDate || [];
+
+        const maxLen = Math.max(actions.length, responsible.length, dueDate.length);
+
+        const linked = Array.from({ length: maxLen }, (_, i) => ({
+            action: actions[i] || { id: `a-${i}`, action: "" },
+            responsible: responsible[i] || { id: `r-${i}`, person: "" },
+            dueDate: dueDate[i] || { id: `d-${i}`, date: "" },
+            index: i
+        }));
+
+        return linked.filter(item => {
+            const actionOk = isSelectedOrNoFilter("actions", item.action?.action);
+            const responsibleOk = isSelectedOrNoFilter("responsible", item.responsible?.person);
+            const dueDateOk = isSelectedOrNoFilter("dueDate", item.dueDate?.date);
+            return actionOk && responsibleOk && dueDateOk;
+        });
+    };
+
     const filteredRows = useMemo(() => {
         let current = [...rows];
+
+        const COLUMN_ONLY_FILTERS = new Set([
+            "hazards",
+            "controls",
+            "actions",
+            "responsible",
+            "dueDate"
+        ]);
 
         // 1) Apply filtering
         current = current.filter(row => {
@@ -230,6 +278,9 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                     ? filterObj
                     : filterObj?.selected;
                 if (!Array.isArray(selected) || selected.length === 0) continue;
+
+                // These filters are handled inside the cell renderers
+                if (COLUMN_ONLY_FILTERS.has(colId)) continue;
 
                 const cellValues = getFilterValuesForCell(row, colId);
                 const match = cellValues.some(v => selected.includes(v));
@@ -1381,7 +1432,7 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
 
             filtered = filtered.filter(row => {
                 const cellValues = getFilterValuesForCell(row, filterColId);
-                return cellValues.some(v => selected.includes(v));
+                return cellValues.every(v => selected.includes(v));
             });
         }
 
@@ -1389,6 +1440,36 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
             new Set(filtered.flatMap(r => getFilterValuesForCell(r, colId)))
         ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
     };
+
+    function syncHeight(key) {
+        const els = (syncGroups.current[key] || []).filter(
+            el => el instanceof HTMLElement
+        );
+        if (!els.length) return;
+
+        els.forEach(el => {
+            el.style.height = 'auto';
+        });
+
+        const maxH = els.reduce(
+            (m, el) => Math.max(m, el.scrollHeight),
+            0
+        );
+
+        els.forEach(el => {
+            el.style.height = `${maxH}px`;
+        });
+    }
+
+    useLayoutEffect(() => {
+        const rafId = window.requestAnimationFrame(() => {
+            Object.keys(syncGroups.current).forEach(key => {
+                syncHeight(key);
+            });
+        });
+
+        return () => window.cancelAnimationFrame(rafId);
+    }, [rows, collapsed, sortConfig, showColumns]);
 
     return (
         <div className="input-row-risk-ibra">
@@ -1531,7 +1612,7 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                 {(!isCollapsed) && (
                     <>
                         <div className="table-wrapper-ibra" ref={tableWrapperRef}>
-                            <table className="table-borders-ibra-table"
+                            <table className="table-borders-ibra-table hide-tds"
                                 style={{
                                     width: tableWidth ? `${tableWidth}px` : '100%', // first paint fallback
                                     tableLayout: 'fixed',
@@ -1701,6 +1782,7 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                                                             );
                                                         }
 
+                                                        {/*
                                                         if (colId === "actions") {
                                                             return (
                                                                 <td key={idx} className={colClass} style={commonCellStyle}>
@@ -1790,7 +1872,7 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                                                                                 style={{
                                                                                     backgroundColor: "#fff",
                                                                                     borderColor: "#BFBFBF",
-                                                                                    color: "#002060",         // text color
+                                                                                    color: "black",         // text color
                                                                                     "--rmdp-primary-color": "#002060",  // ← highlight color (selected day, header accent)
                                                                                     "--rmdp-secondary-color": "#E6ECFF", // ← hover background color
                                                                                     pointerEvents: "auto",
@@ -1825,6 +1907,121 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                                                                             )}
                                                                         </div>
                                                                     ))}
+                                                                </td>
+                                                            );
+                                                        }
+                                                        */}
+
+                                                        if (colId === "actions") {
+                                                            const visibleLinkedItems = getVisibleLinkedItems(p);
+
+                                                            return (
+                                                                <td key={idx} className={colClass} style={commonCellStyle}>
+                                                                    {visibleLinkedItems.map((item, ai, arr) => {
+                                                                        const a = item.action;
+                                                                        const syncKey = `${row.id}-${p.id}-${ai}`;
+                                                                        const showDivider = arr.length > 1 && ai < arr.length - 1;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={a.id || ai}
+                                                                                className={`ibra-linked-item ${showDivider ? "has-divider" : ""}`}
+                                                                                ref={el => {
+                                                                                    let group = syncGroups.current[syncKey] || [];
+
+                                                                                    if (el) {
+                                                                                        if (!group.includes(el)) group.push(el);
+                                                                                    } else {
+                                                                                        group = group.filter(node => node?.isConnected);
+                                                                                    }
+
+                                                                                    syncGroups.current[syncKey] = group;
+                                                                                }}
+                                                                            >
+                                                                                <div className="ibra-linked-item-content">
+                                                                                    <div className="ibra-linked-display" style={{ fontSize: "14px" }}>
+                                                                                        {a.action || ""}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "responsible") {
+                                                            const visibleLinkedItems = getVisibleLinkedItems(p);
+
+                                                            return (
+                                                                <td key={idx} className={colClass} style={commonCellStyle}>
+                                                                    {visibleLinkedItems.map((item, ri, arr) => {
+                                                                        const r = item.responsible;
+                                                                        const syncKey = `${row.id}-${p.id}-${ri}`;
+                                                                        const showDivider = arr.length > 1 && ri < arr.length - 1;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={r.id || ri}
+                                                                                className={`ibra-linked-item ${showDivider ? "has-divider" : ""}`}
+                                                                                ref={el => {
+                                                                                    let group = syncGroups.current[syncKey] || [];
+
+                                                                                    if (el) {
+                                                                                        if (!group.includes(el)) group.push(el);
+                                                                                    } else {
+                                                                                        group = group.filter(node => node?.isConnected);
+                                                                                    }
+
+                                                                                    syncGroups.current[syncKey] = group;
+                                                                                }}
+                                                                            >
+                                                                                <div className="ibra-linked-item-content">
+                                                                                    <div className="ibra-linked-display" style={{ fontSize: "14px" }}>
+                                                                                        {r.person || ""}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </td>
+                                                            );
+                                                        }
+
+                                                        if (colId === "dueDate") {
+                                                            const visibleLinkedItems = getVisibleLinkedItems(p);
+
+                                                            return (
+                                                                <td key={idx} className={colClass} style={commonCellStyle}>
+                                                                    {visibleLinkedItems.map((item, di, arr) => {
+                                                                        const d = item.dueDate;
+                                                                        const syncKey = `${row.id}-${p.id}-${di}`;
+                                                                        const showDivider = arr.length > 1 && di < arr.length - 1;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={d.id || di}
+                                                                                className={`ibra-linked-item ${showDivider ? "has-divider" : ""}`}
+                                                                                ref={el => {
+                                                                                    let group = syncGroups.current[syncKey] || [];
+
+                                                                                    if (el) {
+                                                                                        if (!group.includes(el)) group.push(el);
+                                                                                    } else {
+                                                                                        group = group.filter(node => node?.isConnected);
+                                                                                    }
+
+                                                                                    syncGroups.current[syncKey] = group;
+                                                                                }}
+                                                                            >
+                                                                                <div className="ibra-linked-item-content">
+                                                                                    <div className="ibra-linked-display" style={{ fontSize: "14px" }}>
+                                                                                        {d.date || ""}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </td>
                                                             );
                                                         }
@@ -2098,11 +2295,16 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                                                                                 textAlign: "left",
                                                                             }}
                                                                         >
-                                                                            {row.hazards.map((item, i) => (
-                                                                                <li key={i} style={{ paddingLeft: "5px" }}>
-                                                                                    {typeof item === "string" ? item : item.hazard || ""}
-                                                                                </li>
-                                                                            ))}
+                                                                            {row.hazards
+                                                                                .filter(item => {
+                                                                                    const value = typeof item === "string" ? item : item?.hazard;
+                                                                                    return isSelectedOrNoFilter("hazards", value);
+                                                                                })
+                                                                                .map((item, i) => (
+                                                                                    <li key={i} style={{ paddingLeft: "5px" }}>
+                                                                                        {typeof item === "string" ? item : item.hazard || ""}
+                                                                                    </li>
+                                                                                ))}
                                                                         </ul>
                                                                     ) : (
                                                                         row.hazards
@@ -2131,11 +2333,16 @@ const IBRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
                                                                                 textAlign: "left",
                                                                             }}
                                                                         >
-                                                                            {row.controls.map((item, i) => (
-                                                                                <li key={i} style={{ paddingLeft: "5px" }}>
-                                                                                    {typeof item === "string" ? item : item.control || ""}
-                                                                                </li>
-                                                                            ))}
+                                                                            {row.controls
+                                                                                .filter(item => {
+                                                                                    const value = typeof item === "string" ? item : item?.control;
+                                                                                    return isSelectedOrNoFilter("controls", value);
+                                                                                })
+                                                                                .map((item, i) => (
+                                                                                    <li key={i} style={{ paddingLeft: "5px" }}>
+                                                                                        {typeof item === "string" ? item : item.control || ""}
+                                                                                    </li>
+                                                                                ))}
                                                                         </ul>
                                                                     ) : (
                                                                         row.controls

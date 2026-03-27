@@ -53,6 +53,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
 
     const availableColumns = [
         { id: "nr", title: "Nr", className: "control-analysis-nr", icon: null },
+        { id: "category", title: "Category", className: "control-analysis-control", icon: null },
         { id: "control", title: "Control Name", className: "control-analysis-control", icon: null },
         { id: "description", title: "Control Description", className: "control-analysis-control", icon: null },
         { id: "performance", title: "Performance Requirements & Verifications", className: "control-analysis-control", icon: null },
@@ -75,6 +76,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
 
     const initialColumnWidths = {
         nr: 55,
+        category: 75,
         control: 500,
         description: 500,
         performance: 500,
@@ -95,6 +97,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
     const [columnWidths, setColumnWidths] = useState(initialColumnWidths);
     const columnSizeLimits = {
         nr: { min: 40, max: 120 },
+        category: { min: 60, max: 150 },
         control: { min: 200, max: 900 },
         description: { min: 200, max: 900 },
         performance: { min: 200, max: 900 },
@@ -273,7 +276,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
     }, [isSidebarVisible, isCollapsed]);
 
     const [showColumns, setShowColumns] = useState([
-        "nr", "control", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", ...(readOnly ? [] : ["actions"])
+        "nr", "category", "control", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", ...(readOnly ? [] : ["actions"])
     ]);
 
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -489,27 +492,29 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
         };
 
         currentRows.sort((a, b) => {
-            const av = normalize(a?.[colId]);
-            const bv = normalize(b?.[colId]);
+            const normalize = (v) => (v == null ? "" : String(v).trim());
+            const normCat = (v) => normalize(v).toLowerCase();
 
-            // Put blanks at the bottom
-            const aBlank = av === BLANK;
-            const bBlank = bv === BLANK;
-            if (aBlank && !bBlank) return 1;
-            if (!aBlank && bBlank) return -1;
+            const aCat = normCat(a.category);
+            const bCat = normCat(b.category);
 
-            // Numeric sort if both numeric
-            const an = tryNumber(av);
-            const bn = tryNumber(bv);
-            if (an != null && bn != null) return (an - bn) * dir;
+            const aIsGeneral = aCat === "general";
+            const bIsGeneral = bCat === "general";
 
-            // Date sort for dueDate
-            const ad = tryDate(av);
-            const bd = tryDate(bv);
-            if (ad != null && bd != null) return (ad - bd) * dir;
+            // 1. General first
+            if (aIsGeneral && !bIsGeneral) return -1;
+            if (!aIsGeneral && bIsGeneral) return 1;
 
-            // String sort
-            return String(av).localeCompare(String(bv), undefined, { sensitivity: "base", numeric: true }) * dir;
+            // 2. Then category A-Z
+            if (aCat !== bCat) {
+                return aCat.localeCompare(bCat);
+            }
+
+            // 3. Then control name A-Z
+            const aControl = normalize(a.control).toLowerCase();
+            const bControl = normalize(b.control).toLowerCase();
+
+            return aControl.localeCompare(bControl);
         });
 
         // 3. Renumber
@@ -780,6 +785,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
 
     const getDefaultShowColumns = () => [
         "nr",
+        "category",
         "control",
         "critical",
         "act",
@@ -1281,7 +1287,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
                                                 }
 
                                                 // Center‐align certain columns
-                                                const centerColumns = ['critical', 'act', 'quality', 'cer', "activation", "hierarchy", "cons", "responsible", "dueDate"];
+                                                const centerColumns = ['critical', 'act', 'quality', 'cer', "activation", "hierarchy", "cons", "responsible", "dueDate", "category"];
                                                 const textAlign = centerColumns.includes(columnId) ? 'center' : 'left';
 
                                                 return (

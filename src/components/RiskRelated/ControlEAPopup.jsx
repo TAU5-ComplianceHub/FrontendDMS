@@ -24,6 +24,8 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
     const [hierarchy, setHierarchy] = useState("");
     const [controlAim, setControlAim] = useState("");
     const [quality, setQuality] = useState("");
+    const [category, setCategory] = useState("");
+    const [categoryOptions, setCategoryOptions] = useState([]);
     const [cer, setCER] = useState("");
     const [notes, setNotes] = useState("");
     const [description, setDescription] = useState("");
@@ -68,6 +70,29 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
         setIsSystemControlName(clean ? systemControlSet.has(clean) : false);
     }, [controlName, systemControlSet]);
 
+    const fetchCategories = async () => {
+        const route = `/api/riskInfo/getCategories`;
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}${route}`);
+            if (!response.ok) {
+                throw new Error('Failed to fetch categories');
+            }
+
+            const result = await response.json();
+            const sortedCategories = (result.categories || []).sort((a, b) =>
+                a.category.localeCompare(b.category, undefined, { sensitivity: 'base' })
+            );
+
+            setCategoryOptions(sortedCategories);
+        } catch (error) {
+            console.log(error);
+            setCategoryOptions([]);
+        }
+    };
+
+    useEffect(() => {
+        fetchCategories();
+    }, []);
 
     const [showSuggestionPopup, setShowSuggestionPopup] = useState(false);
 
@@ -309,17 +334,18 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
 
     useEffect(() => {
         if (data) {
-            console.log("🔍 incoming data:", data)
+            console.log("🔍 incoming data:", data);
 
-            setControlName(data.control || '');
-            setCriticalControl(data.critical || '');
-            setControlType(data.act || '');
-            setControlActivation(data.activation || '');
-            setHierarchy(data.hierarchy || '');
-            setControlAim(data.cons || '');
-            setQuality(data.quality || '');
-            setCER(data.cer || '');
-            setNotes(data.notes || '');
+            setControlName(data.control || "");
+            setCriticalControl(data.critical || "");
+            setControlType(data.act || "");
+            setControlActivation(data.activation || "");
+            setHierarchy(data.hierarchy || "");
+            setControlAim(data.cons || "");
+            setQuality(data.quality || "");
+            setCategory(data.category || "");
+            setCER(data.cer || "");
+            setNotes(data.notes || "");
             setDescription(data.description || "");
             setPerformance(data.performance || "");
             setResponsible(data.responsible || "");
@@ -406,6 +432,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
             hierarchy: hierarchy,
             cons: controlAim,
             quality: quality,
+            category: category,
             cer: cer,
             notes: notes,
             description: description,
@@ -436,7 +463,8 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
             controlAim: controlAim,
             quality: quality,
             description: description,
-            performance: performance
+            performance: performance,
+            category: category
         };
     };
 
@@ -482,7 +510,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                             </div>
 
                             <div className="cea-4-row">
-                                <div className="cea-column-fourth">
+                                <div className="cea-column-third">
                                     <div className="cea-popup-page-component-wrapper">
                                         <div className={`ibra-popup-page-form-group ${errors.author ? "error-upload-required-up" : ""}`}>
                                             <label><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpCritical} className="ibra-popup-label-icon" />Critical Control</label>
@@ -501,7 +529,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                         </div>
                                     </div>
                                 </div>
-                                <div className="cea-column-fourth">
+                                <div className="cea-column-third">
                                     <div className="cea-popup-page-component-wrapper">
                                         <div className={`ibra-popup-page-form-group${errors.author ? "error-upload-required-up" : ""}`}>
                                             <label><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpCT} className="ibra-popup-label-icon" />Act, Object or System</label>
@@ -525,7 +553,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                         </div>
                                     </div>
                                 </div>
-                                <div className="cea-column-fourth">
+                                <div className="cea-column-third">
                                     <div className="cea-popup-page-component-wrapper">
                                         <div className={`ibra-popup-page-form-group ${errors.author ? "error-upload-required-up" : ""}`}>
                                             <label style={{ marginLeft: '6px' }}><FontAwesomeIcon icon={faInfoCircle} onClick={openHelpCA} style={{ cursor: 'pointer' }} className="ibra-popup-label-icon" />Control Activation</label>
@@ -555,6 +583,9 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="cea-4-row">
                                 <div className="cea-column-fourth">
                                     <div className="cea-popup-page-component-wrapper">
                                         <div className={`ibra-popup-page-form-group ${errors.author ? "error-upload-required-up" : ""}`}>
@@ -574,6 +605,52 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                                             </option>
                                                         ))
                                                     }
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="cea-column-fourth">
+                                    <div className="cea-popup-page-component-wrapper">
+                                        <div className={`ibra-popup-page-form-group ${errors.riskSource ? "error-upload-required-up" : ""}`}>
+                                            <label><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpQuality} className="ibra-popup-label-icon" />Quality</label>
+                                            <div className="ibra-popup-page-select-container">
+                                                <select
+                                                    className="ibra-popup-page-select"
+                                                    value={quality}
+                                                    onChange={(e) => setQuality(e.target.value)}
+                                                    disabled={readOnly}
+                                                >
+                                                    <option value="">Select Quality</option>
+                                                    {
+                                                        qualityOptions.map((option, index) => (
+                                                            <option key={index} value={option}>
+                                                                {option}
+                                                            </option>
+                                                        ))
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="cea-column-fourth">
+                                    <div className="cea-popup-page-component-wrapper">
+                                        <div className={`ibra-popup-page-form-group ${errors.riskSource ? "error-upload-required-up" : ""}`}>
+                                            <label>Category</label>
+                                            <div className="ibra-popup-page-select-container">
+                                                <select
+                                                    className="ibra-popup-page-select"
+                                                    value={category}
+                                                    onChange={(e) => setCategory(e.target.value)}
+                                                    disabled={isSystemControlName || readOnly}
+                                                >
+                                                    <option value="">Select Category</option>
+                                                    {categoryOptions.map((option, index) => (
+                                                        <option key={index} value={option.category}>
+                                                            {option.category}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </div>
                                         </div>
@@ -609,31 +686,27 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                     </div>
                                 </div>
                                 <div className="ibra-popup-page-column-half">
-                                    <div className="ibra-popup-page-additional-row">
-                                        <div className="ibra-popup-page-column-half">
-                                            <div className="cea-popup-page-component-wrapper">
-                                                <div className={`ibra-popup-page-form-group ${errors.riskSource ? "error-upload-required-up" : ""}`}>
-                                                    <label><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} onClick={openHelpQuality} className="ibra-popup-label-icon" />Quality</label>
-                                                    <div className="ibra-popup-page-select-container">
-                                                        <select
-                                                            className="ibra-popup-page-select"
-                                                            value={quality}
-                                                            onChange={(e) => setQuality(e.target.value)}
-                                                            disabled={readOnly}
-                                                        >
-                                                            <option value="">Select Quality</option>
-                                                            {
-                                                                qualityOptions.map((option, index) => (
-                                                                    <option key={index} value={option}>
-                                                                        {option}
-                                                                    </option>
-                                                                ))
-                                                            }
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                    <div className={`cea-popup-page-component-wrapper cer-wrapper ${formattingColour}`} style={{ height: "calc(100% - 42px)" }}>
+                                        <div className={`ibra-popup-page-form-group`}>
+                                            <label style={{ marginBottom: "10px", display: "block" }} className={`${formattingColour}`}><FontAwesomeIcon icon={faInfoCircle} style={{ cursor: 'pointer' }} className={`ibra-popup-label-icon`} onClick={openHelpCER} />Control Effectiveness Rating</label>
+                                            <label
+                                                style={{ display: "flex", fontWeight: "bold", height: "45px", marginBottom: "0px", justifyContent: "center" }}
+                                                className={`cea-popup-page-label-output ${formattingColour}`}
+                                            >
+                                                {cer || "-"}
+                                            </label>
                                         </div>
+
+                                        <div className="ibra-popup-page-column-half">
+
+                                            {/*
+                                            
+                                            */}
+                                        </div>
+                                    </div>
+
+                                    {/* 
+                                    <div className="ibra-popup-page-additional-row" style={{ marginTop: "8px" }}>
                                         <div className="ibra-popup-page-column-half">
                                             <div className={`cea-popup-page-component-wrapper ${formattingColour}`}>
                                                 <div className={`ibra-popup-page-form-group`}>
@@ -648,6 +721,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                             </div>
                                         </div>
                                     </div>
+                                    */}
                                 </div>
                             </div>
 

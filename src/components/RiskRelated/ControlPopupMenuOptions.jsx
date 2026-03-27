@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const ControlPopupMenuOptions = ({ isOpen = true, id }) => {
+const ControlPopupMenuOptions = ({ isOpen = true, id, deleted = false }) => {
     const navigate = useNavigate();
 
     return (
@@ -15,7 +15,7 @@ const ControlPopupMenuOptions = ({ isOpen = true, id }) => {
                                 onMouseDown={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    navigate(`/FrontendDMS/controlsHistory/${id}`);
+                                    navigate(deleted ? `/FrontendDMS/deletedControlsHistory/${id}` : `/FrontendDMS/controlsHistory/${id}`);
                                 }}
                             >
                                 Version History

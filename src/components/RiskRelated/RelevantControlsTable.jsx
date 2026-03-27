@@ -49,13 +49,21 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
 
             const updatedList = Array.from(selectedNames).map(name => {
                 const existing = byName.get(name);
-                if (existing) return existing;
-
                 const fromPopup = (selectedControlObjects || []).find(o => o.control === name);
+
+                if (existing) {
+                    return {
+                        ...existing,
+                        category:
+                            (existing?.category || fromPopup?.category || "").toString().trim(),
+                    };
+                }
+
                 return {
                     id: uuidv4(),
                     control: name,
                     description: fromPopup?.description || "",
+                    category: (fromPopup?.category ?? "").toString().trim(),
                 };
             });
 
@@ -94,9 +102,30 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
         });
     };
 
-    const sortedRelevantControls = [...(relevantControls || [])].sort((a, b) =>
-        (a.control || "").localeCompare((b.control || ""), undefined, { sensitivity: "base" })
-    );
+    const sortedRelevantControls = [...(relevantControls || [])].sort((a, b) => {
+        const normalize = (v) => (v == null ? "" : String(v).trim());
+        const normCat = (v) => normalize(v).toLowerCase();
+
+        const aCat = normCat(a.category);
+        const bCat = normCat(b.category);
+
+        const aIsGeneral = aCat === "general";
+        const bIsGeneral = bCat === "general";
+
+        // 1. General first
+        if (aIsGeneral && !bIsGeneral) return -1;
+        if (!aIsGeneral && bIsGeneral) return 1;
+
+        // 2. Category A-Z
+        if (aCat !== bCat) {
+            return aCat.localeCompare(bCat);
+        }
+
+        // 3. Control name A-Z
+        return normalize(a.control).localeCompare(normalize(b.control), undefined, {
+            sensitivity: "base"
+        });
+    });
 
     const norm = (s) => (s ?? "").toString().trim().toLowerCase();
 
@@ -156,7 +185,8 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
                                 <thead className="cp-table-header" style={{ backgroundColor: "#002060", color: "white" }}>
                                     <tr>
                                         <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
-                                        <th className="refColCen refRef" style={{ width: "90%" }}>Control Name</th>
+                                        <th className="refColCen refRef" style={{ width: "10%" }}>Category</th>
+                                        <th className="refColCen refRef" style={{ width: "80%" }}>Control Name</th>
                                         {!readOnly && <th className="refColCen refBut" style={{ width: "5%" }}>Action</th>}
                                     </tr>
                                 </thead>
@@ -166,6 +196,9 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
                                             style={highlightedSet.has(norm(row.control)) ? { backgroundColor: "#ffcccc" } : undefined}
                                         >
                                             <td className="refCent" style={{ fontSize: "14px" }}>{index + 1}</td>
+                                            <td className="refCent" style={{ fontSize: "14px", textAlign: "left", fontWeight: "normal", textAlign: "center" }}>
+                                                {row.category}
+                                            </td>
                                             <td className="refCent" style={{ fontSize: "14px", textAlign: "left", fontWeight: "normal" }}>
                                                 {row.control}
                                             </td>

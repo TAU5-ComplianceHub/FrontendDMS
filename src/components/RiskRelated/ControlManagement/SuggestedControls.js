@@ -325,6 +325,7 @@ const SuggestedControls = () => {
     // Added new columns to availableColumns
     const availableColumns = [
         { id: "nr", title: "Nr" },
+        { id: "category", title: "Category" },
         { id: "control", title: "Control" },
         { id: "description", title: "Control Description" },
         { id: "performance", title: "Performance Requirements & Verification" },
@@ -346,6 +347,7 @@ const SuggestedControls = () => {
         "dateSuggested",
         "dateReviewed",
         "suggestedBy",
+        "category",
         "status",
         "control",
         "description",
@@ -384,7 +386,7 @@ const SuggestedControls = () => {
     const identificationColumns = ["control", "description", "performance", "critical"];
     const cerColumns = ["act", "activation", "hierarchy", "quality", "cons"];
     // Identify columns that span 2 rows (Standalone)
-    const standaloneColumns = ["nr", "dateSuggested", "dateReviewed", "suggestedBy", "status", "suggestionMessage"];
+    const standaloneColumns = ["nr", "category", "dateSuggested", "dateReviewed", "suggestedBy", "status", "suggestionMessage"];
 
     const visibleIdentificationColumns = identificationColumns.filter(id => showColumns.includes(id));
     const visibleCerColumns = cerColumns.filter(id => showColumns.includes(id));
@@ -412,6 +414,7 @@ const SuggestedControls = () => {
 
     const [columnWidths, setColumnWidths] = useState({
         nr: 60,
+        category: 70,
         dateSuggested: 120,
         dateReviewed: 120,
         suggestedBy: 150,
@@ -430,6 +433,7 @@ const SuggestedControls = () => {
 
     const [initialColumnWidths] = useState({
         nr: 60,
+        category: 70,
         dateSuggested: 120,
         dateReviewed: 120,
         suggestedBy: 150,
@@ -448,6 +452,7 @@ const SuggestedControls = () => {
 
     const columnSizeLimits = {
         nr: { min: 60, max: 60 },
+        category: { min: 60, max: 150 },
         dateSuggested: { min: 100, max: 200 },
         dateReviewed: { min: 100, max: 200 },
         suggestedBy: { min: 100, max: 300 },
@@ -1075,6 +1080,10 @@ const SuggestedControls = () => {
                                                 <td className="procCent" style={{ fontSize: "14px" }}>
                                                     {index + 1}
                                                 </td>
+                                            )}
+
+                                            {showColumns.includes("category") && (
+                                                <td style={{ fontSize: "14px" }}>{row.category}</td>
                                             )}
 
                                             {showColumns.includes("control") && (

@@ -4,6 +4,10 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
     const [departments, setDepartments] = useState([]);
     const [users, setUsers] = useState([]);
 
+    useEffect(() => {
+        console.log(userToEdit)
+    }, [isEditModalOpen])
+
     const DESIGNATIONS = [
         "Automation & Systems Manager",
         "Boilermaker",
@@ -279,7 +283,7 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                                 <select
                                     id="reportingTo"
                                     className={userToEdit.reportingTo === null ? `create-user-select def-colour` : `create-user-select`}
-                                    value={userToEdit.reportingTo}
+                                    value={userToEdit?.reportingTo || ""}
                                     onChange={(e) => setUserToEdit({ ...userToEdit, reportingTo: e.target.value })}
                                 >
                                     <option value="" className="def-colour">Select Reporting To</option>

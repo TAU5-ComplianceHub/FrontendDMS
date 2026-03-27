@@ -145,7 +145,8 @@ const ImportSiteInfo = ({ onClose, onFileSelected }) => {
                     <div className="import-si-file-text">Upload Site General Information</div>
                     <div className="import-si-file-text-xlsx">{file ? file.name : "No File Selected"}</div>
                     <div className="import-si-file-buttons">
-                        <label className="import-si-file-button">
+                        <label className="import-si-file-button"
+                            style={{ width: "50%" }}>
                             {'Select File'}
                             <input
                                 type="file"
@@ -158,7 +159,7 @@ const ImportSiteInfo = ({ onClose, onFileSelected }) => {
                 </div>
 
                 <div className="import-si-info-row">
-                    <div className="import-si-file-group" style={{ position: "relative" }}>
+                    {false && (<div className="import-si-file-group" style={{ position: "relative" }}>
                         <button
                             className="top-right-button-rsi"
                             title="Download SID"
@@ -171,7 +172,7 @@ const ImportSiteInfo = ({ onClose, onFileSelected }) => {
                         <div className="import-si-value">V0.25</div>
                         <div className="import-si-label">Date Uploaded</div>
                         <div className="import-si-value">2026-01-11</div>
-                    </div>
+                    </div>)}
 
                     <div className="import-si-file-group" style={{ position: "relative" }}>
                         <button
@@ -198,6 +199,7 @@ const ImportSiteInfo = ({ onClose, onFileSelected }) => {
                     className="import-si-file-button-sub"
                     onClick={handleClick}
                     disabled={loading}
+                    style={{ width: "50%" }}
                 >
                     {loading ? (
                         <>

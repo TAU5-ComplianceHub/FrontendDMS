@@ -1,9 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 import "./ChapterTable.css"; // Updated CSS filename
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrash, faTrashCan } from '@fortawesome/free-solid-svg-icons';
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const ChapterTable = ({ formData, setFormData, readOnly = false }) => {
+const ChapterTable = ({ collapsible = false, formData, setFormData, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
+
     const addChapter = () => {
         const newChapter = {
             chapterNumber: formData.chapters.length + 1,
@@ -52,65 +64,81 @@ const ChapterTable = ({ formData, setFormData, readOnly = false }) => {
     };
 
     return (
-        <div className="input-row">
-            <div className="modern-chapter-table">
+        <div className="input-row" style={{ position: "relative" }}>
+            <div className="modern-chapter-table" style={{ position: "relative" }}>
                 <h3 className="font-fam-labels">Add Additional Section</h3>
-                {formData.chapters.map((chapter, chapterIndex) => (
-                    <div key={chapterIndex} className="mct-chapter-card">
-                        <div className="mct-chapter-header">
-                            <h4>Section {chapter.chapterNumber}</h4>
-                            {!readOnly && (<button className="mct-remove-btn" onClick={() => removeChapter(chapterIndex)}><FontAwesomeIcon icon={faTrash} title="Remove Section" /></button>)}
-                        </div>
-                        <label>Section Title:</label>
-                        <input
-                            className="mct-input"
-                            type="text"
-                            value={chapter.chapterTitle}
-                            onChange={(e) => handleInputChange(e, chapterIndex, null, "chapterTitle")}
-                            placeholder="Insert section title..."
-                            readOnly={readOnly}
-                        />
 
-                        <label style={{ marginBottom: "5px", marginTop: "5px" }}>Section Body:</label>
-                        <textarea
-                            className="mct-textarea"
-                            value={chapter.chapterBody}
-                            onChange={(e) => handleInputChange(e, chapterIndex, null, "chapterBody")}
-                            placeholder="Insert content..."
-                            readOnly={readOnly}
-                            rows="10"
-                        />
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                        {chapter.subheadings.map((subheading, subheadingIndex) => (
-                            <div key={subheadingIndex} className="mct-subheading-card">
-                                <div className="mct-subheading-header">
-                                    <h5>Sub-Section {chapterIndex + 1}.{subheadingIndex + 1}</h5>
-                                    {!readOnly && (<button className="mct-remove-btn" onClick={() => removeSubheading(chapterIndex, subheadingIndex)}><FontAwesomeIcon icon={faTrash} title="Remove Sub-Section" /></button>)}
+                {(!isCollapsed) && (
+                    <>
+                        {formData.chapters.map((chapter, chapterIndex) => (
+                            <div key={chapterIndex} className="mct-chapter-card">
+                                <div className="mct-chapter-header">
+                                    <h4>Section {chapter.chapterNumber}</h4>
+                                    {!readOnly && (<button className="mct-remove-btn" onClick={() => removeChapter(chapterIndex)}><FontAwesomeIcon icon={faTrash} title="Remove Section" /></button>)}
                                 </div>
+                                <label>Section Title:</label>
                                 <input
                                     className="mct-input"
                                     type="text"
-                                    value={subheading.subheadingTitle}
-                                    onChange={(e) => handleInputChange(e, chapterIndex, subheadingIndex, "subheadingTitle")}
-                                    placeholder="Insert subheading title..."
+                                    value={chapter.chapterTitle}
+                                    onChange={(e) => handleInputChange(e, chapterIndex, null, "chapterTitle")}
+                                    placeholder="Insert section title..."
                                     readOnly={readOnly}
                                 />
+
+                                <label style={{ marginBottom: "5px", marginTop: "5px" }}>Section Body:</label>
                                 <textarea
                                     className="mct-textarea"
-                                    value={subheading.body}
-                                    onChange={(e) => handleInputChange(e, chapterIndex, subheadingIndex, "body")}
+                                    value={chapter.chapterBody}
+                                    onChange={(e) => handleInputChange(e, chapterIndex, null, "chapterBody")}
                                     placeholder="Insert content..."
                                     readOnly={readOnly}
                                     rows="10"
                                 />
+
+                                {chapter.subheadings.map((subheading, subheadingIndex) => (
+                                    <div key={subheadingIndex} className="mct-subheading-card">
+                                        <div className="mct-subheading-header">
+                                            <h5>Sub-Section {chapterIndex + 1}.{subheadingIndex + 1}</h5>
+                                            {!readOnly && (<button className="mct-remove-btn" onClick={() => removeSubheading(chapterIndex, subheadingIndex)}><FontAwesomeIcon icon={faTrash} title="Remove Sub-Section" /></button>)}
+                                        </div>
+                                        <input
+                                            className="mct-input"
+                                            type="text"
+                                            value={subheading.subheadingTitle}
+                                            onChange={(e) => handleInputChange(e, chapterIndex, subheadingIndex, "subheadingTitle")}
+                                            placeholder="Insert subheading title..."
+                                            readOnly={readOnly}
+                                        />
+                                        <textarea
+                                            className="mct-textarea"
+                                            value={subheading.body}
+                                            onChange={(e) => handleInputChange(e, chapterIndex, subheadingIndex, "body")}
+                                            placeholder="Insert content..."
+                                            readOnly={readOnly}
+                                            rows="10"
+                                        />
+                                    </div>
+                                ))}
+                                {!readOnly && (<div class="add-chapter-container">
+                                    <button className="mct-add-subheading-btn" onClick={() => addSubheading(chapterIndex)}>+ Add Sub-Section</button>
+                                </div>)}
                             </div>
                         ))}
-                        {!readOnly && (<div class="add-chapter-container">
-                            <button className="mct-add-subheading-btn" onClick={() => addSubheading(chapterIndex)}>+ Add Sub-Section</button>
-                        </div>)}
-                    </div>
-                ))}
-                {!readOnly && (<button className="add-row-button" onClick={addChapter}>Add</button>)}
+                        {!readOnly && (<button className="add-row-button" onClick={addChapter}>Add</button>)}
+
+                    </>
+                )}
             </div>
         </div>
     );

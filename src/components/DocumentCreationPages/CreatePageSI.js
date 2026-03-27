@@ -1930,14 +1930,14 @@ const CreatePageSI = () => {
             onRemoveScopeSection={handleRemoveAimSection}
             onAddBullet={handleAddAimBullet}
             onRemoveBullet={handleRemoveAimBullet}
-            collapsible={false}
+            collapsible={true}
           />
 
-          <SpecialInstructionsTable formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} readOnly={readOnly} />
-          <ChapterTable formData={formData} setFormData={setFormData} readOnly={readOnly} />
-          <AbbreviationTableSI formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} si={true} readOnly={readOnly} />
-          <TermTableSI formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} si={true} readOnly={readOnly} />
-          <ReferenceTableSpecialInstructions formData={formData} setFormData={setFormData} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} readOnly={readOnly} />
+          <SpecialInstructionsTable collapsible={true} formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} readOnly={readOnly} />
+          <ChapterTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+          <AbbreviationTableSI collapsible={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} si={true} readOnly={readOnly} />
+          <TermTableSI collapsible={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} si={true} readOnly={readOnly} />
+          <ReferenceTableSpecialInstructions collapsible={true} formData={formData} setFormData={setFormData} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} readOnly={readOnly} />
 
           <div className="input-row-buttons">
             {/* Generate File Button */}

@@ -196,9 +196,60 @@ const RiskReviewPageBLRA = () => {
         }
     };
 
-    const saveAsData = async () => {
+    const buildSupportingDocumentPayload = (documents = []) => {
+        return documents.map((doc, index) => ({
+            nr: index + 1,
+            name: doc.name,
+            note: doc.note || "",
+            saved: Boolean(doc.storageId),
+            storageId: doc.storageId || null,
+            size: doc.size || doc.file?.size || 0,
+            mimeType: doc.mimeType || doc.file?.type || "",
+        }));
+    };
+
+    const buildReviewFormDataRequest = (dataToStore, options = {}) => {
+        const { skipFileUpload = false } = options;
+
+        const multipart = new FormData();
+        const supportingDocuments = dataToStore.formData.supportingDocuments || [];
+
+        const payload = {
+            ...dataToStore,
+            formData: {
+                ...dataToStore.formData,
+                supportingDocuments: buildSupportingDocumentPayload(supportingDocuments),
+            },
+            skipFileUpload,
+        };
+
+        multipart.append("payload", JSON.stringify(payload));
+
+        if (!skipFileUpload) {
+            supportingDocuments.forEach((doc, index) => {
+                if (doc?.file instanceof File && !doc?.storageId) {
+                    multipart.append("supportingFiles", doc.file);
+                    multipart.append(
+                        "supportingFilesMeta",
+                        JSON.stringify({
+                            rowIndex: index,
+                            nr: doc.nr ?? index + 1,
+                            name: doc.name,
+                            note: doc.note || "",
+                        })
+                    );
+                }
+            });
+        }
+
+        return multipart;
+    };
+
+    const saveAsData = async (options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
-            usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
+            usedAbbrCodes: usedAbbrCodesRef.current,
             usedTermCodes: usedTermCodesRef.current,
             formData: formDataRef.current,
             userIDs: userIDsRef.current,
@@ -208,42 +259,66 @@ const RiskReviewPageBLRA = () => {
         };
 
         try {
+            const body = buildReviewFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskDraft/blra/safe`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
+
             const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to save draft');
+            }
 
             if (result.id) {
                 setLoadedID(result.id);
                 loadedIDRef.current = result.id;
+            }
+
+            if (result.formData) {
+                setFormData(result.formData);
+                formDataRef.current = result.formData;
             }
         } catch (error) {
             console.error('Error saving data:', error);
         }
     };
 
-    const saveData = async (fileID) => {
+    const saveData = async (fileID, options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
-            usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
+            usedAbbrCodes: usedAbbrCodesRef.current,
             usedTermCodes: usedTermCodesRef.current,
             formData: formDataRef.current
         };
 
         try {
+            const body = buildReviewFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/blra/save/${fileID}`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
+
             const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to save review file');
+            }
+
+            if (result?.draft?.formData) {
+                setFormData(result.draft.formData);
+                formDataRef.current = result.draft.formData;
+            }
         } catch (error) {
             console.error('Error saving data:', error);
         }
@@ -594,13 +669,16 @@ const RiskReviewPageBLRA = () => {
 
             // Step D: Create the relevantControls array
             normalized.relevantControls = allControls.map(name => {
-                // Try to find description from existing CEA row
                 const ceaRow = normalized.cea?.find(c => c.control === name);
+                const systemRow = allSystemControls?.find(
+                    c => (c?.control || "").trim().toLowerCase() === name.trim().toLowerCase()
+                );
 
                 return {
                     id: uuidv4(),
                     control: name,
-                    description: ceaRow ? ceaRow.description : ""
+                    description: ceaRow ? ceaRow.description : "",
+                    category: ceaRow?.category || systemRow?.category
                 };
             });
 
@@ -675,15 +753,37 @@ const RiskReviewPageBLRA = () => {
         }));
     };
 
-    const updateCEARows = (nrToUpdate, newValues) => {
-        setFormData(prev => ({
-            ...prev,
-            cea: prev.cea.map(item =>
-                item.nr === nrToUpdate
+    const updateCEARows = (idToUpdate, newValues) => {
+        setFormData(prev => {
+            const oldRow = prev.cea.find(item => item.id === idToUpdate);
+            if (!oldRow) return prev;
+
+            const updatedCEA = prev.cea.map(item =>
+                item.id === idToUpdate
                     ? { ...item, ...newValues }
                     : item
-            )
-        }));
+            );
+
+            const oldControlName = oldRow.control;
+            const newControlName = newValues.control ?? oldControlName;
+            const nextCategory = (newValues.category ?? oldRow.category ?? "").toString().trim();
+
+            const updatedRelevantControls = prev.relevantControls.map(item => {
+                if (norm(item.control) !== norm(oldControlName)) return item;
+
+                return {
+                    ...item,
+                    control: newControlName,
+                    category: nextCategory
+                };
+            });
+
+            return {
+                ...prev,
+                cea: updatedCEA,
+                relevantControls: updatedRelevantControls
+            };
+        });
     };
 
     const addIBRARow = () => {
@@ -1169,8 +1269,8 @@ const RiskReviewPageBLRA = () => {
     const autoSaveDraft = () => {
         if (readOnlyRef.current) return;
         if (readOnly) return;
-        if (formData.title.trim() === "") return; // Don't save without a valid title
-        saveData(fileID);
+        if (formData.title.trim() === "") return;
+        saveData(fileID, { skipFileUpload: false });
     };
 
     const [history, setHistory] = useState([]);
@@ -1974,18 +2074,31 @@ const RiskReviewPageBLRA = () => {
         const missingInRelevant = distinctControls.filter(c => !currentRelevantNames.includes(c));
 
         if (missingInRelevant.length > 0) {
-            const newRelevantRows = missingInRelevant.map(name => ({
-                id: uuidv4(),
-                control: name,
-                description: "" // Default empty if added manually
-            }));
+
+            // 🔹 Build lookup for system controls by name
+            const systemByName = new Map(
+                (allSystemControls || [])
+                    .filter(c => (c?.control || "").trim())
+                    .map(c => [c.control.trim().toLowerCase(), c])
+            );
+
+            const newRelevantRows = missingInRelevant.map(name => {
+                const matchedSystemControl = systemByName.get(name.toLowerCase());
+
+                return {
+                    id: uuidv4(),
+                    control: name,
+                    description: "",
+                    category: (matchedSystemControl?.category ?? "").toString().trim()
+                };
+            });
 
             setFormData(prev => ({
                 ...prev,
                 relevantControls: [...(prev.relevantControls || []), ...newRelevantRows]
             }));
         }
-    }, [formData.ibra]);
+    }, [formData.ibra, allSystemControls]);
 
     const norm = (s) => (s == null ? "" : String(s).trim());
 
@@ -2053,7 +2166,8 @@ const RiskReviewPageBLRA = () => {
                     !norm(r.hierarchy) ||
                     !norm(r.cons) ||
                     !norm(r.quality) ||
-                    !norm(r.cer)
+                    !norm(r.cer) ||
+                    !norm(r.category)
                 )
                 .map(r => norm(r.control));
 
@@ -2086,6 +2200,10 @@ const RiskReviewPageBLRA = () => {
             // Build rows to add for missing controls
             const addedRows = missingNames.map(name => {
                 const b = backendMap.get(name) || {};
+                const relevantMatch = (formData.relevantControls || []).find(
+                    rc => norm(rc.control) === norm(name)
+                );
+
                 return {
                     id: uuidv4(),
                     control: name,
@@ -2103,6 +2221,9 @@ const RiskReviewPageBLRA = () => {
                     dueDate: b.dueDate || "",
                     responsible: b.responsible || "",
                     action: b.action || "",
+                    category:
+                        (b.category ?? "").toString().trim() ||
+                        (relevantMatch?.category ?? "").toString().trim()
                 };
             });
 
@@ -2151,6 +2272,68 @@ const RiskReviewPageBLRA = () => {
         // 3. Return true if any defined control is missing from the used set
         return definedControlNames.some(name => !usedControlNames.has(name));
     };
+
+
+    useEffect(() => {
+        if (!Array.isArray(allSystemControls) || allSystemControls.length === 0) return;
+
+        const systemByName = new Map(
+            allSystemControls
+                .filter(c => (c?.control || "").trim())
+                .map(c => [
+                    (c.control || "").toString().trim().toLowerCase(),
+                    c
+                ])
+        );
+
+        let relevantChanged = false;
+        let ceaChanged = false;
+
+        const nextRelevantControls = (formData.relevantControls || []).map(row => {
+            const currentCategory = (row?.category ?? "").toString().trim();
+            if (currentCategory) return row;
+
+            const match = systemByName.get(
+                (row?.control || "").toString().trim().toLowerCase()
+            );
+
+            const matchedCategory = (match?.category ?? "").toString().trim();
+            if (!matchedCategory) return row;
+
+            relevantChanged = true;
+            return {
+                ...row,
+                category: matchedCategory
+            };
+        });
+
+        const nextCEA = (formData.cea || []).map(row => {
+            const currentCategory = (row?.category ?? "").toString().trim();
+            if (currentCategory) return row;
+
+            const match = systemByName.get(
+                (row?.control || "").toString().trim().toLowerCase()
+            );
+
+            const matchedCategory = (match?.category ?? "").toString().trim();
+            if (!matchedCategory) return row;
+
+            ceaChanged = true;
+            return {
+                ...row,
+                category: matchedCategory
+            };
+        });
+
+        if (relevantChanged || ceaChanged) {
+            setFormData(prev => ({
+                ...prev,
+                relevantControls: relevantChanged ? nextRelevantControls : prev.relevantControls,
+                cea: ceaChanged ? nextCEA : prev.cea
+            }));
+        }
+    }, [allSystemControls, formData.relevantControls, formData.cea]);
+
 
     const getUnusedControls = () => {
         const relevant = formData.relevantControls || [];
@@ -2597,6 +2780,45 @@ const RiskReviewPageBLRA = () => {
         });
     };
 
+
+    useEffect(() => {
+        if (!allSystemControls.length) return;
+        if (!Array.isArray(formData.relevantControls) || formData.relevantControls.length === 0) return;
+
+        const systemByName = new Map(
+            allSystemControls
+                .filter(c => (c?.control || "").trim())
+                .map(c => [String(c.control).trim().toLowerCase(), c])
+        );
+
+        let hasChanges = false;
+
+        const nextRelevantControls = formData.relevantControls.map(controlRow => {
+            const currentCategory = (controlRow?.category ?? "").toString().trim();
+            if (currentCategory) return controlRow;
+
+            const matchedSystemControl = systemByName.get(
+                (controlRow?.control || "").toString().trim().toLowerCase()
+            );
+
+            const matchedCategory = (matchedSystemControl?.category ?? "").toString().trim();
+            if (!matchedCategory) return controlRow;
+
+            hasChanges = true;
+            return {
+                ...controlRow,
+                category: matchedCategory,
+            };
+        });
+
+        if (hasChanges) {
+            setFormData(prev => ({
+                ...prev,
+                relevantControls: nextRelevantControls,
+            }));
+        }
+    }, [allSystemControls, formData.relevantControls]);
+
     return (
         <div className="risk-create-container">
             {isSidebarVisible && (
@@ -2789,7 +3011,7 @@ const RiskReviewPageBLRA = () => {
                         onRemoveAimSection={handleRemoveAimSection}
                         onAddBullet={handleAddAimBullet}
                         onRemoveBullet={handleRemoveAimBullet}
-                        collapsible={false}
+                        collapsible={true}
                     />
 
                     <RiskScopeIE
@@ -2824,7 +3046,7 @@ const RiskReviewPageBLRA = () => {
                         onUndoScope={() => undoAiRewrite("scope")}
                         onUndoScopeTextItem={(sectionKey, index) => undoAiRewrite(sectionKey, index)}
 
-                        collapsible={false}
+                        collapsible={true}
                     />
 
                     <RelevantControlsTable
@@ -2838,14 +3060,14 @@ const RiskReviewPageBLRA = () => {
                         highlightedControlNames={unusedRelevantControlsHighlight}
                     />
 
-                    <AbbreviationTableRisk collapsible={false} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
-                    <TermTableRisk collapsible={false} risk={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
-                    <AttendanceTable collapsible={false} readOnly={readOnly} title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
-                    {formData.documentType === "BLRA" && (<BLRATable collapsible={false} readOnly={readOnly} relevantControls={formData.relevantControls} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
-                    {(["BLRA"].includes(formData.documentType)) && (<ControlAnalysisTable collapsible={false} readOnly={readOnly} error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
+                    <AbbreviationTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
+                    <TermTableRisk collapsible={true} risk={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
+                    <AttendanceTable collapsible={true} readOnly={readOnly} title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
+                    {formData.documentType === "BLRA" && (<BLRATable collapsible={true} readOnly={readOnly} relevantControls={formData.relevantControls} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
+                    {(["BLRA"].includes(formData.documentType)) && (<ControlAnalysisTable collapsible={true} readOnly={readOnly} error={errors.cea} rows={formData.cea} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
 
                     <ExecutiveSummary
-                        collapsible={false}
+                        collapsible={true}
                         readOnly={readOnly}
                         formData={formData}
                         setFormData={setFormData}
@@ -2853,9 +3075,9 @@ const RiskReviewPageBLRA = () => {
                         error={errors.execSummary}
                     />
 
-                    <SupportingDocumentTable collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable collapsible={false} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
-                    <PicturesTable collapsible={false} readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+                    <SupportingDocumentTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable collapsible={true} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+                    <PicturesTable collapsible={true} readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
 
                     <div className="input-row">
                         <div className={`input-box-aim-cp`}>

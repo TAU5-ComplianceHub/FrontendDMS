@@ -20,7 +20,6 @@ const BurgerMenuFIMain = ({ isOpen, setIsOpen, toggleTrashView, isTrashView, ope
                 <div className="menu-content-FI-main" onMouseLeave={() => setIsOpen(false)}>
                     <ul>
                         <li onClick={() => navigate("/FrontendDMS/userProfile")}>My Profile</li>
-                        {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (<li onClick={toggleTrashView}>{isTrashView ? "Show All Files" : "Show Trash"}</li>)}
                         {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (<li onClick={openRDPopup}>Highlight Review Dates</li>)}
                         <li onClick={handleLogout}>Logout</li>
                     </ul>

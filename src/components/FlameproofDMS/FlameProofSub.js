@@ -564,12 +564,19 @@ const FlameProofSub = () => {
                     <span className="button-text">Upload Single Certificate</span>
                   </div>
                 </button>
+
+                <button className="but-dm-fi" onClick={() => setIsTrashView(true)}>
+                  <div className="button-content">
+                    <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                    <span className="button-text">Deleted Certificates</span>
+                  </div>
+                </button>
               </div>
             </div>
           )}
           <div className="sidebar-logo-dm-fi">
             <img src={icon} className="icon-risk-rm" />
-            <p className="logo-text-dm-fi">{isTrashView ? `Trashed Certificates` : (type)}</p>
+            <p className="logo-text-dm-fi">{isTrashView ? `Deleted Certificates` : (type)}</p>
             {!isTrashView && (<p className="logo-text-dm-fi" style={{ marginTop: "0px" }}>{siteTitle}</p>)}
           </div>
         </div>
@@ -578,7 +585,8 @@ const FlameProofSub = () => {
 
       <div className="main-box-file-info">
         <div className="top-section-um">
-          <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" /></div>
+          <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={() => { if (isTrashView) { setIsTrashView(false) } else { navigate(-1) } }} icon={faArrowLeft} title="Back" />
+          </div>
           <div className="um-input-container">
             <input className="search-input-um" type="text" placeholder="Search Certificate Number" autoComplete="off" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             {searchQuery !== "" && (<i><FontAwesomeIcon icon={faX} onClick={clearSearch} className="icon-um-search" title="Clear Search" /></i>)}
@@ -592,7 +600,7 @@ const FlameProofSub = () => {
 
         <div className="table-flameproof-card">
           <div className="flameproof-table-header-label-wrapper">
-            <label className="risk-control-label">{isTrashView ? `Trashed Certificates` : (type)}</label>
+            <label className="risk-control-label">{isTrashView ? `Deleted Certificates` : (type)}</label>
             {!isTrashView && (<FontAwesomeIcon icon={faDownload} title="Export to Excel" className="top-right-button-control-att" onClick={exportSID} />)}
             <FontAwesomeIcon
               icon={faFilter}

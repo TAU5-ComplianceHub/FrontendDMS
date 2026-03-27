@@ -181,6 +181,8 @@ import ScopeOnlyDocxTestPage from './components/ScopeOnlyDocxTestPage';
 import SGIBackupHistory from './components/SystemAdmin/SGIBackupHistory';
 import SGIAdminPage from './components/SystemAdmin/SGIAdminPage';
 import SGIVersionHistory from './components/SystemAdmin/SGIVersionHistory';
+import DeletedControlAttributes from './components/RiskRelated/DeletedControls/DeletedControlAttributes';
+import DeletedControlVersionHistory from './components/RiskRelated/DeletedControls/DeletedControlVersionHistory';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -425,9 +427,11 @@ function App() {
         <Route path="FrontendDMS/versionHistorySOJRA/:id" element={<VersionHistorySOJRA />} />
         <Route path="FrontendDMS/reviewSOJRA/:fileId/:type" element={<ReviewPageSOJRA />} />
         <Route path="/test" element={<ScopeOnlyDocxTestPage />} />
-        <Route path="/sgiBackups" element={<SGIBackupHistory />} />
-        <Route path="/sgiAdminPage" element={<SGIAdminPage />} />
-        <Route path="/sgiVersionHistory" element={<SGIVersionHistory />} />
+        <Route path="FrontendDMS/sgiBackups" element={<SGIBackupHistory />} />
+        <Route path="FrontendDMS/sgiAdminPage" element={<SGIAdminPage />} />
+        <Route path="FrontendDMS/sgiVersionHistory" element={<SGIVersionHistory />} />
+        <Route path="FrontendDMS/deletedControls" element={<DeletedControlAttributes />} />
+        <Route path="FrontendDMS/deletedControlsHistory/:id" element={<DeletedControlVersionHistory />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

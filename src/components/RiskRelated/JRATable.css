@@ -145,7 +145,6 @@
 .ibraSubJRA {
     min-width: 550px;
     max-width: 550px;
-    padding-right: 2px !important;
 }
 
 .ibraTXJRA {
@@ -412,6 +411,10 @@ td.jraStatus {
     padding-bottom: 7px;
     width: 100%;
     border-bottom: #CCC 1px solid;
+}
+
+.test-jra:last-child {
+    border-bottom: none;
 }
 
 .delete-mainrow-button {

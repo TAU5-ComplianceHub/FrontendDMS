@@ -23,6 +23,25 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
     const [previewCy, setPreviewCy] = useState(null);
     const [modalSize, setModalSize] = useState({ width: '70%', height: '70%' });
 
+    const normalizeProcedureRowsForFlowchart = (rows = []) => {
+        if (!Array.isArray(rows) || rows.length === 0) return [];
+
+        const isBlankPrev = (value) => {
+            const v = (value ?? "").toString().trim();
+            return v === "" || v === "-";
+        };
+
+        const allPrevStepsBlank = rows.every(row => isBlankPrev(row.prevStep));
+
+        return rows.map((row, index) => ({
+            ...row,
+            mainStep: `${index + 1}. ${(row.mainStep ?? "").trim()}`,
+            prevStep: allPrevStepsBlank
+                ? (index === 0 ? "-" : String(index))
+                : ((row.prevStep ?? "").toString().trim() || "-")
+        }));
+    };
+
     useImperativeHandle(ref, () => ({
         downloadImages: async () => {
             if (!procedureRows || procedureRows.length < 2) return;
@@ -436,10 +455,7 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
                 return resolve({ cyInstance: null, paginatedFlowchart: [] });
             }
 
-            const numberedProcedureRows = procedureRows.map((row, index) => ({
-                ...row,
-                mainStep: `${index + 1}. ${row.mainStep.trim()}`,
-            }));
+            const numberedProcedureRows = normalizeProcedureRowsForFlowchart(procedureRows);
 
             axios.post(`${process.env.REACT_APP_URL}/api/flowIMG/generate`, {
                 procedureRows: numberedProcedureRows,
@@ -638,10 +654,7 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
 
     const fetchFlowData = async () => {
         if (!procedureRows || procedureRows.length === 0) return { elements: [] };
-        const numberedProcedureRows = procedureRows.map((row, index) => ({
-            ...row,
-            mainStep: `${index + 1}. ${row.mainStep.trim()}`,
-        }));
+        const numberedProcedureRows = normalizeProcedureRowsForFlowchart(procedureRows);
         try {
             const response = await axios.post(`${process.env.REACT_APP_URL}/api/flowIMG/generate`, {
                 procedureRows: numberedProcedureRows,
@@ -684,11 +697,11 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
                                 "border-color": "#8a8a8a",
                                 "font-size": "14px",
                                 "width": "300px",
-                                "height": "50px",
+                                "height": "label",
                                 "font-family": "Arial, sans-serif",
                                 "text-wrap": "wrap",
                                 "text-max-width": "270px",
-                                "padding": "5px"
+                                "padding": "12px"
                             }
                         },
                         {
@@ -705,7 +718,8 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
                                 "font-weight": "bold",
                                 "font-size": "18px",
                                 "width": "300px",
-                                "height": "60px",
+                                "height": "label",
+                                "padding": "12px",
                                 "font-family": "Arial, sans-serif",
                                 "text-wrap": "wrap",
                             }
@@ -724,7 +738,8 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
                                 "font-weight": "bold",
                                 "font-size": "16px",
                                 "width": "300px",
-                                "height": "60px",
+                                "height": "label",
+                                "padding": "12px",
                                 "font-family": "Arial, sans-serif",
                                 "text-wrap": "wrap",
                             }
@@ -1032,10 +1047,10 @@ const FlowchartRenderer = forwardRef(({ procedureRows, documentType, title }, re
     return (
         <div className="flowchart-container">
             <div className="flowchart-buttons">
-                <button onClick={openModal} className="top-right-button-ibra2" title="Preview Flowchart">
+                <button onClick={openModal} className="top-right-button-ibra3" title="Preview Flowchart">
                     <FontAwesomeIcon icon={faEye} className="icon-um-search" />
                 </button>
-                <button onClick={exportImage} className="top-right-button-ibra" title="Download Flowchart">
+                <button onClick={exportImage} className="top-right-button-ibra2" title="Download Flowchart">
                     <FontAwesomeIcon icon={faDownload} className="icon-um-search" />
                 </button>
             </div>

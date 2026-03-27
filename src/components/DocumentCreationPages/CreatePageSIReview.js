@@ -1646,14 +1646,14 @@ const CreatePageSIReview = () => {
             onRemoveScopeSection={handleRemoveAimSection}
             onAddBullet={handleAddAimBullet}
             onRemoveBullet={handleRemoveAimBullet}
-            collapsible={false}
+            collapsible={true}
           />
 
-          <SpecialInstructionsTable readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} />
-          <ChapterTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
-          <AbbreviationTableSI readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} si={true} />
-          <TermTableSI readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} si={true} />
-          <ReferenceTableSpecialInstructions readOnly={readOnly} formData={formData} setFormData={setFormData} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
+          <SpecialInstructionsTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} error={errors.special} setErrors={setErrors} />
+          <ChapterTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+          <AbbreviationTableSI collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} si={true} />
+          <TermTableSI collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} si={true} />
+          <ReferenceTableSpecialInstructions collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
 
           <div className="input-row">
             <div className={`input-box-aim-cp ${errors.change ? "error-create" : ""}`}>

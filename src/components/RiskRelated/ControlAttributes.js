@@ -1180,7 +1180,7 @@ const ControlAttributes = () => {
     };
 
     return (
-        <div className="risk-control-attributes-container">
+        <div className="risk-control-attributes-container" style={{ userSelect: "none" }}>
             {isSidebarVisible && (
                 <div className="sidebar-um">
                     <div className="sidebar-toggle-icon" title="Hide Sidebar" onClick={() => setIsSidebarVisible(false)}>
@@ -1204,6 +1204,12 @@ const ControlAttributes = () => {
                                     <div className="button-content">
                                         <FontAwesomeIcon icon={faFile} className="button-logo-custom" />
                                         <span className="button-text">Suggested Controls</span>
+                                    </div>
+                                </button>
+                                <button className="but-um" onClick={() => navigate("/FrontendDMS/deletedControls")}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                                        <span className="button-text">Deleted Controls</span>
                                     </div>
                                 </button>
                             </>

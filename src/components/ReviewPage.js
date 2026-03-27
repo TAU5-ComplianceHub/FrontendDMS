@@ -267,7 +267,7 @@ const ReviewPage = () => {
     const autoSaveDraft = () => {
         if (readOnlyRef.current) return;
         if (readOnly) return;
-        saveData(fileID);
+        saveData(fileID, { skipFileUpload: false });
         toast.dismiss();
         toast.clearWaitingQueue();
         toast.success("Draft has been auto-saved", {
@@ -312,7 +312,58 @@ const ReviewPage = () => {
         });
     };
 
-    const saveAsData = async () => {
+    const buildSupportingDocumentPayload = (documents = []) => {
+        return documents.map((doc, index) => ({
+            nr: index + 1,
+            name: doc.name,
+            note: doc.note || "",
+            saved: Boolean(doc.storageId),
+            storageId: doc.storageId || null,
+            size: doc.size || doc.file?.size || 0,
+            mimeType: doc.mimeType || doc.file?.type || "",
+        }));
+    };
+
+    const buildReviewFormDataRequest = (dataToStore, options = {}) => {
+        const { skipFileUpload = false } = options;
+
+        const multipart = new FormData();
+        const supportingDocuments = dataToStore.formData.supportingDocuments || [];
+
+        const payload = {
+            ...dataToStore,
+            formData: {
+                ...dataToStore.formData,
+                supportingDocuments: buildSupportingDocumentPayload(supportingDocuments),
+            },
+            skipFileUpload,
+        };
+
+        multipart.append("payload", JSON.stringify(payload));
+
+        if (!skipFileUpload) {
+            supportingDocuments.forEach((doc, index) => {
+                if (doc?.file instanceof File && !doc?.storageId) {
+                    multipart.append("supportingFiles", doc.file);
+                    multipart.append(
+                        "supportingFilesMeta",
+                        JSON.stringify({
+                            rowIndex: index,
+                            nr: doc.nr ?? index + 1,
+                            name: doc.name,
+                            note: doc.note || "",
+                        })
+                    );
+                }
+            });
+        }
+
+        return multipart;
+    };
+
+    const saveAsData = async (options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
             usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
             usedTermCodes: usedTermCodesRef.current,
@@ -329,26 +380,39 @@ const ReviewPage = () => {
         };
 
         try {
+            const body = buildReviewFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/draft/safe`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
+
             const result = await response.json();
 
-            if (result.id) {  // Ensure we receive an ID from the backend
-                setLoadedID(result.id);  // Update loadedID to track the saved document
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to save draft');
+            }
+
+            if (result.id) {
+                setLoadedID(result.id);
                 loadedIDRef.current = result.id;
+            }
+
+            if (result.formData) {
+                setFormData(result.formData);
+                formDataRef.current = result.formData;
             }
         } catch (error) {
             console.error('Error saving data:', error);
         }
     };
 
-    const saveData = async (fileID) => {
+    const saveData = async (fileID, options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
             usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
             usedTermCodes: usedTermCodesRef.current,
@@ -361,15 +425,26 @@ const ReviewPage = () => {
         };
 
         try {
+            const body = buildReviewFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/procedure/save/${fileID}`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
+
             const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to save review file');
+            }
+
+            if (result?.draft?.formData) {
+                setFormData(result.draft.formData);
+                formDataRef.current = result.draft.formData;
+            }
         } catch (error) {
             console.error('Error saving data:', error);
         }
@@ -1917,7 +1992,7 @@ const ReviewPage = () => {
                         onRemoveAimSection={handleRemoveAimSection}
                         onAddBullet={handleAddAimBullet}
                         onRemoveBullet={handleRemoveAimBullet}
-                        collapsible={false}
+                        collapsible={true}
                     />
 
                     <ScopeBulletComponent
@@ -1947,20 +2022,20 @@ const ReviewPage = () => {
                         onRemoveScopeSection={handleRemoveScopeSection}
                         onAddBullet={handleAddScopeBullet}
                         onRemoveBullet={handleRemoveScopeBullet}
-                        collapsible={false}
+                        collapsible={true}
                     />
 
-                    <PPETable readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
-                    <HandToolTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
-                    <EquipmentTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
-                    <MobileMachineTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
-                    <MaterialsTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
-                    <AbbreviationTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
-                    <TermTable readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
-                    <ProcedureTable readOnly={readOnly} ref={procedureTableRef} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
-                    <ChapterTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
-                    <SupportingDocumentTable readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <PPETable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
+                    <HandToolTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
+                    <EquipmentTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
+                    <MobileMachineTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
+                    <MaterialsTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
+                    <AbbreviationTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
+                    <TermTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
+                    <ProcedureTable collapsible={true} readOnly={readOnly} ref={procedureTableRef} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
+                    <ChapterTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable collapsible={true} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />
+                    <SupportingDocumentTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
 
                     <div className={`input-row`} style={{ marginTop: "10px" }}>
                         <div className={`input-box-3-review ${errors.reviewDate ? "error-create" : ""}`}>
@@ -1977,7 +2052,7 @@ const ReviewPage = () => {
                         </div>
                     </div>
 
-                    <PicturesTable readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
+                    <PicturesTable collapsible={true} readOnly={readOnly} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} />
 
                     <div className="input-row">
                         <div className={`input-box-aim-cp ${errors.change ? "error-create" : ""}`}>

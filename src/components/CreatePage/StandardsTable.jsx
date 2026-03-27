@@ -5,9 +5,14 @@ import { toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faCopy, faArrowsUpDown, faFilter } from '@fortawesome/free-solid-svg-icons';
 import { v4 as uuidv4 } from 'uuid';
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const StandardsTable = ({ formData, setFormData, error, title, documentType, setErrors, readOnly = false }) => {
-
+const StandardsTable = ({ collapsible = false, formData, setFormData, error, title, documentType, setErrors, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const isCollapsed = collapsible ? collapsed : false;
     // --- EXCEL FILTER & SORT STATE ---
     const excelPopupRef = useRef(null);
     const initialOrderRef = useRef(new Map());
@@ -28,6 +33,11 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
     const [draggedRowId, setDraggedRowId] = useState(null);
     const [dragOverRowId, setDragOverRowId] = useState(null);
     const draggedElRef = useRef(null);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const renumberStandards = (arr) => {
         arr.forEach((item, idx) => {
@@ -492,7 +502,7 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
     };
 
     const getFilterBtnClass = () => {
-        return "top-right-button-ibra";
+        return "top-right-button-ibra2";
     };
 
     // --- NEW: Helper to get options filtered by OTHER columns ---
@@ -543,123 +553,198 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                     />
                 </button>
 
-                <div
-                    className="standards-class-table-container"
-                    ref={containerRef}
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
                 >
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                {[
-                                    { id: "nr", label: "Nr", className: "procCent standNr" },
-                                    { id: "mainSection", label: "Main Section", className: "procCent standMain" },
-                                    { id: "minRequirement", label: "Minimum Requirement Description / Details", className: "procCent standSub" },
-                                    { id: "reference", label: "Reference / Source", subLabel: "(Where Applicable)", className: "procCent standPrev" },
-                                    { id: "notes", label: "Additional Notes", className: "procCent standAR" }
-                                ].map(col => (
-                                    <th
-                                        key={col.id}
-                                        className={col.className}
-                                        style={{ cursor: "pointer" }}
-                                        onClick={(e) => openExcelFilterPopup(col.id, e)}
-                                    >
-                                        {col.label}
-                                        {col.subLabel && <br />}
-                                        {col.subLabel && col.subLabel}
-                                        {((filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
-                                            <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                        )}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRows.map((row, index) => {
-                                const spanCount = Math.max(row.details.length, 1);
-                                const isDropTarget = draggedRowId && dragOverRowId === row.id && draggedRowId !== row.id;
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                                return (
-                                    <React.Fragment key={index}>
-                                        <tr key={index}
-                                            className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${isDropTarget ? 'drop-target-top' : ''}`}
-                                            draggable={isDragEnabled && armedDragRow === row.id}
-                                            onDragStart={isDragEnabled && armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
-                                            onDragOver={isDragEnabled ? e => handleDragOver(e, row.id) : undefined}
-                                            onDragLeave={isDragEnabled ? handleDragLeave : undefined}
-                                            onDrop={isDragEnabled ? e => handleDrop(e, row.id) : undefined}
-                                            onDragEnd={isDragEnabled ? handleDragEnd : undefined}
-                                        >
-                                            <td className="procCent" style={{ fontSize: "14px" }} rowSpan={spanCount}>
-                                                {row.nr}
-                                                {!readOnly && isDragEnabled && (<FontAwesomeIcon
-                                                    icon={faArrowsUpDown}
-                                                    className="drag-handle-standards"
-                                                    onMouseDown={() => setArmedDragRow(row.id)}
-                                                    onMouseUp={() => setArmedDragRow(null)}
-                                                />)}
-                                            </td>
-                                            <td rowSpan={spanCount} className="main-cell-standards" style={{}}>
-                                                <textarea
-                                                    name="mainSection"
-                                                    className="aim-textarea-st font-fam"
-                                                    value={row.mainSection}
-                                                    style={{ fontSize: "14px", fontWeight: "bold" }}
-                                                    placeholder="Main Section"
-                                                    onChange={(e) => handleMainSectionChange(row.id, e.target.value)}
-                                                    readOnly={readOnly}
-                                                />
-                                                {!readOnly && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            className="insert-mainrow-button-standards"
-                                                            title="Add Main Step Here"
-                                                            onClick={() => handleAddMain(row.id)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faPlus} />
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            className="delete-mainrow-button-standards"
-                                                            title="Delete Main Step"
-                                                            onClick={() => handleDeleteMain(row.id)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            className="duplicate-mainrow-button-standards"
-                                                            title="Duplicate Main Step"
-                                                            onClick={() => handleDuplicateMain(row.id)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faCopy} />
-                                                        </button></>
+                {(!isCollapsed) && (
+                    <>
+                        <div
+                            className="standards-class-table-container"
+                            ref={containerRef}
+                        >
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        {[
+                                            { id: "nr", label: "Nr", className: "procCent standNr" },
+                                            { id: "mainSection", label: "Main Section", className: "procCent standMain" },
+                                            { id: "minRequirement", label: "Minimum Requirement Description / Details", className: "procCent standSub" },
+                                            { id: "reference", label: "Reference / Source", subLabel: "(Where Applicable)", className: "procCent standPrev" },
+                                            { id: "notes", label: "Additional Notes", className: "procCent standAR" }
+                                        ].map(col => (
+                                            <th
+                                                key={col.id}
+                                                className={col.className}
+                                                style={{ cursor: "pointer" }}
+                                                onClick={(e) => openExcelFilterPopup(col.id, e)}
+                                            >
+                                                {col.label}
+                                                {col.subLabel && <br />}
+                                                {col.subLabel && col.subLabel}
+                                                {((filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
+                                                    <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
                                                 )}
-                                            </td>
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredRows.map((row, index) => {
+                                        const spanCount = Math.max(row.details.length, 1);
+                                        const isDropTarget = draggedRowId && dragOverRowId === row.id && draggedRowId !== row.id;
 
-                                            {row.details.length > 0 ? (
-                                                <>
-                                                    <td className="sub-cell-standards">
-                                                        <label className="detail-label">{row.details[0].nr}</label>
+                                        return (
+                                            <React.Fragment key={index}>
+                                                <tr key={index}
+                                                    className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${isDropTarget ? 'drop-target-top' : ''}`}
+                                                    draggable={isDragEnabled && armedDragRow === row.id}
+                                                    onDragStart={isDragEnabled && armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
+                                                    onDragOver={isDragEnabled ? e => handleDragOver(e, row.id) : undefined}
+                                                    onDragLeave={isDragEnabled ? handleDragLeave : undefined}
+                                                    onDrop={isDragEnabled ? e => handleDrop(e, row.id) : undefined}
+                                                    onDragEnd={isDragEnabled ? handleDragEnd : undefined}
+                                                >
+                                                    <td className="procCent" style={{ fontSize: "14px" }} rowSpan={spanCount}>
+                                                        {row.nr}
+                                                        {!readOnly && isDragEnabled && (<FontAwesomeIcon
+                                                            icon={faArrowsUpDown}
+                                                            className="drag-handle-standards"
+                                                            onMouseDown={() => setArmedDragRow(row.id)}
+                                                            onMouseUp={() => setArmedDragRow(null)}
+                                                        />)}
+                                                    </td>
+                                                    <td rowSpan={spanCount} className="main-cell-standards" style={{}}>
                                                         <textarea
-                                                            name="minRequirement"
+                                                            name="mainSection"
                                                             className="aim-textarea-st font-fam"
-                                                            value={row.details[0].minRequirement}
-                                                            placeholder="Detail description…"
-                                                            style={{ fontSize: "14px" }}
-                                                            onChange={(e) => handleDetailChange(row.id, row.details[0].id, "minRequirement", e.target.value)}
+                                                            value={row.mainSection}
+                                                            style={{ fontSize: "14px", fontWeight: "bold" }}
+                                                            placeholder="Main Section"
+                                                            onChange={(e) => handleMainSectionChange(row.id, e.target.value)}
                                                             readOnly={readOnly}
                                                         />
-
                                                         {!readOnly && (
                                                             <>
                                                                 <button
                                                                     type="button"
+                                                                    className="insert-mainrow-button-standards"
+                                                                    title="Add Main Step Here"
+                                                                    onClick={() => handleAddMain(row.id)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faPlus} />
+                                                                </button>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="delete-mainrow-button-standards"
+                                                                    title="Delete Main Step"
+                                                                    onClick={() => handleDeleteMain(row.id)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
+                                                                </button>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="duplicate-mainrow-button-standards"
+                                                                    title="Duplicate Main Step"
+                                                                    onClick={() => handleDuplicateMain(row.id)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faCopy} />
+                                                                </button></>
+                                                        )}
+                                                    </td>
+
+                                                    {row.details.length > 0 ? (
+                                                        <>
+                                                            <td className="sub-cell-standards">
+                                                                <label className="detail-label">{row.details[0].nr}</label>
+                                                                <textarea
+                                                                    name="minRequirement"
+                                                                    className="aim-textarea-st font-fam"
+                                                                    value={row.details[0].minRequirement}
+                                                                    placeholder="Detail description…"
+                                                                    style={{ fontSize: "14px" }}
+                                                                    onChange={(e) => handleDetailChange(row.id, row.details[0].id, "minRequirement", e.target.value)}
+                                                                    readOnly={readOnly}
+                                                                />
+
+                                                                {!readOnly && (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="add-subrow-button-standards"
+                                                                            title="Add Main Step Here"
+                                                                            onClick={() => handleAddDetail(row.id, row.details[0].id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faPlus} />
+                                                                        </button>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            className="delete-subrow-button-standards"
+                                                                            title="Delete Main Step"
+                                                                            onClick={() => handleDeleteDetail(row.id, row.details[0].id)}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </td>
+                                                            <td>
+                                                                <textarea
+                                                                    name="reference"
+                                                                    className="aim-textarea-st font-fam"
+                                                                    value={row.details[0].reference}
+                                                                    placeholder="Reference / Source…"
+                                                                    style={{ fontSize: "14px" }}
+                                                                    onChange={(e) => handleDetailChange(row.id, row.details[0].id, "reference", e.target.value)}
+                                                                    readOnly={readOnly}
+                                                                />
+                                                            </td>
+                                                            <td>
+                                                                <textarea
+                                                                    name="notes"
+                                                                    className="aim-textarea-st font-fam"
+                                                                    value={row.details[0].notes}
+                                                                    placeholder="Additional notes…"
+                                                                    style={{ fontSize: "14px" }}
+                                                                    onChange={(e) => handleDetailChange(row.id, row.details[0].id, "notes", e.target.value)}
+                                                                    readOnly={readOnly}
+                                                                />
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <td colSpan={3} />
+                                                    )}
+                                                </tr>
+
+                                                {row.details.slice(1).map((detail, j) => (
+                                                    <tr key={j} className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''}`}>
+                                                        <td className="sub-cell-standards">
+                                                            <label className="detail-label">{row.details[j + 1].nr}</label>
+                                                            <textarea
+                                                                name="minRequirement"
+                                                                className="aim-textarea-st font-fam"
+                                                                value={detail.minRequirement}
+                                                                placeholder="Detail description…"
+                                                                style={{ fontSize: "14px" }}
+                                                                onChange={(e) => handleDetailChange(row.id, detail.id, "minRequirement", e.target.value)}
+                                                                readOnly={readOnly}
+                                                            />
+
+                                                            {!readOnly && (<>
+                                                                <button
+                                                                    type="button"
                                                                     className="add-subrow-button-standards"
                                                                     title="Add Main Step Here"
-                                                                    onClick={() => handleAddDetail(row.id, row.details[0].id)}
+                                                                    onClick={() => handleAddDetail(row.id, detail.id)}
                                                                 >
                                                                     <FontAwesomeIcon icon={faPlus} />
                                                                 </button>
@@ -668,263 +753,202 @@ const StandardsTable = ({ formData, setFormData, error, title, documentType, set
                                                                     type="button"
                                                                     className="delete-subrow-button-standards"
                                                                     title="Delete Main Step"
-                                                                    onClick={() => handleDeleteDetail(row.id, row.details[0].id)}
+                                                                    onClick={() => handleDeleteDetail(row.id, detail.id)}
                                                                 >
                                                                     <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
                                                                 </button>
-                                                            </>
-                                                        )}
-                                                    </td>
-                                                    <td>
-                                                        <textarea
-                                                            name="reference"
-                                                            className="aim-textarea-st font-fam"
-                                                            value={row.details[0].reference}
-                                                            placeholder="Reference / Source…"
-                                                            style={{ fontSize: "14px" }}
-                                                            onChange={(e) => handleDetailChange(row.id, row.details[0].id, "reference", e.target.value)}
-                                                            readOnly={readOnly}
-                                                        />
-                                                    </td>
-                                                    <td>
-                                                        <textarea
-                                                            name="notes"
-                                                            className="aim-textarea-st font-fam"
-                                                            value={row.details[0].notes}
-                                                            placeholder="Additional notes…"
-                                                            style={{ fontSize: "14px" }}
-                                                            onChange={(e) => handleDetailChange(row.id, row.details[0].id, "notes", e.target.value)}
-                                                            readOnly={readOnly}
-                                                        />
-                                                    </td>
-                                                </>
-                                            ) : (
-                                                <td colSpan={3} />
-                                            )}
-                                        </tr>
-
-                                        {row.details.slice(1).map((detail, j) => (
-                                            <tr key={j} className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''}`}>
-                                                <td className="sub-cell-standards">
-                                                    <label className="detail-label">{row.details[j + 1].nr}</label>
-                                                    <textarea
-                                                        name="minRequirement"
-                                                        className="aim-textarea-st font-fam"
-                                                        value={detail.minRequirement}
-                                                        placeholder="Detail description…"
-                                                        style={{ fontSize: "14px" }}
-                                                        onChange={(e) => handleDetailChange(row.id, detail.id, "minRequirement", e.target.value)}
-                                                        readOnly={readOnly}
-                                                    />
-
-                                                    {!readOnly && (<>
-                                                        <button
-                                                            type="button"
-                                                            className="add-subrow-button-standards"
-                                                            title="Add Main Step Here"
-                                                            onClick={() => handleAddDetail(row.id, detail.id)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faPlus} />
-                                                        </button>
-
-                                                        <button
-                                                            type="button"
-                                                            className="delete-subrow-button-standards"
-                                                            title="Delete Main Step"
-                                                            onClick={() => handleDeleteDetail(row.id, detail.id)}
-                                                        >
-                                                            <FontAwesomeIcon icon={faTrash} className="delete-mainrow-icon" />
-                                                        </button>
-                                                    </>)}
-                                                </td>
-                                                <td>
-                                                    <textarea
-                                                        name="reference"
-                                                        className="aim-textarea-st font-fam"
-                                                        value={detail.reference}
-                                                        placeholder="Reference / Source…"
-                                                        style={{ fontSize: "14px" }}
-                                                        onChange={(e) => handleDetailChange(row.id, detail.id, "reference", e.target.value)}
-                                                    />
-                                                </td>
-                                                <td>
-                                                    <textarea
-                                                        name="notes"
-                                                        className="aim-textarea-st font-fam"
-                                                        value={detail.notes}
-                                                        placeholder="Additional notes…"
-                                                        style={{ fontSize: "14px" }}
-                                                        onChange={(e) => handleDetailChange(row.id, detail.id, "notes", e.target.value)}
-                                                    />
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-
-                    {excelFilter.open && (
-                        <div
-                            className="excel-filter-popup"
-                            ref={excelPopupRef}
-                            style={{
-                                position: "fixed",
-                                top: excelFilter.pos.top,
-                                left: excelFilter.pos.left,
-                                width: excelFilter.pos.width,
-                                zIndex: 9999,
-                            }}
-                            onWheel={handleInnerScrollWheel}
-                        >
-                            <div className="excel-filter-sortbar">
-                                <button
-                                    type="button"
-                                    className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
-                                        sortConfig.direction === "asc" ? "active" : ""
-                                        }`}
-                                    onClick={() => toggleSort(excelFilter.colId, "asc")}
-                                >
-                                    Sort A to Z
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
-                                        sortConfig.direction === "desc" ? "active" : ""
-                                        }`}
-                                    onClick={() => toggleSort(excelFilter.colId, "desc")}
-                                >
-                                    Sort Z to A
-                                </button>
-                            </div>
-
-                            <input
-                                type="text"
-                                className="excel-filter-search"
-                                placeholder="Search"
-                                value={excelSearch}
-                                onChange={(e) => setExcelSearch(e.target.value)}
-                            />
-
-                            {(() => {
-                                const colId = excelFilter.colId;
-
-                                // Use the new helper to get context-aware options
-                                const allValues = getAvailableOptions(colId);
-
-                                const visibleValues = allValues.filter(v =>
-                                    String(v).toLowerCase().includes(excelSearch.toLowerCase())
-                                );
-
-                                const isAllVisibleSelected =
-                                    visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
-
-                                const toggleAll = (checked) => {
-                                    setExcelSelected(prev => {
-                                        const next = new Set(prev);
-                                        if (checked) {
-                                            visibleValues.forEach(v => next.add(v));
-                                        } else {
-                                            visibleValues.forEach(v => next.delete(v));
-                                        }
-                                        return next;
-                                    });
-                                };
-
-                                const toggleValue = (v) => {
-                                    setExcelSelected(prev => {
-                                        const next = new Set(prev);
-                                        if (next.has(v)) next.delete(v);
-                                        else next.add(v);
-                                        return next;
-                                    });
-                                };
-
-                                const onOk = () => {
-                                    let finalSelection = new Set(excelSelected);
-
-                                    // If searching, only apply changes to the visible items
-                                    if (excelSearch.trim() !== "") {
-                                        const visibleSet = new Set(visibleValues);
-                                        finalSelection = new Set(
-                                            Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                                            </>)}
+                                                        </td>
+                                                        <td>
+                                                            <textarea
+                                                                name="reference"
+                                                                className="aim-textarea-st font-fam"
+                                                                value={detail.reference}
+                                                                placeholder="Reference / Source…"
+                                                                style={{ fontSize: "14px" }}
+                                                                onChange={(e) => handleDetailChange(row.id, detail.id, "reference", e.target.value)}
+                                                            />
+                                                        </td>
+                                                        <td>
+                                                            <textarea
+                                                                name="notes"
+                                                                className="aim-textarea-st font-fam"
+                                                                value={detail.notes}
+                                                                placeholder="Additional notes…"
+                                                                style={{ fontSize: "14px" }}
+                                                                onChange={(e) => handleDetailChange(row.id, detail.id, "notes", e.target.value)}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
                                         );
-                                    }
+                                    })}
+                                </tbody>
+                            </table>
 
-                                    const selectedArr = Array.from(finalSelection);
+                            {excelFilter.open && (
+                                <div
+                                    className="excel-filter-popup"
+                                    ref={excelPopupRef}
+                                    style={{
+                                        position: "fixed",
+                                        top: excelFilter.pos.top,
+                                        left: excelFilter.pos.left,
+                                        width: excelFilter.pos.width,
+                                        zIndex: 9999,
+                                    }}
+                                    onWheel={handleInnerScrollWheel}
+                                >
+                                    <div className="excel-filter-sortbar">
+                                        <button
+                                            type="button"
+                                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                                sortConfig.direction === "asc" ? "active" : ""
+                                                }`}
+                                            onClick={() => toggleSort(excelFilter.colId, "asc")}
+                                        >
+                                            Sort A to Z
+                                        </button>
 
-                                    // Check if this is a "Select All" (Reset) scenario
-                                    const isTotalReset = allValues.length > 0 &&
-                                        allValues.length === selectedArr.length &&
-                                        selectedArr.every(v => finalSelection.has(v));
+                                        <button
+                                            type="button"
+                                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                                sortConfig.direction === "desc" ? "active" : ""
+                                                }`}
+                                            onClick={() => toggleSort(excelFilter.colId, "desc")}
+                                        >
+                                            Sort Z to A
+                                        </button>
+                                    </div>
 
-                                    setFilters(prev => {
-                                        const next = { ...prev };
-                                        if (isTotalReset) {
-                                            delete next[colId];
-                                        } else {
-                                            next[colId] = selectedArr;
-                                        }
-                                        return next;
-                                    });
+                                    <input
+                                        type="text"
+                                        className="excel-filter-search"
+                                        placeholder="Search"
+                                        value={excelSearch}
+                                        onChange={(e) => setExcelSearch(e.target.value)}
+                                    />
 
-                                    setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
-                                };
+                                    {(() => {
+                                        const colId = excelFilter.colId;
 
-                                const onCancel = () => {
-                                    setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
-                                };
+                                        // Use the new helper to get context-aware options
+                                        const allValues = getAvailableOptions(colId);
 
-                                return (
-                                    <>
-                                        <div className="excel-filter-list">
-                                            <label className="excel-filter-item">
-                                                <span className="excel-filter-checkbox">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="checkbox-excel-attend"
-                                                        checked={isAllVisibleSelected}
-                                                        onChange={(e) => toggleAll(e.target.checked)}
-                                                    />
-                                                </span>
-                                                <span className="excel-filter-text">
-                                                    {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
-                                                </span>
-                                            </label>
+                                        const visibleValues = allValues.filter(v =>
+                                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                                        );
 
-                                            {visibleValues.map(v => (
-                                                <label className="excel-filter-item" key={String(v)}>
-                                                    <span className="excel-filter-checkbox">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="checkbox-excel-attend"
-                                                            checked={excelSelected.has(v)}
-                                                            onChange={() => toggleValue(v)}
-                                                        />
-                                                    </span>
-                                                    <span className="excel-filter-text">{v}</span>
-                                                </label>
-                                            ))}
+                                        const isAllVisibleSelected =
+                                            visibleValues.length > 0 && visibleValues.every(v => excelSelected.has(v));
 
-                                            {visibleValues.length === 0 && (
-                                                <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
-                                                    No matches found
+                                        const toggleAll = (checked) => {
+                                            setExcelSelected(prev => {
+                                                const next = new Set(prev);
+                                                if (checked) {
+                                                    visibleValues.forEach(v => next.add(v));
+                                                } else {
+                                                    visibleValues.forEach(v => next.delete(v));
+                                                }
+                                                return next;
+                                            });
+                                        };
+
+                                        const toggleValue = (v) => {
+                                            setExcelSelected(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(v)) next.delete(v);
+                                                else next.add(v);
+                                                return next;
+                                            });
+                                        };
+
+                                        const onOk = () => {
+                                            let finalSelection = new Set(excelSelected);
+
+                                            // If searching, only apply changes to the visible items
+                                            if (excelSearch.trim() !== "") {
+                                                const visibleSet = new Set(visibleValues);
+                                                finalSelection = new Set(
+                                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                                );
+                                            }
+
+                                            const selectedArr = Array.from(finalSelection);
+
+                                            // Check if this is a "Select All" (Reset) scenario
+                                            const isTotalReset = allValues.length > 0 &&
+                                                allValues.length === selectedArr.length &&
+                                                selectedArr.every(v => finalSelection.has(v));
+
+                                            setFilters(prev => {
+                                                const next = { ...prev };
+                                                if (isTotalReset) {
+                                                    delete next[colId];
+                                                } else {
+                                                    next[colId] = selectedArr;
+                                                }
+                                                return next;
+                                            });
+
+                                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                                        };
+
+                                        const onCancel = () => {
+                                            setExcelFilter({ open: false, colId: null, anchorRect: null, pos: { top: 0, left: 0, width: 0 } });
+                                        };
+
+                                        return (
+                                            <>
+                                                <div className="excel-filter-list">
+                                                    <label className="excel-filter-item">
+                                                        <span className="excel-filter-checkbox">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="checkbox-excel-attend"
+                                                                checked={isAllVisibleSelected}
+                                                                onChange={(e) => toggleAll(e.target.checked)}
+                                                            />
+                                                        </span>
+                                                        <span className="excel-filter-text">
+                                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                                        </span>
+                                                    </label>
+
+                                                    {visibleValues.map(v => (
+                                                        <label className="excel-filter-item" key={String(v)}>
+                                                            <span className="excel-filter-checkbox">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="checkbox-excel-attend"
+                                                                    checked={excelSelected.has(v)}
+                                                                    onChange={() => toggleValue(v)}
+                                                                />
+                                                            </span>
+                                                            <span className="excel-filter-text">{v}</span>
+                                                        </label>
+                                                    ))}
+
+                                                    {visibleValues.length === 0 && (
+                                                        <div style={{ padding: "8px", color: "#888", fontStyle: "italic", fontSize: "12px" }}>
+                                                            No matches found
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
 
-                                        <div className="excel-filter-actions">
-                                            <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
-                                            <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
-                                        </div>
-                                    </>
-                                );
-                            })()}
+                                                <div className="excel-filter-actions">
+                                                    <button type="button" className="excel-filter-btn" onClick={onOk}>Apply</button>
+                                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>Cancel</button>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
+                    </>
+                )}
             </div>
         </div>
     );

@@ -182,15 +182,65 @@ const RiskReviewPageJRA = () => {
         }
     };
 
-    const saveAsData = async () => {
+    const buildSupportingDocumentPayload = (documents = []) => {
+        return documents.map((doc, index) => ({
+            nr: index + 1,
+            name: doc.name,
+            note: doc.note || "",
+            saved: Boolean(doc.storageId),
+            storageId: doc.storageId || null,
+            size: doc.size || doc.file?.size || 0,
+            mimeType: doc.mimeType || doc.file?.type || "",
+        }));
+    };
+
+    const buildReviewFormDataRequest = (dataToStore, options = {}) => {
+        const { skipFileUpload = false } = options;
+
+        const multipart = new FormData();
+        const supportingDocuments = dataToStore.formData.supportingDocuments || [];
+
+        const payload = {
+            ...dataToStore,
+            formData: {
+                ...dataToStore.formData,
+                supportingDocuments: buildSupportingDocumentPayload(supportingDocuments),
+            },
+            skipFileUpload,
+        };
+
+        multipart.append("payload", JSON.stringify(payload));
+
+        if (!skipFileUpload) {
+            supportingDocuments.forEach((doc, index) => {
+                if (doc?.file instanceof File && !doc?.storageId) {
+                    multipart.append("supportingFiles", doc.file);
+                    multipart.append(
+                        "supportingFilesMeta",
+                        JSON.stringify({
+                            rowIndex: index,
+                            nr: doc.nr ?? index + 1,
+                            name: doc.name,
+                            note: doc.note || "",
+                        })
+                    );
+                }
+            });
+        }
+
+        return multipart;
+    };
+
+    const saveAsData = async (options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
-            usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
+            usedAbbrCodes: usedAbbrCodesRef.current,
             usedTermCodes: usedTermCodesRef.current,
             usedPPEOptions: usedPPEOptionsRef.current,
             usedEquipment: usedEquipmentRef.current,
             usedHandTools: usedHandToolsRef.current,
             usedMaterials: usedMaterialsRef.current,
-            usedMobileMachine: usedMobileMachineRef.current,
             formData: formDataRef.current,
             userIDs: userIDsRef.current,
             creator: userIDRef.current,
@@ -199,49 +249,70 @@ const RiskReviewPageJRA = () => {
         };
 
         try {
+            const body = buildReviewFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskDraft/jra/safe`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
-            const result = await response.json();
-            setOfflineDraft(false);
-            localStorage.removeItem("draftData");
 
-            if (result.id) {  // Ensure we receive an ID from the backend
-                setLoadedID(result.id);  // Update loadedID to track the saved document
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to save draft');
+            }
+
+            if (result.id) {
+                setLoadedID(result.id);
                 loadedIDRef.current = result.id;
+            }
+
+            if (result.formData) {
+                setFormData(result.formData);
+                formDataRef.current = result.formData;
             }
         } catch (error) {
             console.error('Error saving data:', error);
         }
     };
 
-    const saveData = async () => {
+    const saveData = async (fileID, options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
-            usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
+            usedAbbrCodes: usedAbbrCodesRef.current,
             usedTermCodes: usedTermCodesRef.current,
             usedPPEOptions: usedPPEOptionsRef.current,
             usedEquipment: usedEquipmentRef.current,
             usedHandTools: usedHandToolsRef.current,
             usedMaterials: usedMaterialsRef.current,
-            usedMobileMachine: usedMobileMachineRef.current,
             formData: formDataRef.current
         };
 
         try {
+            const body = buildReviewFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/fileGenDocs/jra/save/${fileID}`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
+
             const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to save review file');
+            }
+
+            if (result?.draft?.formData) {
+                setFormData(result.draft.formData);
+                formDataRef.current = result.draft.formData;
+            }
         } catch (error) {
             console.error('Error saving data:', error);
         }
@@ -656,8 +727,8 @@ const RiskReviewPageJRA = () => {
     const autoSaveDraft = () => {
         if (readOnlyRef.current) return;
         if (readOnly) return;
-        if (formData.title.trim() === "") return; // Don't save without a valid title
-        saveData(fileID);
+        if (formData.title.trim() === "") return;
+        saveData(fileID, { skipFileUpload: false });
     };
 
     const [history, setHistory] = useState([]);
@@ -1385,19 +1456,19 @@ const RiskReviewPageJRA = () => {
                     </div>
 
                     <DocumentSignaturesRiskTable readOnly={readOnly} rows={formData.rows} handleRowChange={handleRowChange} addRow={addRow} removeRow={removeRow} error={errors.signs} updateRows={updateSignatureRows} />
-                    <AbbreviationTableRisk collapsible={false} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
-                    <TermTableRisk collapsible={false} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
-                    <IntroTaskInfo collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <PPETableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
-                    <HandToolsTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
-                    <MaterialsTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
-                    <EquipmentTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
-                    <MobileMachineTableRisk collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
-                    <AttendanceTable collapsible={false} readOnly={readOnly} title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attendance} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
-                    <JRATable collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} />
+                    <AbbreviationTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} />
+                    <TermTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} />
+                    <IntroTaskInfo collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <PPETableRisk collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} />
+                    <HandToolsTableRisk collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} />
+                    <MaterialsTableRisk collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
+                    <EquipmentTableRisk collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} />
+                    <MobileMachineTableRisk collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} />
+                    <AttendanceTable collapsible={true} readOnly={readOnly} title={formData.title} documentType={formData.documentType} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attendance} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} />
+                    <JRATable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} isSidebarVisible={isSidebarVisible} />
                     <OtherTeam collapsible={false} readOnly={readOnly} formData={formData} />
-                    <SupportingDocumentTable collapsible={false} readOnly={readOnly} formData={formData} setFormData={setFormData} />
-                    <ReferenceTable collapsible={false} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
+                    <SupportingDocumentTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
+                    <ReferenceTable collapsible={true} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} />
                     <div className="input-row">
                         <div className={`input-box-aim-cp`}>
                             <h3 className="font-fam-labels">Document Change Reason <span className="required-field">*</span></h3>

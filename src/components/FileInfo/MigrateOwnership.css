@@ -33,12 +33,26 @@
     border-radius: 10px;
     text-align: center;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    max-width: 700px;
-    width: 90%;
+    max-width: 950px;
+    width: 95%;
 }
 
 .migrate-owner-page-select-container {
     position: relative;
+}
+
+.migrate-owner-file-name-cell {
+    vertical-align: middle !important;
+}
+
+.migrate-owner-row-select {
+    width: 100%;
+    min-width: 180px;
+    padding: 6px 8px;
+    border: 1px solid #bfbfbf;
+    border-radius: 4px;
+    background: white;
+    font-size: 14px;
 }
 
 .migrate-owner-page-select {
@@ -65,4 +79,61 @@
     border-right: 6px solid transparent;
     border-top: 6px solid #777;
     pointer-events: none;
+}
+
+.migrate-owner-files-box {
+    justify-self: center;
+    width: calc(100% - 20px);
+    min-height: 260px;
+    max-height: 260px;
+    overflow: auto;
+    border: 1px solid #d9d9d9;
+    border-radius: 0px;
+    background: #fff;
+}
+
+.migrate-owner-files-table {
+    width: calc(100% - 0px);
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.migrate-owner-files-table th,
+.migrate-owner-files-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #ccc;
+    text-align: left;
+    vertical-align: top;
+}
+
+.migrate-owner-files-table thead th {
+    position: sticky;
+    top: 0;
+    background: #002060;
+    z-index: 1;
+}
+
+.migrate-owner-empty-state {
+    padding: 16px;
+    font-size: 14px;
+    color: #666;
+}
+
+/* Subtle modern scrollbar - same colour */
+.migrate-owner-files-box::-webkit-scrollbar {
+    width: 8px;
+}
+
+.migrate-owner-files-box::-webkit-scrollbar-track {
+    background: white;
+    border-radius: 6px;
+}
+
+.migrate-owner-files-box::-webkit-scrollbar-thumb {
+    background: #c6c6c6;
+    border-radius: 6px;
+}
+
+.migrate-owner-files-box::-webkit-scrollbar-thumb:hover {
+    background: #b5b5b5;
 }

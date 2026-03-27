@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import "./SupportingDocumentTable.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlusCircle, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlusCircle, faInfoCircle, faDownload } from '@fortawesome/free-solid-svg-icons';
 import { toast } from "react-toastify";
 import {
     faChevronDown,
@@ -17,6 +17,57 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
     const toggleCollapse = () => {
         const newState = !collapsed;
         setCollapsed(newState);
+    };
+
+    const isDownloadable = (row) => {
+        return Boolean(row?.file || row?.storageId);
+    };
+
+    const triggerBrowserDownload = (blob, fileName) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    };
+
+    const handleDownloadFile = async (row) => {
+        try {
+            // Unsaved file still only in memory
+            if (row?.file instanceof File) {
+                triggerBrowserDownload(row.file, row.name);
+                return;
+            }
+
+            // Saved file on backend
+            if (row?.storageId) {
+                const response = await fetch(
+                    `${process.env.REACT_APP_URL}/api/file/draft-supporting/download/${row.storageId}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Bearer ${localStorage.getItem("token")}`,
+                        },
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error("Failed to download file");
+                }
+
+                const blob = await response.blob();
+                triggerBrowserDownload(blob, row.name);
+                return;
+            }
+
+            toast.error("This file is not available for download.");
+        } catch (error) {
+            console.error("Error downloading file:", error);
+            toast.error("Could not download file.");
+        }
     };
 
     const removeFileExtension = (fileName) => {
@@ -36,7 +87,10 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
         );
 
         const existingExactKeys = new Set(
-            existingFiles.map((doc) => `${doc.name}__${doc.file?.size ?? 0}`)
+            existingFiles.map((doc) => {
+                const size = doc.file?.size ?? doc.size ?? 0;
+                return `${doc.name}__${size}`;
+            })
         );
 
         const newBaseNames = new Set();
@@ -73,7 +127,8 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
                 nr: existingFiles.length + index + 1,
                 name: file.name,
                 file,
-                note: ""
+                note: "",
+                saved: false,
             }))
         ];
 
@@ -91,7 +146,6 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
         });
 
         setSelectedFiles(updatedFiles);
-
         event.target.value = null;
     };
 
@@ -140,11 +194,49 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
                                         <tr key={index}>
                                             <td className="refCent" style={{ fontSize: "14px" }}>{row.nr}</td>
                                             <td className="refCent" style={{ fontSize: "14px", textAlign: "left" }}>{removeFileExtension(row.name)}</td>
-                                            {!readOnly && (<td className="ref-but-row procCent">
-                                                <button className="remove-row-button" onClick={() => handleRemoveFile(index)}>
-                                                    <FontAwesomeIcon icon={faTrash} title="Remove File" />
-                                                </button>
-                                            </td>)}
+                                            {!readOnly && (
+                                                <td className="ref-but-row procCent">
+                                                    <div
+                                                        style={{
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            gap: "8px",
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        {isDownloadable(row) ? (
+                                                            <button
+                                                                type="button"
+                                                                className="download-support-row-button"
+                                                                onClick={() => handleDownloadFile(row)}
+                                                                title="Download File"
+                                                                style={{
+                                                                    display: "inline-flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "center",
+                                                                }}
+                                                            >
+                                                                <FontAwesomeIcon icon={faDownload} />
+                                                            </button>
+                                                        ) : null}
+
+                                                        <button
+                                                            type="button"
+                                                            className="remove-row-button"
+                                                            onClick={() => handleRemoveFile(index)}
+                                                            title="Remove File"
+                                                            style={{
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                            }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
                                         </tr>
                                     ))}
                                 </tbody>

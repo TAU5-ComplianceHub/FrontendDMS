@@ -121,7 +121,11 @@ const UserManagement = () => {
         role: user?.role?.trim() || "",
         designation: user?.designation?.trim() || "",
         department: user?.department?.trim() || "",
-        reportingTo: user?.reportingTo ? String(user.reportingTo) : null,
+        reportingTo: user?.reportingTo?._id
+            ? String(user.reportingTo._id)
+            : user?.reportingTo
+                ? String(user.reportingTo)
+                : null,
         password: user?.password?.trim() || ""
     });
 
@@ -229,7 +233,12 @@ const UserManagement = () => {
     };
 
     const openEditModal = (user) => {
-        setUserToEdit({ ...user, password: '' }); // Do not pre-fill the password
+        setUserToEdit({
+            ...user,
+            reportingTo: user?.reportingTo?._id || user?.reportingTo || "",
+            password: ""
+        });
+
         setIsEditModalOpen(true);
     };
 

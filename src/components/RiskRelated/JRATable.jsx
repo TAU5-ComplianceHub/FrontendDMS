@@ -24,7 +24,7 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
     const tableWrapperRef = useRef(null);
     const [hoveredBody, setHoveredBody] = useState({ rowId: null, bodyIdx: null });
     const savedWidthRef = useRef(null);
-    const [collapsed, setCollapsed] = useState(true);
+    const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
 
     // Help Popups
@@ -62,6 +62,58 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
     const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
     const initialOrderRef = useRef(new Map());
     const BLANK = "(Blanks)";
+
+    const getBodyFilterValuesForCell = (body, colId) => {
+        if (!body) return [BLANK];
+
+        let targetArray = [];
+
+        switch (colId) {
+            case "hazards":
+                targetArray = body.hazards?.map(h => h.hazard);
+                break;
+            case "UE":
+                targetArray = body.UE?.map(u => u.ue);
+                break;
+            case "sub":
+                targetArray = body.sub?.map(s => s.task);
+                break;
+            case "taskExecution":
+                targetArray = body.taskExecution?.map(t => t.R);
+                break;
+            case "controls":
+                targetArray = body.controls?.map(c => c.control);
+                break;
+            case "go":
+                targetArray = body.go_noGo?.map(g => g.go);
+                break;
+            default:
+                targetArray = [];
+                break;
+        }
+
+        const values = (targetArray || [])
+            .map(v => String(v ?? "").trim())
+            .filter(Boolean);
+
+        return values.length > 0 ? values : [BLANK];
+    };
+
+    const bodyMatchesFilters = (body, filters) => {
+        for (const [colId, filterObj] of Object.entries(filters)) {
+            const selected = Array.isArray(filterObj) ? filterObj : filterObj?.selected;
+            if (!selected || !Array.isArray(selected)) continue;
+
+            // root-level columns should not filter individual bodies
+            if (colId === "nr" || colId === "main") continue;
+
+            const cellValues = getBodyFilterValuesForCell(body, colId);
+            const match = cellValues.some(v => selected.includes(v));
+            if (!match) return false;
+        }
+
+        return true;
+    };
 
     const getDefaultShowColumns = () => [
         "nr",
@@ -342,7 +394,7 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
         });
 
         return () => window.cancelAnimationFrame(rafId);
-    }, [formData.jra]);
+    }, [formData.jra, collapsed, sortConfig]);
 
     const handleDragStart = (e, rowId) => {
         const rows = Array.from(
@@ -474,35 +526,48 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
     const filteredRows = useMemo(() => {
         let current = [...formData.jra];
 
-        // 1. Filtering
-        current = current.filter(row => {
-            for (const [colId, filterObj] of Object.entries(filters)) {
-                // CHANGE: Support both array (new) and object (old) formats
-                const selected = Array.isArray(filterObj) ? filterObj : filterObj?.selected;
-                if (!selected || !Array.isArray(selected)) continue;
+        current = current
+            .map(row => {
+                const selectedBodies = Array.isArray(row.jraBody)
+                    ? row.jraBody.filter(body => bodyMatchesFilters(body, filters))
+                    : [];
 
-                // Get values for this row/column
-                const cellValues = getFilterValuesForCell(row, colId);
-                // If overlap exists between cell values and selected filter values
-                const match = cellValues.some(v => selected.includes(v));
-                if (!match) return false;
-            }
+                // apply root-level filters separately
+                for (const [colId, filterObj] of Object.entries(filters)) {
+                    const selected = Array.isArray(filterObj) ? filterObj : filterObj?.selected;
+                    if (!selected || !Array.isArray(selected)) continue;
 
-            // 2. Flag Filtering
-            if (showFlagged) {
-                const isRowFlagged = row.rowFlagged;
-                const hasFlaggedBody = row.jraBody.some(body =>
-                    body.subStepFlagged ||
-                    body.hazards?.some(h => h.flagged) ||
-                    body.UE?.some(u => u.flagged)
-                );
-                if (!isRowFlagged && !hasFlaggedBody) return false;
-            }
+                    if (colId === "nr" || colId === "main") {
+                        const cellValues = getFilterValuesForCell(row, colId);
+                        const match = cellValues.some(v => selected.includes(v));
+                        if (!match) {
+                            return null;
+                        }
+                    }
+                }
 
-            return true;
-        });
+                if (showFlagged) {
+                    const isRowFlagged = row.rowFlagged;
+                    const hasFlaggedVisibleBody = selectedBodies.some(body =>
+                        body.subStepFlagged ||
+                        body.hazards?.some(h => h.flagged) ||
+                        body.UE?.some(u => u.flagged)
+                    );
 
-        // 3. Sorting
+                    if (!isRowFlagged && !hasFlaggedVisibleBody) {
+                        return null;
+                    }
+                }
+
+                if (selectedBodies.length === 0) return null;
+
+                return {
+                    ...row,
+                    jraBody: selectedBodies
+                };
+            })
+            .filter(Boolean);
+
         const colId = sortConfig?.colId || "nr";
 
         if (colId === "nr") {
@@ -515,14 +580,14 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
         const normalize = (v) => {
             const s = v == null ? "" : String(v).trim();
             return s === "" ? BLANK : s;
-        }
+        };
 
         const tryNumber = (v) => {
             const s = String(v).replace(/,/g, "").trim();
             if (!/^[-+]?\d*(?:\.\d+)?$/.test(s) || s === "" || s === "." || s === "+" || s === "-") return null;
             const n = Number(s);
             return Number.isFinite(n) ? n : null;
-        }
+        };
 
         current.sort((a, b) => {
             const valsA = getFilterValuesForCell(a, colId);
@@ -550,7 +615,6 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
 
         current.forEach((r, i) => (r.nr = i + 1));
         return current;
-
     }, [formData.jra, filters, showFlagged, sortConfig]);
 
     const insertBodyRow = (rowId, insertAtIndex) => {
@@ -1497,7 +1561,7 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
 
                                                         if (colId === "sub") {
                                                             return (
-                                                                <td key={colIdx} className={`${cls}  correct-wrap-ibra`} style={commonCellStyle}>
+                                                                <td key={colIdx} className={`${cls}  correct-wrap-ibra`} style={{ ...commonCellStyle, paddingRight: "8px" }}>
                                                                     {body.sub.map((sObj, sIdx) => (
                                                                         <div className="test-jra"
                                                                             key={sObj.id}

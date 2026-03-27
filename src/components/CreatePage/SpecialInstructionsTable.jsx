@@ -5,12 +5,23 @@ import { toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faCopy, faArrowsUpDown } from '@fortawesome/free-solid-svg-icons';
 import { v4 as uuidv4 } from 'uuid';
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const SpecialInstructionsTable = ({ formData, setFormData, error, title, documentType, setErrors, readOnly = false }) => {
+const SpecialInstructionsTable = ({ collapsible = false, formData, setFormData, error, title, documentType, setErrors, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const isCollapsed = collapsible ? collapsed : false;
     const [armedDragRow, setArmedDragRow] = useState(null);
     const [draggedRowId, setDraggedRowId] = useState(null);
     const [dragOverRowId, setDragOverRowId] = useState(null);
     const draggedElRef = useRef(null);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     // ---- DRAG & DROP HANDLERS ----
     const handleDragStart = (e, id) => {
@@ -118,84 +129,98 @@ const SpecialInstructionsTable = ({ formData, setFormData, error, title, documen
             <div className={`proc-box ${error ? "error-proc" : ""}`}>
                 <h3 className="font-fam-labels">Special Instructions <span className="required-field">*</span></h3>
 
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                <div className="si-chapter-card">
-                    <span style={{ color: "black" }}><strong>Note:</strong> The following special instructions are effective immediately.</span>
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                <th className="procCent siNr">Nr</th>
-                                <th className="procCent siMain">Special Instruction</th>
-                                {!readOnly && (<th className="procCent siSub">Action</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {formData.special.map((row, index) => {
-                                return (
-                                    <tr key={index}
-                                        draggable={armedDragRow === row.id}
-                                        onDragStart={armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
-                                        onDragOver={e => handleDragOver(e, row.id)}
-                                        onDragLeave={e => {
-                                            const rt = e.relatedTarget || e.nativeEvent?.relatedTarget;
-                                            if (rt && e.currentTarget.contains(rt)) return;
-                                            handleDragLeave();
-                                        }}
-
-                                        onDrop={e => handleDrop(e, row.id)}
-                                        onDragEnd={handleDragEnd}
-                                        className={dragOverRowId === row.id ? "drag-over-top" : ""}
-                                    >
-                                        <td className="procCent" style={{ fontSize: "14px", color: "black" }}>
-                                            {row.nr}
-                                            {!readOnly && (<FontAwesomeIcon
-                                                icon={faArrowsUpDown}
-                                                className="drag-handle-standards"
-                                                onMouseDown={() => setArmedDragRow(row.id)}
-                                                onMouseUp={() => setArmedDragRow(null)}
-                                            />)}
-                                        </td>
-                                        <td className="main-cell-standards" style={{}}>
-                                            <textarea
-                                                name="special"
-                                                className="aim-textarea-st font-fam"
-                                                value={row.instruction}
-                                                style={{ fontSize: "14px" }}
-                                                placeholder="Insert Special Instruction" // Optional placeholder text
-                                                onChange={(e) => handleMainSectionChange(row.id, e.target.value)}
-                                                onFocus={() => setErrors(prev => ({
-                                                    ...prev,
-                                                    special: false
-                                                }))}
-                                                readOnly={readOnly}
-                                            />
-                                        </td>
-                                        {!readOnly && (<td className="action-cell-si procCent">
-                                            <div className="action-buttons-si">
-                                                <button
-                                                    className="remove-row-button font-fam"
-                                                    style={{ fontSize: "14px" }}
-                                                    title="Remove Row"
-                                                    onClick={() => handleDeleteMain(row.id)}
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} />
-                                                </button>
-                                                <button
-                                                    className="insert-row-button-sig-risk font-fam"
-                                                    title="Add Row"
-                                                    style={{ fontSize: "15px" }}
-                                                    onClick={() => handleAddMain(row.id)}
-                                                >
-                                                    <FontAwesomeIcon icon={faPlusCircle} />
-                                                </button>
-                                            </div>
-                                        </td>)}
+                {(!isCollapsed) && (
+                    <>
+                        <div className="si-chapter-card">
+                            <span style={{ color: "black" }}><strong>Note:</strong> The following special instructions are effective immediately.</span>
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        <th className="procCent siNr">Nr</th>
+                                        <th className="procCent siMain">Special Instruction</th>
+                                        {!readOnly && (<th className="procCent siSub">Action</th>)}
                                     </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
+                                </thead>
+                                <tbody>
+                                    {formData.special.map((row, index) => {
+                                        return (
+                                            <tr key={index}
+                                                draggable={armedDragRow === row.id}
+                                                onDragStart={armedDragRow === row.id ? e => handleDragStart(e, row.id) : undefined}
+                                                onDragOver={e => handleDragOver(e, row.id)}
+                                                onDragLeave={e => {
+                                                    const rt = e.relatedTarget || e.nativeEvent?.relatedTarget;
+                                                    if (rt && e.currentTarget.contains(rt)) return;
+                                                    handleDragLeave();
+                                                }}
+
+                                                onDrop={e => handleDrop(e, row.id)}
+                                                onDragEnd={handleDragEnd}
+                                                className={dragOverRowId === row.id ? "drag-over-top" : ""}
+                                            >
+                                                <td className="procCent" style={{ fontSize: "14px", color: "black" }}>
+                                                    {row.nr}
+                                                    {!readOnly && (<FontAwesomeIcon
+                                                        icon={faArrowsUpDown}
+                                                        className="drag-handle-standards"
+                                                        onMouseDown={() => setArmedDragRow(row.id)}
+                                                        onMouseUp={() => setArmedDragRow(null)}
+                                                    />)}
+                                                </td>
+                                                <td className="main-cell-standards" style={{}}>
+                                                    <textarea
+                                                        name="special"
+                                                        className="aim-textarea-st font-fam"
+                                                        value={row.instruction}
+                                                        style={{ fontSize: "14px" }}
+                                                        placeholder="Insert Special Instruction" // Optional placeholder text
+                                                        onChange={(e) => handleMainSectionChange(row.id, e.target.value)}
+                                                        onFocus={() => setErrors(prev => ({
+                                                            ...prev,
+                                                            special: false
+                                                        }))}
+                                                        readOnly={readOnly}
+                                                    />
+                                                </td>
+                                                {!readOnly && (<td className="action-cell-si procCent">
+                                                    <div className="action-buttons-si">
+                                                        <button
+                                                            className="remove-row-button font-fam"
+                                                            style={{ fontSize: "14px" }}
+                                                            title="Remove Row"
+                                                            onClick={() => handleDeleteMain(row.id)}
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                        <button
+                                                            className="insert-row-button-sig-risk font-fam"
+                                                            title="Add Row"
+                                                            style={{ fontSize: "15px" }}
+                                                            onClick={() => handleAddMain(row.id)}
+                                                        >
+                                                            <FontAwesomeIcon icon={faPlusCircle} />
+                                                        </button>
+                                                    </div>
+                                                </td>)}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                    </>
+                )}
             </div>
         </div>
     );

@@ -81,6 +81,7 @@ const CreatePage = () => {
   const [isDuplicateName, setIsDuplicateName] = useState(false);
   const [isImportJRAPopupOpen, setIsImportJRAPopupOpen] = useState(false);
   const [loadingAimIndex, setLoadingAimIndex] = useState(null);
+  const [isJRA, setIsJRA] = useState(false);
 
   const openImportJRA = () => setIsImportJRAPopupOpen(true);
   const closeImportJRA = () => setIsImportJRAPopupOpen(false);
@@ -198,6 +199,22 @@ const CreatePage = () => {
     }));
   };
 
+  const filterJRAWithoutWorkExecution = (jraFormData = {}) => {
+    const jraRows = Array.isArray(jraFormData.jra) ? jraFormData.jra : [];
+
+    return jraRows.map((row) => ({
+      ...row,
+      jraBody: Array.isArray(row?.jraBody)
+        ? row.jraBody.filter((body) =>
+          !Array.isArray(body?.hazards) ||
+          !body.hazards.some(
+            (h) => cleanLine(h?.hazard).toLowerCase() === "work execution"
+          )
+        )
+        : []
+    }));
+  };
+
   const importJRAData = (jraItem) => {
     if (!jraItem) return;
 
@@ -232,11 +249,17 @@ const CreatePage = () => {
       Equipment: Array.isArray(importedFormData.Equipment) ? importedFormData.Equipment : [],
       MobileMachine: Array.isArray(importedFormData.MobileMachine) ? importedFormData.MobileMachine : [],
       Materials: Array.isArray(importedFormData.Materials) ? importedFormData.Materials : [],
+
+      jra: filterJRAWithoutWorkExecution(importedFormData),
+
+      isJRA: true
     }));
 
     if (importedFormData.title?.trim()) {
       setTitleSet(true);
     }
+
+    setIsJRA(true);
 
     toast.dismiss();
     toast.clearWaitingQueue();
@@ -522,7 +545,58 @@ const CreatePage = () => {
     }
   };
 
-  const saveData = async (overrideTitle = null) => {
+  const buildSupportingDocumentPayload = (documents = []) => {
+    return documents.map((doc, index) => ({
+      nr: index + 1,
+      name: doc.name,
+      note: doc.note || "",
+      saved: Boolean(doc.storageId),
+      storageId: doc.storageId || null,
+      size: doc.size || doc.file?.size || 0,
+      mimeType: doc.mimeType || doc.file?.type || "",
+    }));
+  };
+
+  const buildDraftFormDataRequest = (dataToStore, options = {}) => {
+    const { skipFileUpload = false } = options;
+
+    const multipart = new FormData();
+    const supportingDocuments = dataToStore.formData.supportingDocuments || [];
+
+    const payload = {
+      ...dataToStore,
+      formData: {
+        ...dataToStore.formData,
+        supportingDocuments: buildSupportingDocumentPayload(supportingDocuments),
+      },
+      skipFileUpload,
+    };
+
+    multipart.append("payload", JSON.stringify(payload));
+
+    if (!skipFileUpload) {
+      supportingDocuments.forEach((doc, index) => {
+        if (doc?.file instanceof File && !doc?.storageId) {
+          multipart.append("supportingFiles", doc.file);
+          multipart.append(
+            "supportingFilesMeta",
+            JSON.stringify({
+              rowIndex: index,
+              nr: doc.nr ?? index + 1,
+              name: doc.name,
+              note: doc.note || "",
+            })
+          );
+        }
+      });
+    }
+
+    return multipart;
+  };
+
+  const saveData = async (overrideTitle = null, options = {}) => {
+    const { skipFileUpload = false } = options;
+
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
@@ -542,13 +616,14 @@ const CreatePage = () => {
     };
 
     try {
+      const body = buildDraftFormDataRequest(dataToStore, { skipFileUpload });
+
       const response = await fetch(`${process.env.REACT_APP_URL}/api/draft/safe`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(dataToStore),
+        body,
       });
 
       const result = await response.json();
@@ -573,6 +648,11 @@ const CreatePage = () => {
         loadedIDRef.current = result.id;
       }
 
+      if (result.formData) {
+        setFormData(result.formData);
+        formDataRef.current = result.formData;
+      }
+
       return { ok: true, id: result.id };
     } catch (error) {
       console.error('Error saving data:', error);
@@ -581,7 +661,9 @@ const CreatePage = () => {
     }
   };
 
-  const updateData = async (selectedUserIDs) => {
+  const updateData = async (selectedUserIDs, options = {}) => {
+    const { skipFileUpload = false } = options;
+
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
       usedTermCodes: usedTermCodesRef.current,
@@ -598,22 +680,36 @@ const CreatePage = () => {
     };
 
     try {
+      const body = buildDraftFormDataRequest(dataToStore, { skipFileUpload });
+
       const response = await fetch(`${process.env.REACT_APP_URL}/api/draft/modifySafe/${loadedIDRef.current}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(dataToStore),
+        body,
       });
+
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to update draft');
+      }
+
+      if (result.formData) {
+        setFormData(result.formData);
+        formDataRef.current = result.formData;
+      }
+
       setOfflineDraft(false);
       localStorage.removeItem("draftData");
 
       console.log(result.message);
+      return result;
     } catch (error) {
       console.error('Error saving data:', error);
       saveDataOffline(loadedIDRef.current);
+      return null;
     }
   };
 
@@ -713,6 +809,7 @@ const CreatePage = () => {
       setUsedMaterials(storedData.usedMaterials || []);
       setUserIDs(storedData.userIDs || []);
       setLockUser(storedData.lockOwner?.username);
+      setIsJRA(storedData.formData.isJRA ?? false)
 
       const rawForm = storedData.formData || {};
       const normalizedForm = {
@@ -884,7 +981,7 @@ const CreatePage = () => {
     if (formData.title.trim() === "") return; // Don't save without a valid title
 
     if (loadedIDRef.current === '') {
-      saveData(); // First time save
+      saveData(null, { skipFileUpload: false });
       console.log("📝 autoSaveDraft() triggered 1");
       toast.dismiss();
       toast.clearWaitingQueue();
@@ -895,7 +992,7 @@ const CreatePage = () => {
         }
       });
     } else {
-      updateData(userIDsRef.current); // Update existing draft
+      updateData(userIDsRef.current, { skipFileUpload: false });
       console.log("📝 autoSaveDraft() triggered 2");
       toast.dismiss();
       toast.clearWaitingQueue();
@@ -2407,7 +2504,7 @@ const CreatePage = () => {
             onRemoveAimSection={handleRemoveAimSection}
             onAddBullet={handleAddAimBullet}
             onRemoveBullet={handleRemoveAimBullet}
-            collapsible={false}
+            collapsible={true}
           />
 
           <ScopeBulletComponent
@@ -2437,20 +2534,20 @@ const CreatePage = () => {
             onRemoveScopeSection={handleRemoveScopeSection}
             onAddBullet={handleAddScopeBullet}
             onRemoveBullet={handleRemoveScopeBullet}
-            collapsible={false}
+            collapsible={true}
           />
 
-          <PPETable formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} readOnly={readOnly} />
-          <HandToolTable formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} readOnly={readOnly} />
-          <EquipmentTable formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} readOnly={readOnly} />
-          <MobileMachineTable formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} readOnly={readOnly} />
-          <MaterialsTable formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} readOnly={readOnly} />
-          <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-          <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-          <ProcedureTable ref={procedureTableRef} formData={formData} setFormData={setFormData} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} readOnly={readOnly} />
-          <ChapterTable formData={formData} setFormData={setFormData} readOnly={readOnly} />
-          <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} readOnly={readOnly} />
-          <SupportingDocumentTable formData={formData} setFormData={setFormData} readOnly={readOnly} />
+          <PPETable collapsible={true} formData={formData} setFormData={setFormData} usedPPEOptions={usedPPEOptions} setUsedPPEOptions={setUsedPPEOptions} userID={userID} readOnly={readOnly} />
+          <HandToolTable collapsible={true} formData={formData} setFormData={setFormData} usedHandTools={usedHandTools} setUsedHandTools={setUsedHandTools} userID={userID} readOnly={readOnly} />
+          <EquipmentTable collapsible={true} formData={formData} setFormData={setFormData} usedEquipment={usedEquipment} setUsedEquipment={setUsedEquipment} userID={userID} readOnly={readOnly} />
+          <MobileMachineTable collapsible={true} formData={formData} setFormData={setFormData} usedMobileMachine={usedMobileMachine} setUsedMobileMachine={setUsedMobileMachines} userID={userID} readOnly={readOnly} />
+          <MaterialsTable collapsible={true} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} readOnly={readOnly} />
+          <AbbreviationTable collapsible={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+          <TermTable collapsible={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+          <ProcedureTable collapsible={true} ref={procedureTableRef} formData={formData} setFormData={setFormData} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} readOnly={readOnly} />
+          <ChapterTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+          <ReferenceTable collapsible={true} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} readOnly={readOnly} />
+          <SupportingDocumentTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
 
           <div className="input-row">
             <div className={`input-box-3 ${errors.reviewDate ? "error-create" : ""}`}>
@@ -2474,7 +2571,7 @@ const CreatePage = () => {
             </div>
           </div>
 
-          <PicturesTable picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} readOnly={readOnly} />
+          <PicturesTable collapsible={true} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} readOnly={readOnly} />
           <div className="input-row-buttons">
             {/* Generate File Button */}
             <button

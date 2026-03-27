@@ -6,8 +6,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faArrowsUpDown, faCopy, faUndo, faFilter } from '@fortawesome/free-solid-svg-icons';
 import FlowchartRenderer from "./FlowchartRenderer";
 import { aiRewrite } from "../../utils/jraAI";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow, error, title, documentType, updateProcRows, readOnly = false, setErrors, setFormData, formData }, ref) => {
+const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow, removeRow, updateRow, error, title, documentType, updateProcRows, readOnly = false, setErrors, setFormData, formData }, ref) => {
+    const [collapsed, setCollapsed] = useState(false);
+    const isCollapsed = collapsible ? collapsed : false;
     const [designationOptions, setDesignationOptions] = useState([]);
     const [showARDropdown, setShowARDropdown] = useState({ index: null, field: "" });
     const [dropdownOptions, setDropdownOptions] = useState([]);
@@ -41,6 +47,11 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
     const [excelSearch, setExcelSearch] = useState("");
     const [excelSelected, setExcelSelected] = useState(new Set());
     const BLANK = "(Blanks)";
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     useImperativeHandle(ref, () => ({
         getFlowchartImages: async () => {
@@ -682,7 +693,7 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
     };
 
     const getFilterBtnClass = () => {
-        return "top-right-button-ibra3";
+        return "top-right-button-ibra4";
     };
 
     // --- NEW: Helper to get options filtered by OTHER columns ---
@@ -735,268 +746,283 @@ const ProcedureTable = forwardRef(({ procedureRows, addRow, removeRow, updateRow
                     />
                 </button>
 
-                {procedureRows.length > 0 && (
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                {/* Helper function to render headers with filter/sort icons */}
-                                {[
-                                    { id: "nr", label: "Nr", className: "procCent procNr" },
-                                    { id: "mainStep", label: "Procedure Main Steps", className: "procCent procMain" },
-                                    { id: "SubStep", label: "Procedure Sub Steps", className: "procCent procSub" },
-                                    { id: "prevStep", label: "Predecessor", subLabel: "(Immediate Prior Steps)", className: "procCent procPrev" },
-                                    { id: "responsible", label: "Responsible and Accountable", className: "procCent procAR" }, // responsible/accountable share a cell visually but handle filtering separately if needed. Currently responsible is the primary filter key for this cell if clicked? Or we need two? The original table has ONE header for R&A. Let's make it clickable for "Responsible" or maybe just disable filtering here since it's a composite? I will map it to 'responsible' for now.
-                                    { id: "Action", label: "Action", className: "procCent procAct", noFilter: true }
-                                ].map((col) => (
-                                    !readOnly && col.id === "Action" ? (
-                                        <th key={col.id} className={col.className} style={{ backgroundColor: "#002060", color: "white" }}>{col.label}</th>
-                                    ) : (col.id !== "Action") && (
-                                        <th
-                                            key={col.id}
-                                            className={col.className}
-                                            style={{ backgroundColor: "#002060", color: "white", cursor: col.noFilter ? "default" : "pointer" }}
-                                            onClick={(e) => !col.noFilter && openExcelFilterPopup(col.id, e)}
-                                        >
-                                            {col.label}
-                                            {col.subLabel && <div className="procFineText" style={{ color: "white" }}>{col.subLabel}</div>}
-                                            {(!col.noFilter && (filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
-                                                <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
-                                            )}
-                                        </th>
-                                    )
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredRows.map((row) => {
-                                // Use originalIndex for data manipulation
-                                const index = row.originalIndex;
-                                return (
-                                    <React.Fragment key={index}>
-                                        <tr key={index}
-                                            draggable={isDragEnabled && armedDragRow === row.nr}
-                                            onDragStart={isDragEnabled && armedDragRow === row.nr ? e => handleDragStart(e, row.nr) : undefined}
-                                            onDragOver={isDragEnabled ? e => handleDragOver(e, row.nr) : undefined}
-                                            onDragLeave={isDragEnabled ? handleDragLeave : undefined}
-                                            onDrop={isDragEnabled ? e => handleDrop(e, row.nr) : undefined}
-                                            onDragEnd={isDragEnabled ? handleDragEnd : undefined}
-                                            className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${dragOverRowNr === row.nr ? 'drag-over-top' : ''}`}
-                                        >
-                                            <td className="procCent" style={{ fontSize: "14px" }}>
-                                                {row.nr}
-                                                {!readOnly && isDragEnabled && (<FontAwesomeIcon
-                                                    icon={faArrowsUpDown}
-                                                    className="drag-handle-standards"
-                                                    onMouseDown={() => setArmedDragRow(row.nr)}
-                                                    onMouseUp={() => setArmedDragRow(null)}
-                                                />)}
-                                            </td>
-                                            <td>
-                                                <div className="textarea-wrapper-proc">
-                                                    <textarea
-                                                        name="mainStep"
-                                                        className={`${mainHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
-                                                        value={row.mainStep}
-                                                        ref={el => {
-                                                            const key = `${index}`;
-                                                            if (el) {
-                                                                mainInputRefs.current[key] = el;
-                                                            } else {
-                                                                delete mainInputRefs.current[key];
-                                                            }
-                                                        }}
-                                                        readOnly={readOnly}
-                                                        style={{ fontSize: "14px" }}
-                                                        onChange={(e) => handleInputChange(index, "mainStep", e.target.value)}
-                                                        placeholder="Insert the main step of the procedure here..."
-                                                    />
-                                                    {loadingMainKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin-main spin-animation-proc" />)}
-                                                    {mainHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoMain(index)} />)}
-                                                    {(!loadingMainKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Main Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteMain(index)} />)}
-
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="textarea-wrapper-proc">
-                                                    <textarea
-                                                        name="SubStep"
-                                                        className={`${subHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
-                                                        value={row.SubStep}
-                                                        ref={el => {
-                                                            const key = `${index}`;
-                                                            if (el) {
-                                                                subInputRefs.current[key] = el;
-                                                            } else {
-                                                                delete subInputRefs.current[key];
-                                                            }
-                                                        }}
-                                                        readOnly={readOnly}
-                                                        onChange={(e) => handleInputChange(index, "SubStep", e.target.value)}
-                                                        style={{ fontSize: "14px" }}
-                                                        placeholder="Insert the sub steps of the procedure here..."
-                                                    />
-                                                    {loadingSubKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin spin-animation-proc" />)}
-                                                    {subHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoSub(index)} />)}
-                                                    {(!loadingSubKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Sub Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteSub(index)} />)}
-
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="prev-step-container-ref">
-                                                    {(row.prevStep && row.prevStep.trim() !== "" ? row.prevStep.split(";") : [""]).map((step, stepIndex, arr) => (
-                                                        <div key={stepIndex} className="prev-step-input-ref">
-                                                            <input
-                                                                type="text"
-                                                                style={{ fontSize: "14px", width: readOnly ? "100%" : "" }}
-                                                                className="aim-input-pt font-fam"
-                                                                value={step}
-                                                                onChange={(e) => {
-                                                                    let updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
-
-                                                                    if (stepIndex < updatedSteps.length) {
-                                                                        updatedSteps[stepIndex] = e.target.value;
-                                                                    } else {
-                                                                        updatedSteps.push(e.target.value);
-                                                                    }
-
-                                                                    updateRow(index, "prevStep", updatedSteps.join(";"));
-                                                                }}
-                                                                placeholder="Insert step"
-                                                                readOnly={readOnly}
-                                                            />
-                                                            {!readOnly && (<button
-                                                                className="remove-step-button-ref"
-                                                                onClick={() => {
-                                                                    const updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
-                                                                    if (updatedSteps.length > 1) {
-                                                                        updateRow(index, "prevStep", updatedSteps.filter((_, i) => i !== stepIndex).join(";"));
-                                                                    } else {
-                                                                        toast.warn("At least one predecessor is required.", { autoClose: 1000, closeButton: true });
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <FontAwesomeIcon icon={faTrash} title="Remove Predecessor" />
-                                                            </button>)}
-                                                            {(stepIndex === arr.length - 1 && !readOnly) && (
-                                                                <button
-                                                                    className="add-row-button-pred"
-                                                                    style={{ fontSize: "15px" }}
-                                                                    onClick={() => {
-                                                                        const updatedSteps = row.prevStep ? row.prevStep.split(";") : [""];
-                                                                        updatedSteps.push("");
-                                                                        updateRow(index, "prevStep", updatedSteps.join(";"));
-                                                                    }}
-                                                                >
-                                                                    <FontAwesomeIcon icon={faPlusCircle} title="Add Step" />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="select-container-proc">
-                                                    <div className="select-wrapper">
-                                                        <label className={`select-label-proc ${invalidRows.includes(index) && !row.responsible ? "label-error-pt" : ""}`}>R:</label>
-                                                        <textarea
-                                                            type="text"
-                                                            className="table-control-proc-text-area-ar"
-                                                            value={row.responsible}
-                                                            style={{ fontSize: "14px" }}
-                                                            placeholder="Select Responsible"
-                                                            ref={(el) => (inputRefs.current[`responsible-${index}`] = el)}
-                                                            onChange={(e) => {
-                                                                handleInputChange(index, "responsible", e.target.value);
-                                                                const filtered = designationOptions.filter(opt =>
-                                                                    opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
-                                                                    opt !== row.accountable
-                                                                );
-                                                                setDropdownOptions(filtered);
-                                                            }}
-                                                            onFocus={() => {
-                                                                if (readOnly) return;
-                                                                const rect = inputRefs.current[`responsible-${index}`].getBoundingClientRect();
-                                                                setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
-                                                                setDropdownOptions(designationOptions.filter(opt => opt !== row.accountable));
-                                                                setShowARDropdown({ index, field: "responsible" });
-                                                            }}
-                                                            onBlur={(e) => {
-                                                                addDesignationIfNew(e.target.value);
-                                                            }}
-                                                            readOnly={readOnly}
-                                                        />
-                                                    </div>
-
-                                                    <div className="select-wrapper">
-                                                        <label className={`select-label-proc ${invalidRows.includes(index) && !row.accountable ? "label-error-pt" : ""}`}>A:</label>
-                                                        <textarea
-                                                            type="text"
-                                                            className="table-control-proc-text-area-ar"
-                                                            value={row.accountable}
-                                                            style={{ fontSize: "14px" }}
-                                                            placeholder="Select Accountable"
-                                                            ref={(el) => (inputRefs.current[`accountable-${index}`] = el)}
-                                                            onChange={(e) => {
-                                                                handleInputChange(index, "accountable", e.target.value);
-                                                                const filtered = designationOptions.filter(opt =>
-                                                                    opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
-                                                                    opt !== row.responsible
-                                                                );
-                                                                setDropdownOptions(filtered);
-                                                            }}
-                                                            onFocus={() => {
-                                                                if (readOnly) return;
-                                                                const rect = inputRefs.current[`accountable-${index}`].getBoundingClientRect();
-                                                                setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
-                                                                setDropdownOptions(designationOptions.filter(opt => opt !== row.responsible));
-                                                                setShowARDropdown({ index, field: "accountable" });
-                                                            }}
-                                                            onBlur={(e) => {
-                                                                addDesignationIfNew(e.target.value);
-                                                            }}
-                                                            readOnly={readOnly}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            {!readOnly && (<td className="procCent">
-                                                <button
-                                                    className="remove-row-button"
-                                                    onClick={() => removeProRow(index)}
-                                                    title="Delete step"
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                                                </button>
-                                                {index < procedureRows.length - 1 && (
-                                                    <button
-                                                        className="insert-row-button-sig"
-                                                        onClick={() => insertRowAt(index + 1)}
-                                                        style={{ fontSize: "15px" }}
-                                                        title="Insert step"
-                                                    >
-                                                        <FontAwesomeIcon icon={faPlusCircle} />
-                                                    </button>
-                                                )}
-                                                {true && (<button
-                                                    className="remove-row-button"
-                                                    onClick={() => handleDuplicateRow(row.nr)}
-                                                    title="Duplicate step"
-                                                >
-                                                    <FontAwesomeIcon icon={faCopy} title="Duplicate Row" />
-                                                </button>)}
-
-                                            </td>)}
-                                        </tr>
-                                    </React.Fragment>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                )}
-
-                {!readOnly && (<button className="add-row-button-ds font-fam" onClick={add}>
-                    <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
                 </button>)}
+
+                {(!isCollapsed) && (
+                    <>
+                        {procedureRows.length > 0 && (
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        {/* Helper function to render headers with filter/sort icons */}
+                                        {[
+                                            { id: "nr", label: "Nr", className: "procCent procNr" },
+                                            { id: "mainStep", label: "Procedure Main Steps", className: "procCent procMain" },
+                                            { id: "SubStep", label: "Procedure Sub Steps", className: "procCent procSub" },
+                                            { id: "prevStep", label: "Predecessor", subLabel: "(Immediate Prior Steps)", className: "procCent procPrev" },
+                                            { id: "responsible", label: "Responsible and Accountable", className: "procCent procAR" }, // responsible/accountable share a cell visually but handle filtering separately if needed. Currently responsible is the primary filter key for this cell if clicked? Or we need two? The original table has ONE header for R&A. Let's make it clickable for "Responsible" or maybe just disable filtering here since it's a composite? I will map it to 'responsible' for now.
+                                            { id: "Action", label: "Action", className: "procCent procAct", noFilter: true }
+                                        ].map((col) => (
+                                            !readOnly && col.id === "Action" ? (
+                                                <th key={col.id} className={col.className} style={{ backgroundColor: "#002060", color: "white" }}>{col.label}</th>
+                                            ) : (col.id !== "Action") && (
+                                                <th
+                                                    key={col.id}
+                                                    className={col.className}
+                                                    style={{ backgroundColor: "#002060", color: "white", cursor: col.noFilter ? "default" : "pointer" }}
+                                                    onClick={(e) => !col.noFilter && openExcelFilterPopup(col.id, e)}
+                                                >
+                                                    {col.label}
+                                                    {col.subLabel && <div className="procFineText" style={{ color: "white" }}>{col.subLabel}</div>}
+                                                    {(!col.noFilter && (filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
+                                                        <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
+                                                    )}
+                                                </th>
+                                            )
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredRows.map((row) => {
+                                        // Use originalIndex for data manipulation
+                                        const index = row.originalIndex;
+                                        return (
+                                            <React.Fragment key={index}>
+                                                <tr key={index}
+                                                    draggable={isDragEnabled && armedDragRow === row.nr}
+                                                    onDragStart={isDragEnabled && armedDragRow === row.nr ? e => handleDragStart(e, row.nr) : undefined}
+                                                    onDragOver={isDragEnabled ? e => handleDragOver(e, row.nr) : undefined}
+                                                    onDragLeave={isDragEnabled ? handleDragLeave : undefined}
+                                                    onDrop={isDragEnabled ? e => handleDrop(e, row.nr) : undefined}
+                                                    onDragEnd={isDragEnabled ? handleDragEnd : undefined}
+                                                    className={`${row.nr % 2 === 0 ? 'evenTRColour' : ''} ${dragOverRowNr === row.nr ? 'drag-over-top' : ''}`}
+                                                >
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.nr}
+                                                        {!readOnly && isDragEnabled && (<FontAwesomeIcon
+                                                            icon={faArrowsUpDown}
+                                                            className="drag-handle-standards"
+                                                            onMouseDown={() => setArmedDragRow(row.nr)}
+                                                            onMouseUp={() => setArmedDragRow(null)}
+                                                        />)}
+                                                    </td>
+                                                    <td>
+                                                        <div className="textarea-wrapper-proc">
+                                                            <textarea
+                                                                name="mainStep"
+                                                                className={`${mainHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
+                                                                value={row.mainStep}
+                                                                ref={el => {
+                                                                    const key = `${index}`;
+                                                                    if (el) {
+                                                                        mainInputRefs.current[key] = el;
+                                                                    } else {
+                                                                        delete mainInputRefs.current[key];
+                                                                    }
+                                                                }}
+                                                                readOnly={readOnly}
+                                                                style={{ fontSize: "14px" }}
+                                                                onChange={(e) => handleInputChange(index, "mainStep", e.target.value)}
+                                                                placeholder="Insert the main step of the procedure here..."
+                                                            />
+                                                            {loadingMainKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin-main spin-animation-proc" />)}
+                                                            {mainHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoMain(index)} />)}
+                                                            {(!loadingMainKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Main Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteMain(index)} />)}
+
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="textarea-wrapper-proc">
+                                                            <textarea
+                                                                name="SubStep"
+                                                                className={`${subHistory[`${index}`]?.length > 0 ? `aim-textarea-pt-2` : `aim-textarea-pt`} font-fam`}
+                                                                value={row.SubStep}
+                                                                ref={el => {
+                                                                    const key = `${index}`;
+                                                                    if (el) {
+                                                                        subInputRefs.current[key] = el;
+                                                                    } else {
+                                                                        delete subInputRefs.current[key];
+                                                                    }
+                                                                }}
+                                                                readOnly={readOnly}
+                                                                onChange={(e) => handleInputChange(index, "SubStep", e.target.value)}
+                                                                style={{ fontSize: "14px" }}
+                                                                placeholder="Insert the sub steps of the procedure here..."
+                                                            />
+                                                            {loadingSubKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin spin-animation-proc" />)}
+                                                            {subHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoSub(index)} />)}
+                                                            {(!loadingSubKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Sub Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteSub(index)} />)}
+
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="prev-step-container-ref">
+                                                            {(row.prevStep && row.prevStep.trim() !== "" ? row.prevStep.split(";") : [""]).map((step, stepIndex, arr) => (
+                                                                <div key={stepIndex} className="prev-step-input-ref">
+                                                                    <input
+                                                                        type="text"
+                                                                        style={{ fontSize: "14px", width: readOnly ? "100%" : "" }}
+                                                                        className="aim-input-pt font-fam"
+                                                                        value={step}
+                                                                        onChange={(e) => {
+                                                                            let updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
+
+                                                                            if (stepIndex < updatedSteps.length) {
+                                                                                updatedSteps[stepIndex] = e.target.value;
+                                                                            } else {
+                                                                                updatedSteps.push(e.target.value);
+                                                                            }
+
+                                                                            updateRow(index, "prevStep", updatedSteps.join(";"));
+                                                                        }}
+                                                                        placeholder="Insert step"
+                                                                        readOnly={readOnly}
+                                                                    />
+                                                                    {!readOnly && (<button
+                                                                        className="remove-step-button-ref"
+                                                                        onClick={() => {
+                                                                            const updatedSteps = row.prevStep ? row.prevStep.split(";") : [];
+                                                                            if (updatedSteps.length > 1) {
+                                                                                updateRow(index, "prevStep", updatedSteps.filter((_, i) => i !== stepIndex).join(";"));
+                                                                            } else {
+                                                                                toast.warn("At least one predecessor is required.", { autoClose: 1000, closeButton: true });
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faTrash} title="Remove Predecessor" />
+                                                                    </button>)}
+                                                                    {(stepIndex === arr.length - 1 && !readOnly) && (
+                                                                        <button
+                                                                            className="add-row-button-pred"
+                                                                            style={{ fontSize: "15px" }}
+                                                                            onClick={() => {
+                                                                                const updatedSteps = row.prevStep ? row.prevStep.split(";") : [""];
+                                                                                updatedSteps.push("");
+                                                                                updateRow(index, "prevStep", updatedSteps.join(";"));
+                                                                            }}
+                                                                        >
+                                                                            <FontAwesomeIcon icon={faPlusCircle} title="Add Step" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="select-container-proc">
+                                                            <div className="select-wrapper">
+                                                                <label className={`select-label-proc ${invalidRows.includes(index) && !row.responsible ? "label-error-pt" : ""}`}>R:</label>
+                                                                <textarea
+                                                                    type="text"
+                                                                    className="table-control-proc-text-area-ar"
+                                                                    value={row.responsible}
+                                                                    style={{ fontSize: "14px" }}
+                                                                    placeholder="Select Responsible"
+                                                                    ref={(el) => (inputRefs.current[`responsible-${index}`] = el)}
+                                                                    onChange={(e) => {
+                                                                        handleInputChange(index, "responsible", e.target.value);
+                                                                        const filtered = designationOptions.filter(opt =>
+                                                                            opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
+                                                                            opt !== row.accountable
+                                                                        );
+                                                                        setDropdownOptions(filtered);
+                                                                    }}
+                                                                    onFocus={() => {
+                                                                        if (readOnly) return;
+                                                                        const rect = inputRefs.current[`responsible-${index}`].getBoundingClientRect();
+                                                                        setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+                                                                        setDropdownOptions(designationOptions.filter(opt => opt !== row.accountable));
+                                                                        setShowARDropdown({ index, field: "responsible" });
+                                                                    }}
+                                                                    onBlur={(e) => {
+                                                                        addDesignationIfNew(e.target.value);
+                                                                    }}
+                                                                    readOnly={readOnly}
+                                                                />
+                                                            </div>
+
+                                                            <div className="select-wrapper">
+                                                                <label className={`select-label-proc ${invalidRows.includes(index) && !row.accountable ? "label-error-pt" : ""}`}>A:</label>
+                                                                <textarea
+                                                                    type="text"
+                                                                    className="table-control-proc-text-area-ar"
+                                                                    value={row.accountable}
+                                                                    style={{ fontSize: "14px" }}
+                                                                    placeholder="Select Accountable"
+                                                                    ref={(el) => (inputRefs.current[`accountable-${index}`] = el)}
+                                                                    onChange={(e) => {
+                                                                        handleInputChange(index, "accountable", e.target.value);
+                                                                        const filtered = designationOptions.filter(opt =>
+                                                                            opt.toLowerCase().includes(e.target.value.toLowerCase()) &&
+                                                                            opt !== row.responsible
+                                                                        );
+                                                                        setDropdownOptions(filtered);
+                                                                    }}
+                                                                    onFocus={() => {
+                                                                        if (readOnly) return;
+                                                                        const rect = inputRefs.current[`accountable-${index}`].getBoundingClientRect();
+                                                                        setDropdownPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+                                                                        setDropdownOptions(designationOptions.filter(opt => opt !== row.responsible));
+                                                                        setShowARDropdown({ index, field: "accountable" });
+                                                                    }}
+                                                                    onBlur={(e) => {
+                                                                        addDesignationIfNew(e.target.value);
+                                                                    }}
+                                                                    readOnly={readOnly}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    {!readOnly && (<td className="procCent">
+                                                        <button
+                                                            className="remove-row-button"
+                                                            onClick={() => removeProRow(index)}
+                                                            title="Delete step"
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} title="Remove Row" />
+                                                        </button>
+                                                        {index < procedureRows.length - 1 && (
+                                                            <button
+                                                                className="insert-row-button-sig"
+                                                                onClick={() => insertRowAt(index + 1)}
+                                                                style={{ fontSize: "15px" }}
+                                                                title="Insert step"
+                                                            >
+                                                                <FontAwesomeIcon icon={faPlusCircle} />
+                                                            </button>
+                                                        )}
+                                                        {true && (<button
+                                                            className="remove-row-button"
+                                                            onClick={() => handleDuplicateRow(row.nr)}
+                                                            title="Duplicate step"
+                                                        >
+                                                            <FontAwesomeIcon icon={faCopy} title="Duplicate Row" />
+                                                        </button>)}
+
+                                                    </td>)}
+                                                </tr>
+                                            </React.Fragment>
+                                        )
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+
+                        {!readOnly && (<button className="add-row-button-ds font-fam" onClick={add}>
+                            <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
+                        </button>)}
+
+                    </>
+                )}
             </div>
 
             {showARDropdown.index !== null && dropdownOptions.length > 0 && (

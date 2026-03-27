@@ -898,6 +898,22 @@ body {
   color: #CB6F6F;
 }
 
+.download-support-row-button {
+  background-color: transparent;
+  color: black;
+  font-weight: bold;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.3s ease;
+}
+
+.download-support-row-button:hover {
+  color: #7EAC89;
+}
+
 .edit-terms-row-button {
   background-color: transparent;
   color: black;

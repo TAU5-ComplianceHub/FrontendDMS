@@ -642,12 +642,19 @@ const FileInfo = () => {
                     <span className="button-text">Upload Single Document</span>
                   </div>
                 </button>
+
+                <button className="but-dm-fi" onClick={() => setIsTrashView(true)}>
+                  <div className="button-content">
+                    <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                    <span className="button-text">Deleted Documents</span>
+                  </div>
+                </button>
               </div>
             </div>
           )}
           <div className="sidebar-logo-dm-fi">
             <img src={isTrashView ? `${process.env.PUBLIC_URL}/trashIcon.svg` : `${process.env.PUBLIC_URL}/${iconMap[type]}`} alt="Logo" className="icon-risk-rm" />
-            <p className="logo-text-dm-fi">{isTrashView ? `Trash` : (type === "Policy" ? "Policies" : `${type}s`)}</p>
+            <p className="logo-text-dm-fi">{isTrashView ? `Deleted Documents` : (type === "Policy" ? "Policies" : `${type}s`)}</p>
           </div>
         </div>
       ) : (
@@ -661,7 +668,7 @@ const FileInfo = () => {
       <div className="main-box-file-info">
         <div className="top-section-um">
           <div className="burger-menu-icon-um">
-            <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
+            <FontAwesomeIcon onClick={() => { if (isTrashView) { setIsTrashView(false) } else { navigate(-1) } }} icon={faArrowLeft} title="Back" />
           </div>
 
           <div className="um-input-container">
@@ -720,7 +727,7 @@ const FileInfo = () => {
 
         <div className="table-flameproof-card">
           <div className="flameproof-table-header-label-wrapper">
-            <label className="risk-control-label">{(type === "Policy" ? "Policies" : `${type}s`)}</label>
+            <label className="risk-control-label">{isTrashView ? "Deleted Documents" : (type === "Policy" ? "Policies" : `${type}s`)}</label>
             <button
               className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
               title={hasActiveFilters ? "Filters Active (Double Click to Clear)" : "Table is filter enabled."}

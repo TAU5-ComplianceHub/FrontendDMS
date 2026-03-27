@@ -8,7 +8,7 @@ import { useState } from "react";
 
 const OtherTeam = ({ collapsible = false, formData }) => {
     const members = formData.introInfo.members || [];
-    const [collapsed, setCollapsed] = useState(true);
+    const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
 
     const toggleCollapse = () => {

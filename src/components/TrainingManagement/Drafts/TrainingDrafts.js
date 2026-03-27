@@ -2,10 +2,11 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from 'jwt-decode';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrash, faCircleLeft, faPenToSquare, faRotateLeft, faArrowsRotate, faMagnifyingGlass, faCircleXmark, faX, faFilter, faSortUp, faSortDown, faArrowLeft, faCaretRight, faCaretLeft, faSearch, faEdit } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrash, faCircleLeft, faPenToSquare, faRotateLeft, faArrowsRotate, faMagnifyingGlass, faCircleXmark, faX, faFilter, faSortUp, faSortDown, faArrowLeft, faCaretRight, faCaretLeft, faSearch, faEdit, faFile } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "../../Notifications/TopBar";
 import TrainingDraftOwnership from "./TrainingDraftOwnership";
 import { toast, ToastContainer } from "react-toastify";
+import MigrateDraftOwnership from "../../DraftMigration/MigrateDraftOwnership";
 
 const TrainingDrafts = () => {
     const [drafts, setDrafts] = useState([]);
@@ -26,6 +27,7 @@ const TrainingDrafts = () => {
     const [draftType, setDraftType] = useState('');
     const [draftID, setDraftID] = useState(null);
     const navigate = useNavigate();
+    const [batchTransfer, setBatchTransfer] = useState(false);
 
     // Excel Filter States
     const [excelFilter, setExcelFilter] = useState({
@@ -80,6 +82,14 @@ const TrainingDrafts = () => {
             default: return "";
         }
     };
+
+    const openBatch = () => {
+        setBatchTransfer(true);
+    }
+
+    const closeBatch = () => {
+        setBatchTransfer(false);
+    }
 
     const toggleSort = (field) => {
         if (sortBy !== field) {
@@ -325,7 +335,14 @@ const TrainingDrafts = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
-
+                    <div className="button-container-create">
+                        <button className="but-um" onClick={() => openBatch()}>
+                            <div className="button-content">
+                                <FontAwesomeIcon icon={faFile} className="button-logo-custom" />
+                                <span className="button-text">Batch Migrate</span>
+                            </div>
+                        </button>
+                    </div>
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/migrate2.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"All TMS Drafts"}</p>
@@ -606,6 +623,8 @@ const TrainingDrafts = () => {
                     })()}
                 </div>
             )}
+
+            {batchTransfer && (<MigrateDraftOwnership onClose={closeBatch} draftType="TMS" />)}
             <ToastContainer />
         </div>
     );

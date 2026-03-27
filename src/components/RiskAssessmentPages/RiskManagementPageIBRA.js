@@ -339,7 +339,58 @@ const RiskManagementPageIBRA = () => {
         setIsSaveAsModalOpen(false);
     };
 
-    const saveData = async (overrideTitle = null) => {
+    const buildSupportingDocumentPayload = (documents = []) => {
+        return documents.map((doc, index) => ({
+            nr: index + 1,
+            name: doc.name,
+            note: doc.note || "",
+            saved: Boolean(doc.storageId),
+            storageId: doc.storageId || null,
+            size: doc.size || doc.file?.size || 0,
+            mimeType: doc.mimeType || doc.file?.type || "",
+        }));
+    };
+
+    const buildDraftFormDataRequest = (dataToStore, options = {}) => {
+        const { skipFileUpload = false } = options;
+
+        const multipart = new FormData();
+        const supportingDocuments = dataToStore.formData.supportingDocuments || [];
+
+        const payload = {
+            ...dataToStore,
+            formData: {
+                ...dataToStore.formData,
+                supportingDocuments: buildSupportingDocumentPayload(supportingDocuments),
+            },
+            skipFileUpload,
+        };
+
+        multipart.append("payload", JSON.stringify(payload));
+
+        if (!skipFileUpload) {
+            supportingDocuments.forEach((doc, index) => {
+                if (doc?.file instanceof File && !doc?.storageId) {
+                    multipart.append("supportingFiles", doc.file);
+                    multipart.append(
+                        "supportingFilesMeta",
+                        JSON.stringify({
+                            rowIndex: index,
+                            nr: doc.nr ?? index + 1,
+                            name: doc.name,
+                            note: doc.note || "",
+                        })
+                    );
+                }
+            });
+        }
+
+        return multipart;
+    };
+
+    const saveData = async (overrideTitle = null, options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
             usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
             usedTermCodes: usedTermCodesRef.current,
@@ -354,13 +405,14 @@ const RiskManagementPageIBRA = () => {
         };
 
         try {
+            const body = buildDraftFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskDraft/ibra/safe`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
 
             const result = await response.json();
@@ -382,6 +434,11 @@ const RiskManagementPageIBRA = () => {
                 loadedIDRef.current = result.id;
             }
 
+            if (result.formData) {
+                setFormData(result.formData);
+                formDataRef.current = result.formData;
+            }
+
             return { ok: true, id: result.id };
         } catch (error) {
             console.error('Error saving data:', error);
@@ -389,7 +446,9 @@ const RiskManagementPageIBRA = () => {
         }
     };
 
-    const updateData = async (selectedUserIDs) => {
+    const updateData = async (selectedUserIDs, options = {}) => {
+        const { skipFileUpload = false } = options;
+
         const dataToStore = {
             usedAbbrCodes: usedAbbrCodesRef.current,
             usedTermCodes: usedTermCodesRef.current,
@@ -401,19 +460,32 @@ const RiskManagementPageIBRA = () => {
         };
 
         try {
+            const body = buildDraftFormDataRequest(dataToStore, { skipFileUpload });
+
             const response = await fetch(`${process.env.REACT_APP_URL}/api/riskDraft/ibra/modifySafe/${loadedIDRef.current}`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify(dataToStore),
+                body,
             });
+
             const result = await response.json();
 
+            if (!response.ok) {
+                throw new Error(result?.error || 'Failed to update draft');
+            }
+
+            if (result.formData) {
+                setFormData(result.formData);
+                formDataRef.current = result.formData;
+            }
+
             console.log(result.message);
+            return result;
         } catch (error) {
             console.error('Error saving data:', error);
+            return null;
         }
     };
 
@@ -734,13 +806,16 @@ const RiskManagementPageIBRA = () => {
 
             // Step D: Create the relevantControls array
             normalized.relevantControls = allControls.map(name => {
-                // Try to find description from existing CEA row
                 const ceaRow = normalized.cea?.find(c => c.control === name);
+                const systemRow = allSystemControls?.find(
+                    c => (c?.control || "").trim().toLowerCase() === name.trim().toLowerCase()
+                );
 
                 return {
                     id: uuidv4(),
                     control: name,
-                    description: ceaRow ? ceaRow.description : ""
+                    description: ceaRow ? ceaRow.description : "",
+                    category: ceaRow?.category || systemRow?.category
                 };
             });
 
@@ -835,14 +910,36 @@ const RiskManagementPageIBRA = () => {
     };
 
     const updateCEARows = (idToUpdate, newValues) => {
-        setFormData(prev => ({
-            ...prev,
-            cea: prev.cea.map(item =>
+        setFormData(prev => {
+            const oldRow = prev.cea.find(item => item.id === idToUpdate);
+            if (!oldRow) return prev;
+
+            const updatedCEA = prev.cea.map(item =>
                 item.id === idToUpdate
                     ? { ...item, ...newValues }
                     : item
-            )
-        }));
+            );
+
+            const oldControlName = oldRow.control;
+            const newControlName = newValues.control ?? oldControlName;
+            const nextCategory = (newValues.category ?? oldRow.category ?? "").toString().trim();
+
+            const updatedRelevantControls = prev.relevantControls.map(item => {
+                if (norm(item.control) !== norm(oldControlName)) return item;
+
+                return {
+                    ...item,
+                    control: newControlName,
+                    category: nextCategory
+                };
+            });
+
+            return {
+                ...prev,
+                cea: updatedCEA,
+                relevantControls: updatedRelevantControls
+            };
+        });
     };
 
     const addIBRARow = () => {
@@ -1333,11 +1430,11 @@ const RiskManagementPageIBRA = () => {
     const autoSaveDraft = () => {
         if (readOnlyRef.current) return;
         if (readOnly) return;
-        if (formData.title.trim() === "") return; // Don't save without a valid title
+        if (formData.title.trim() === "") return;
 
         if (loadedIDRef.current === '') {
             if (riskType === "IBRA") {
-                saveData();
+                saveData(null, { skipFileUpload: false });
             }
             console.log("📝 autoSaveDraft() triggered 1");
             toast.dismiss();
@@ -1350,7 +1447,7 @@ const RiskManagementPageIBRA = () => {
             });
         } else {
             if (riskType === "IBRA") {
-                updateData(userIDsRef.current);
+                updateData(userIDsRef.current, { skipFileUpload: false });
             }
             console.log("📝 autoSaveDraft() triggered 2");
             toast.dismiss();
@@ -2221,18 +2318,31 @@ const RiskManagementPageIBRA = () => {
         const missingInRelevant = distinctControls.filter(c => !currentRelevantNames.includes(c));
 
         if (missingInRelevant.length > 0) {
-            const newRelevantRows = missingInRelevant.map(name => ({
-                id: uuidv4(),
-                control: name,
-                description: "" // Default empty if added manually
-            }));
+
+            // 🔹 Build lookup for system controls by name
+            const systemByName = new Map(
+                (allSystemControls || [])
+                    .filter(c => (c?.control || "").trim())
+                    .map(c => [c.control.trim().toLowerCase(), c])
+            );
+
+            const newRelevantRows = missingInRelevant.map(name => {
+                const matchedSystemControl = systemByName.get(name.toLowerCase());
+
+                return {
+                    id: uuidv4(),
+                    control: name,
+                    description: "",
+                    category: (matchedSystemControl?.category ?? "").toString().trim()
+                };
+            });
 
             setFormData(prev => ({
                 ...prev,
                 relevantControls: [...(prev.relevantControls || []), ...newRelevantRows]
             }));
         }
-    }, [formData.ibra]); // Watch IBRA changes
+    }, [formData.ibra, allSystemControls]);
 
     // Helper: normalize control name
     const norm = (s) => (s == null ? "" : String(s).trim());
@@ -2255,8 +2365,10 @@ const RiskManagementPageIBRA = () => {
         const pick = (key, fallback = "") => {
             const localVal = localRow?.[key];
             if (localVal != null && String(localVal).trim() !== "") return localVal;
+
             const backendVal = backendRow?.[key];
             if (backendVal != null && String(backendVal).trim() !== "") return backendVal;
+
             return fallback;
         };
 
@@ -2275,6 +2387,7 @@ const RiskManagementPageIBRA = () => {
             dueDate: pick("dueDate"),
             responsible: pick("responsible"),
             action: pick("action"),
+            category: pick("category"),
         };
     };
 
@@ -2301,7 +2414,8 @@ const RiskManagementPageIBRA = () => {
                     !norm(r.hierarchy) ||
                     !norm(r.cons) ||
                     !norm(r.quality) ||
-                    !norm(r.cer)
+                    !norm(r.cer) ||
+                    !norm(r.category)
                 )
                 .map(r => norm(r.control));
 
@@ -2340,6 +2454,11 @@ const RiskManagementPageIBRA = () => {
             const addedRows = missingNames.map(name => {
                 const b = backendMap.get(name) || {};
                 const sysId = findSystemId(name);
+
+                const relevantMatch = (formData.relevantControls || []).find(
+                    rc => norm(rc.control) === norm(name)
+                );
+
                 return {
                     id: uuidv4(),
                     control: name,
@@ -2358,6 +2477,9 @@ const RiskManagementPageIBRA = () => {
                     dueDate: b.dueDate || "",
                     responsible: b.responsible || "",
                     action: b.action || "",
+                    category:
+                        (b.category ?? "").toString().trim() ||
+                        (relevantMatch?.category ?? "").toString().trim()
                 };
             });
 
@@ -2383,6 +2505,66 @@ const RiskManagementPageIBRA = () => {
         syncCEAFromIBRA();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formData.ibra]);
+
+    useEffect(() => {
+        if (!Array.isArray(allSystemControls) || allSystemControls.length === 0) return;
+
+        const systemByName = new Map(
+            allSystemControls
+                .filter(c => (c?.control || "").trim())
+                .map(c => [
+                    (c.control || "").toString().trim().toLowerCase(),
+                    c
+                ])
+        );
+
+        let relevantChanged = false;
+        let ceaChanged = false;
+
+        const nextRelevantControls = (formData.relevantControls || []).map(row => {
+            const currentCategory = (row?.category ?? "").toString().trim();
+            if (currentCategory) return row;
+
+            const match = systemByName.get(
+                (row?.control || "").toString().trim().toLowerCase()
+            );
+
+            const matchedCategory = (match?.category ?? "").toString().trim();
+            if (!matchedCategory) return row;
+
+            relevantChanged = true;
+            return {
+                ...row,
+                category: matchedCategory
+            };
+        });
+
+        const nextCEA = (formData.cea || []).map(row => {
+            const currentCategory = (row?.category ?? "").toString().trim();
+            if (currentCategory) return row;
+
+            const match = systemByName.get(
+                (row?.control || "").toString().trim().toLowerCase()
+            );
+
+            const matchedCategory = (match?.category ?? "").toString().trim();
+            if (!matchedCategory) return row;
+
+            ceaChanged = true;
+            return {
+                ...row,
+                category: matchedCategory
+            };
+        });
+
+        if (relevantChanged || ceaChanged) {
+            setFormData(prev => ({
+                ...prev,
+                relevantControls: relevantChanged ? nextRelevantControls : prev.relevantControls,
+                cea: ceaChanged ? nextCEA : prev.cea
+            }));
+        }
+    }, [allSystemControls, formData.relevantControls, formData.cea]);
 
     useEffect(() => {
         if (riskId === "new") {
@@ -2502,7 +2684,6 @@ const RiskManagementPageIBRA = () => {
             diffsToImportCount: diffsToImport.length
         });
 
-        // Conditions to run: Draft loaded, system controls fetched, CEA rows exist, not checked yet
         if (!draftId) return;
         if (!formData?.cea || formData.cea.length === 0) return;
 
@@ -2522,70 +2703,69 @@ const RiskManagementPageIBRA = () => {
 
                 const normalizeVal = (v) => (v == null ? "" : String(v).trim());
                 const normalizeKey = (v) => normalizeVal(v).toLowerCase();
-                const fieldsToCompare = ["description", "critical", "act", "activation", "hierarchy", "cons", "quality", "performance"];
 
-                // 2. Build Lookup Maps
-                // mapIdToLatest: Points ANY version ID (old or new) to the Latest Control Object
+                const fieldsToCompare = [
+                    "description",
+                    "critical",
+                    "act",
+                    "activation",
+                    "hierarchy",
+                    "cons",
+                    "quality",
+                    "performance",
+                    "category"
+                ];
+
                 const mapIdToLatest = new Map();
-                // mapNameToLatest: Points Current Name to Latest Control Object (Fallback for legacy)
                 const mapNameToLatest = new Map();
 
                 syncData.forEach(latestCtrl => {
-                    // Map the current ID
                     mapIdToLatest.set(latestCtrl._id, latestCtrl);
 
-                    // Map ALL previous IDs to this latest control
                     if (Array.isArray(latestCtrl.previousIds)) {
                         latestCtrl.previousIds.forEach(prevId => {
                             mapIdToLatest.set(prevId, latestCtrl);
                         });
                     }
 
-                    // Map Name
                     mapNameToLatest.set(normalizeKey(latestCtrl.control), latestCtrl);
                 });
 
                 const diffs = [];
+                const silentIdUpdates = new Map();
 
-                // 3. Compare Draft Rows
                 formData.cea.forEach((row) => {
                     const rowControlName = normalizeVal(row?.control);
                     const rowControlKey = normalizeKey(row?.control);
                     let sys = null;
                     let matchType = 'none';
 
-                    // A. Try Match by ID (Handles Versioning & Renames)
                     if (row.uniqueId && mapIdToLatest.has(row.uniqueId)) {
                         sys = mapIdToLatest.get(row.uniqueId);
                         matchType = 'id';
                     }
 
-                    // B. Fallback: Match by Name (For legacy rows without IDs)
                     if (!sys && rowControlKey && mapNameToLatest.has(rowControlKey)) {
                         sys = mapNameToLatest.get(rowControlKey);
                         matchType = 'name';
                     }
 
-                    if (!sys) return; // No link found
+                    if (!sys) return;
 
                     const mismatches = {};
                     let hasDiff = false;
 
-                    // Check 1: Is the Draft ID different from the Latest System ID? 
-                    // (This catches if we are using an old version OR if we are backfilling a missing ID)
                     if (row.uniqueId !== sys._id) {
                         mismatches['uniqueId'] = { cea: row.uniqueId, system: sys._id };
                         hasDiff = true;
                     }
 
-                    // Check 2: Has the Name Changed? (Rename detected via ID match)
                     const sysControlName = normalizeVal(sys.control);
                     if (sysControlName !== rowControlName) {
                         mismatches['control'] = { cea: rowControlName, system: sysControlName };
                         hasDiff = true;
                     }
 
-                    // Check 3: Has any system-sourced control metadata changed?
                     fieldsToCompare.forEach((key) => {
                         const ceaVal = normalizeVal(row?.[key]);
                         const sysVal = normalizeVal(sys?.[key]);
@@ -2595,16 +2775,35 @@ const RiskManagementPageIBRA = () => {
                         }
                     });
 
+                    const mismatchKeys = Object.keys(mismatches);
+                    const idOnlyMismatch = mismatchKeys.length === 1 && mismatchKeys[0] === "uniqueId";
+
+                    if (idOnlyMismatch) {
+                        silentIdUpdates.set(row.id, sys._id);
+                        return;
+                    }
+
                     if (hasDiff) {
                         diffs.push({
                             ceaRowId: row.id,
                             currentName: rowControlName,
                             mismatches,
                             matchType,
-                            systemLatestId: sys._id // Store strictly the latest ID
+                            systemLatestId: sys._id
                         });
                     }
                 });
+
+                if (silentIdUpdates.size > 0) {
+                    setFormData(prev => ({
+                        ...prev,
+                        cea: (prev.cea || []).map(row =>
+                            silentIdUpdates.has(row.id)
+                                ? { ...row, uniqueId: silentIdUpdates.get(row.id) }
+                                : row
+                        )
+                    }));
+                }
 
                 if (diffs.length > 0) {
                     setDiffsToImport(diffs);
@@ -2619,7 +2818,8 @@ const RiskManagementPageIBRA = () => {
                         "hierarchy",
                         "cons",
                         "quality",
-                        "performance"
+                        "performance",
+                        "category"
                     ];
 
                     const currentList = [];
@@ -2649,18 +2849,14 @@ const RiskManagementPageIBRA = () => {
                             }
                         });
 
-                        // --- NEW: pull the "who/when" from the latest system control (sys)
-                        // route should return these on each control
                         const lastUpdatedAt = sys.lastUpdatedAt ?? null;
                         const lastUpdatedBy = sys.lastUpdatedBy ?? null;
-                        // e.g. { _id, name, email } based on your route
 
                         currentList.push({
                             ceaRowId: d.ceaRowId,
                             control: currentValues.control,
                             values: currentValues,
                             mismatches: d.mismatches,
-                            // optional: include here too, if you want to show it even on "current" side
                             lastUpdatedAt,
                             lastUpdatedBy,
                         });
@@ -2671,8 +2867,6 @@ const RiskManagementPageIBRA = () => {
                             values: latestValues,
                             mismatches: d.mismatches,
                             systemLatestId: d.systemLatestId,
-
-                            // --- NEW: store updating user + timestamp for this newer version
                             lastUpdatedAt,
                             lastUpdatedBy,
                         });
@@ -2837,6 +3031,44 @@ const RiskManagementPageIBRA = () => {
             setFormData(prev => ({ ...prev, cea: updatedCEA }));
         }
     }, [allSystemControls, loadedIDRef.current]);
+
+    useEffect(() => {
+        if (!allSystemControls.length) return;
+        if (!Array.isArray(formData.relevantControls) || formData.relevantControls.length === 0) return;
+
+        const systemByName = new Map(
+            allSystemControls
+                .filter(c => (c?.control || "").trim())
+                .map(c => [String(c.control).trim().toLowerCase(), c])
+        );
+
+        let hasChanges = false;
+
+        const nextRelevantControls = formData.relevantControls.map(controlRow => {
+            const currentCategory = (controlRow?.category ?? "").toString().trim();
+            if (currentCategory) return controlRow;
+
+            const matchedSystemControl = systemByName.get(
+                (controlRow?.control || "").toString().trim().toLowerCase()
+            );
+
+            const matchedCategory = (matchedSystemControl?.category ?? "").toString().trim();
+            if (!matchedCategory) return controlRow;
+
+            hasChanges = true;
+            return {
+                ...controlRow,
+                category: matchedCategory,
+            };
+        });
+
+        if (hasChanges) {
+            setFormData(prev => ({
+                ...prev,
+                relevantControls: nextRelevantControls,
+            }));
+        }
+    }, [allSystemControls, formData.relevantControls]);
 
     const hasControlUpdates = diffsToImport.length > 0;
 

@@ -12,7 +12,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 const IntroTaskInfo = ({ collapsible = false, formData, setFormData, error, setErrors, readOnly = false }) => {
-    const [collapsed, setCollapsed] = useState(true);
+    const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
     const [groupedAreas, setGroupedAreas] = useState({});
     const [mainAreas, setMainAreas] = useState([]);

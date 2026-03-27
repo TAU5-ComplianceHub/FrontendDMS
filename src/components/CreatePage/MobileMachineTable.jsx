@@ -5,8 +5,14 @@ import ManageMobileMachines from "../ValueChanges/ManageMobileMachines";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrash, faTrashCan, faX, faSearch, faHistory, faPlus, faPenToSquare, faPlusCircle, faEdit } from '@fortawesome/free-solid-svg-icons';
 import ModifySuggestedMobileMachines from "../ValueChanges/ModifySuggestedMobileMachines";
+import {
+    faChevronDown,
+    faChevronUp
+} from "@fortawesome/free-solid-svg-icons";
 
-const MobileMachineTable = ({ formData, setFormData, usedMobileMachine, setUsedMobileMachine, userID, readOnly = false }) => {
+const MobileMachineTable = ({ collapsible = false, formData, setFormData, usedMobileMachine, setUsedMobileMachine, userID, readOnly = false }) => {
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
     // State to control the popup and selected abbreviations
     const [macData, setMacData] = useState([]);
     const [originalData, setOriginalData] = useState([])
@@ -18,6 +24,11 @@ const MobileMachineTable = ({ formData, setFormData, usedMobileMachine, setUsedM
     const [searchTerm, setSearchTerm] = useState("");
     const [macUpdate, setMacUpdate] = useState("");
     const [updatePopup, setUpdatePopup] = useState(false);
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const fetchValues = async () => {
         try {
@@ -293,74 +304,88 @@ const MobileMachineTable = ({ formData, setFormData, usedMobileMachine, setUsedM
                     </div>
                 )}
 
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
+
                 {/* Display selected abbreviations in a table */}
-                {selectedMMachine.size > 0 && (
-                    <table className="vcr-table font-fam table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                <th className="col-mac-mac" style={{ textAlign: "center" }}>Mobile Machine</th>
-                                {!readOnly && (<th className="col-mac-act" style={{ textAlign: "center" }}>Action</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {formData.MobileMachine?.map((row, index) => (
-                                <tr key={index}>
-                                    <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.mac}</td>
-                                    {!readOnly && (
-                                        <td className="procCent">
-                                            <div className="term-action-buttons">
-                                                <button
-                                                    className="remove-row-button"
-                                                    style={{ paddingRight: "6px" }}
-                                                    onClick={() => {
-                                                        // Remove abbreviation from table and the selected abbreviations set
-                                                        setFormData({
-                                                            ...formData,
-                                                            MobileMachine: formData.MobileMachine.filter((_, i) => i !== index),
-                                                        });
-                                                        setUsedMobileMachine(
-                                                            usedMobileMachine.filter((mac) => mac !== row.mac)
-                                                        );
+                {(!isCollapsed) && (
+                    <>
+                        {selectedMMachine.size > 0 && (
+                            <table className="vcr-table font-fam table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        <th className="col-mac-mac" style={{ textAlign: "center" }}>Mobile Machine</th>
+                                        {!readOnly && (<th className="col-mac-act" style={{ textAlign: "center" }}>Action</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {formData.MobileMachine?.map((row, index) => (
+                                        <tr key={index}>
+                                            <td style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{row.mac}</td>
+                                            {!readOnly && (
+                                                <td className="procCent">
+                                                    <div className="term-action-buttons">
+                                                        <button
+                                                            className="remove-row-button"
+                                                            style={{ paddingRight: "6px" }}
+                                                            onClick={() => {
+                                                                // Remove abbreviation from table and the selected abbreviations set
+                                                                setFormData({
+                                                                    ...formData,
+                                                                    MobileMachine: formData.MobileMachine.filter((_, i) => i !== index),
+                                                                });
+                                                                setUsedMobileMachine(
+                                                                    usedMobileMachine.filter((mac) => mac !== row.mac)
+                                                                );
 
-                                                        // Update the selectedAbbrs state to reflect the removal
-                                                        const newSelectedMachines = new Set(selectedMMachine);
-                                                        newSelectedMachines.delete(row.mac);
-                                                        setSelectedMMachine(newSelectedMachines);
-                                                    }}
-                                                >
-                                                    <FontAwesomeIcon icon={faTrash} title="Remove Row" />
-                                                </button>
-                                                <button
-                                                    className="edit-terms-row-button"
-                                                    style={{ paddingLeft: "6px" }}
-                                                    onClick={() => {
-                                                        if (originalData.some(item => item.machine === row.mac)) { openManagePopup(row.mac) }
-                                                        else {
-                                                            openUpdate(row.mac);
-                                                        }
-                                                    }}
-                                                >
-                                                    <FontAwesomeIcon icon={faEdit} title="Modify Mobile Machine" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                                                                // Update the selectedAbbrs state to reflect the removal
+                                                                const newSelectedMachines = new Set(selectedMMachine);
+                                                                newSelectedMachines.delete(row.mac);
+                                                                setSelectedMMachine(newSelectedMachines);
+                                                            }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} title="Remove Row" />
+                                                        </button>
+                                                        <button
+                                                            className="edit-terms-row-button"
+                                                            style={{ paddingLeft: "6px" }}
+                                                            onClick={() => {
+                                                                if (originalData.some(item => item.machine === row.mac)) { openManagePopup(row.mac) }
+                                                                else {
+                                                                    openUpdate(row.mac);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faEdit} title="Modify Mobile Machine" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
 
-                {(selectedMMachine.size === 0 && isNA) && (
-                    <button className="add-row-button-mac" onClick={handlePopupToggle} disabled={!isNA}>
-                        Select
-                    </button>
-                )}
+                        {(selectedMMachine.size === 0 && isNA) && (
+                            <button className="add-row-button-mac" onClick={handlePopupToggle} disabled={!isNA}>
+                                Select
+                            </button>
+                        )}
 
-                {(selectedMMachine.size > 0 && !readOnly) && (
-                    <button className="add-row-button-mac-plus" onClick={handlePopupToggle}>
-                        <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
-                    </button>
+                        {(selectedMMachine.size > 0 && !readOnly) && (
+                            <button className="add-row-button-mac-plus" onClick={handlePopupToggle}>
+                                <FontAwesomeIcon icon={faPlusCircle} title="Add Row" />
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
 

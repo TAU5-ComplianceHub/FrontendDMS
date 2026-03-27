@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './IBRAPopup.css';
 import { jwtDecode } from "jwt-decode";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faFlag } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faFlag, faPlusCircle } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import FunctionalOwnership from './RiskInfo/FunctionalOwnership';
@@ -19,6 +19,8 @@ import UnwantedEvent from './RiskInfo/UnwantedEvent';
 import ControlDesc from './RiskInfo/ControlDesc';
 import { v4 as uuidv4 } from 'uuid';
 import MaterialUE from './RiskInfo/MaterialUE';
+import DatePicker from "react-multi-date-picker";
+import { faCalendarDays, faX } from '@fortawesome/free-solid-svg-icons';
 
 const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, availableControls }) => {
     const [mainFlag, setMainFlag] = useState("");
@@ -75,6 +77,15 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
     const [selectedDescription, setSelectedDescription] = useState("");
     const [selectedPerformance, setSelectedPerformance] = useState("");
     const [showDescription, setShowDescription] = useState(false);
+
+    const [riskTreatmentRows, setRiskTreatmentRows] = useState([
+        {
+            id: uuidv4(),
+            action: '',
+            responsible: '',
+            dueDate: ''
+        }
+    ]);
 
     const riskSourceUEMap = {
         'Biological': ['Exposure to Pathogen', 'Allergic Reaction', 'Contamination', 'Infestation'],
@@ -431,6 +442,29 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
                 );
             }
 
+            if (data.possible && Array.isArray(data.possible) && data.possible.length) {
+                const flattenedRows = data.possible.flatMap((block) => {
+                    const actions = block.actions || [];
+                    const responsible = block.responsible || [];
+                    const dueDates = block.dueDate || [];
+
+                    const maxLen = Math.max(actions.length, responsible.length, dueDates.length, 1);
+
+                    return Array.from({ length: maxLen }, (_, index) => ({
+                        id: uuidv4(),
+                        action: actions[index]?.action || '',
+                        responsible: responsible[index]?.person || '',
+                        dueDate: dueDates[index]?.date || ''
+                    }));
+                });
+
+                setRiskTreatmentRows(
+                    flattenedRows.length
+                        ? flattenedRows
+                        : [{ id: uuidv4(), action: '', responsible: '', dueDate: '' }]
+                );
+            }
+
             // Set risk rank rows
             setRiskRankRows([
                 { id: 1, label: 'S', value: data['S'] || '-' },
@@ -448,6 +482,57 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
             }
         }
     }, [data]);
+
+    const handleRiskTreatmentChange = (id, field, value) => {
+        setRiskTreatmentRows(prev =>
+            prev.map(row => row.id === id ? { ...row, [field]: value } : row)
+        );
+    };
+
+    const handleRiskTreatmentDateChange = (id, value) => {
+        let formattedDate = '';
+
+        if (value) {
+            if (typeof value === 'string') {
+                formattedDate = value;
+            } else if (typeof value.format === 'function') {
+                formattedDate = value.format("YYYY-MM-DD");
+            } else {
+                formattedDate = String(value);
+            }
+        }
+
+        setRiskTreatmentRows(prev =>
+            prev.map(row =>
+                row.id === id ? { ...row, dueDate: formattedDate } : row
+            )
+        );
+    };
+
+    const handleAddRiskTreatmentRow = (afterId) => {
+        setRiskTreatmentRows(prev => {
+            const index = prev.findIndex(row => row.id === afterId);
+            const newRow = {
+                id: uuidv4(),
+                action: '',
+                responsible: '',
+                dueDate: ''
+            };
+
+            if (index === -1) return [...prev, newRow];
+
+            const updated = [...prev];
+            updated.splice(index + 1, 0, newRow);
+            return updated;
+        });
+    };
+
+    const handleRemoveRiskTreatmentRow = (id) => {
+        setRiskTreatmentRows(prev => {
+            if (prev.length === 1) return prev;
+            return prev.filter(row => row.id !== id);
+        });
+    };
 
     useEffect(() => {
         const maxRiskRank = riskRankRows.reduce((max, row) => {
@@ -644,6 +729,23 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
             maxConsequence: maxConsequence,
             additional: additionalComments,
             source: riskSource,
+            possible: [
+                {
+                    id: data?.possible?.[0]?.id || uuidv4(),
+                    actions: riskTreatmentRows.map(row => ({
+                        id: uuidv4(),
+                        action: row.action
+                    })),
+                    responsible: riskTreatmentRows.map(row => ({
+                        id: uuidv4(),
+                        person: row.responsible
+                    })),
+                    dueDate: riskTreatmentRows.map(row => ({
+                        id: uuidv4(),
+                        date: row.dueDate
+                    }))
+                }
+            ],
             hazards: hazardRows.map(row => row.value),  // Collecting all hazard row values
             controls: controlRows.map(row => row.value), // Collecting all control row values
             ...riskRankRows.reduce((acc, row) => {
@@ -1355,6 +1457,118 @@ const IBRAPopup = ({ onClose, onSave, data, rowsData, readOnly = true, available
                                     </div>
                                 </div>
                             </div>
+
+                            {true && (<div className="ibra-popup-page-form-group-main-container-2">
+                                <div className="ibra-popup-page-component-wrapper">
+                                    <div className="ibra-popup-page-form-group">
+                                        <label>
+                                            Risk Treatment
+                                        </label>
+
+                                        <div className="ibra-popup-risk-treatment-list">
+                                            {riskTreatmentRows.map((row) => (
+                                                <div className="ibra-popup-risk-treatment-row">
+                                                    <div className="ibra-popup-risk-treatment-action">
+                                                        <textarea
+                                                            className="ibra-popup-page-input-table-2"
+                                                            value={row.action}
+                                                            onChange={(e) => handleRiskTreatmentChange(row.id, 'action', e.target.value)}
+                                                            placeholder="Insert Required Action"
+                                                            readOnly={readOnly}
+                                                        />
+                                                    </div>
+
+                                                    <div className="ibra-popup-risk-treatment-responsible">
+                                                        <input
+                                                            type="text"
+                                                            className="ibra-popup-page-input-table"
+                                                            value={row.responsible}
+                                                            onChange={(e) => handleRiskTreatmentChange(row.id, 'responsible', e.target.value)}
+                                                            placeholder="Insert Responsible Person"
+                                                            readOnly={readOnly}
+                                                        />
+                                                    </div>
+
+                                                    <div className="ibra-popup-risk-treatment-date">
+                                                        <div className="ibra-popup-risk-treatment-date-wrap">
+                                                            <DatePicker
+                                                                value={row.dueDate || null}
+                                                                format="YYYY-MM-DD"
+                                                                onChange={(val) =>
+                                                                    handleRiskTreatmentDateChange(
+                                                                        row.id,
+                                                                        val?.format ? val.format("YYYY-MM-DD") : ""
+                                                                    )
+                                                                }
+                                                                highlightToday={false}
+                                                                editable={false}
+                                                                disabled={readOnly}
+                                                                inputClass="ibra-popup-risk-treatment-date-input"
+                                                                containerClassName="ibra-popup-risk-treatment-date-container"
+                                                                calendarPosition="bottom-left"
+                                                                portal
+                                                                portalTarget={document.body}
+                                                                zIndex={99999}
+                                                                onOpenPickNewDate={false}
+                                                            />
+
+                                                            {!!row.dueDate ? (
+                                                                <button
+                                                                    type="button"
+                                                                    className="ibra-popup-risk-treatment-date-clear-btn"
+                                                                    title="Clear date"
+                                                                    disabled={readOnly}
+                                                                    onMouseDown={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                    }}
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        if (readOnly) return;
+                                                                        handleRiskTreatmentDateChange(row.id, "");
+                                                                    }}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faX} />
+                                                                </button>
+                                                            ) : (
+                                                                <span
+                                                                    className="ibra-popup-risk-treatment-date-calendar-icon"
+                                                                    aria-hidden="false"
+                                                                >
+                                                                    <FontAwesomeIcon icon={faCalendarDays} />
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {!readOnly && (
+                                                        <div className="ibra-popup-risk-treatment-actions">
+                                                            <button
+                                                                type="button"
+                                                                className="ibra-popup-page-action-button-add-hazard"
+                                                                onClick={() => handleAddRiskTreatmentRow(row.id)}
+                                                            >
+                                                                <FontAwesomeIcon icon={faCirclePlus} />
+                                                            </button>
+
+                                                            {riskTreatmentRows.length > 1 && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="ibra-popup-page-action-button"
+                                                                    onClick={() => handleRemoveRiskTreatmentRow(row.id)}
+                                                                >
+                                                                    <FontAwesomeIcon icon={faTrashAlt} />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>)}
                         </div>
                     </div>
 

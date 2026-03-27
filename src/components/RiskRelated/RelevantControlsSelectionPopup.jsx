@@ -64,7 +64,13 @@ const RelevantControlsSelectionPopup = ({
             if (!c?.control?.trim()) return;
             const k = key(c.control);
             if (!map.has(k)) {
-                map.set(k, { _id: `pseudo-${k}`, control: c.control, description: c.description || "", __pseudo: true });
+                map.set(k, {
+                    _id: `pseudo-${k}`,
+                    control: c.control,
+                    description: c.description || "",
+                    category: (c.category ?? "").toString().trim(),
+                    __pseudo: true
+                });
             }
         });
 
@@ -73,7 +79,13 @@ const RelevantControlsSelectionPopup = ({
             if (!c?.control?.trim()) return;
             const k = key(c.control);
             if (!map.has(k)) {
-                map.set(k, { _id: `pseudo-${k}`, control: c.control, description: c.description || "", __pseudo: true });
+                map.set(k, {
+                    _id: `pseudo-${k}`,
+                    control: c.control,
+                    description: c.description || "",
+                    category: (c.category ?? "").toString().trim(),
+                    __pseudo: true
+                });
             }
         });
 
@@ -103,6 +115,7 @@ const RelevantControlsSelectionPopup = ({
         _id: `pseudo-${key(name)}`,
         control: name,
         description: "",
+        category: "",
         __pseudo: true,
     });
 
@@ -178,8 +191,9 @@ const RelevantControlsSelectionPopup = ({
                             <table className="popup-table font-fam">
                                 <thead className="share-headers">
                                     <tr>
-                                        <th className="inp-size-share">Select</th>
-                                        <th>Control Name</th>
+                                        <th className="inp-size-share" style={{ width: "5%" }}>Select</th>
+                                        <th style={{ width: "15%", textAlign: "center" }}>Category</th>
+                                        <th style={{ width: "80%" }}>Control Name</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -200,6 +214,7 @@ const RelevantControlsSelectionPopup = ({
                                                         onChange={() => handleCheckboxChange(control.control)}
                                                     />
                                                 </td>
+                                                <td style={{ fontWeight: "normal", textAlign: "center" }}>{control.category}</td>
                                                 <td style={{ fontWeight: "normal" }}>{control.control}</td>
                                             </tr>
                                         ))

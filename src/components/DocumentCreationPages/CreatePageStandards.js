@@ -338,7 +338,58 @@ const CreatePageStandards = () => {
     }
   };
 
-  const saveData = async (overrideTitle = null) => {
+  const buildSupportingDocumentPayload = (documents = []) => {
+    return documents.map((doc, index) => ({
+      nr: index + 1,
+      name: doc.name,
+      note: doc.note || "",
+      saved: Boolean(doc.storageId),
+      storageId: doc.storageId || null,
+      size: doc.size || doc.file?.size || 0,
+      mimeType: doc.mimeType || doc.file?.type || "",
+    }));
+  };
+
+  const buildDraftFormDataRequest = (dataToStore, options = {}) => {
+    const { skipFileUpload = false } = options;
+
+    const multipart = new FormData();
+    const supportingDocuments = dataToStore.formData.supportingDocuments || [];
+
+    const payload = {
+      ...dataToStore,
+      formData: {
+        ...dataToStore.formData,
+        supportingDocuments: buildSupportingDocumentPayload(supportingDocuments),
+      },
+      skipFileUpload,
+    };
+
+    multipart.append("payload", JSON.stringify(payload));
+
+    if (!skipFileUpload) {
+      supportingDocuments.forEach((doc, index) => {
+        if (doc?.file instanceof File && !doc?.storageId) {
+          multipart.append("supportingFiles", doc.file);
+          multipart.append(
+            "supportingFilesMeta",
+            JSON.stringify({
+              rowIndex: index,
+              nr: doc.nr ?? index + 1,
+              name: doc.name,
+              note: doc.note || "",
+            })
+          );
+        }
+      });
+    }
+
+    return multipart;
+  };
+
+  const saveData = async (overrideTitle = null, options = {}) => {
+    const { skipFileUpload = false } = options;
+
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
       usedTermCodes: usedTermCodesRef.current,
@@ -358,13 +409,14 @@ const CreatePageStandards = () => {
     };
 
     try {
+      const body = buildDraftFormDataRequest(dataToStore, { skipFileUpload });
+
       const response = await fetch(`${process.env.REACT_APP_URL}/api/draft/standards/safe`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(dataToStore),
+        body,
       });
 
       const result = await response.json();
@@ -389,6 +441,11 @@ const CreatePageStandards = () => {
         loadedIDRef.current = result.id;
       }
 
+      if (result.formData) {
+        setFormData(result.formData);
+        formDataRef.current = result.formData;
+      }
+
       return { ok: true, id: result.id };
     } catch (error) {
       console.error('Error saving data:', error);
@@ -397,7 +454,9 @@ const CreatePageStandards = () => {
     }
   };
 
-  const updateData = async (selectedUserIDs) => {
+  const updateData = async (selectedUserIDs, options = {}) => {
+    const { skipFileUpload = false } = options;
+
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
       usedTermCodes: usedTermCodesRef.current,
@@ -414,22 +473,36 @@ const CreatePageStandards = () => {
     };
 
     try {
+      const body = buildDraftFormDataRequest(dataToStore, { skipFileUpload });
+
       const response = await fetch(`${process.env.REACT_APP_URL}/api/draft/standards/modifySafe/${loadedIDRef.current}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(dataToStore),
+        body,
       });
+
       const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.error || 'Failed to update draft');
+      }
+
+      if (result.formData) {
+        setFormData(result.formData);
+        formDataRef.current = result.formData;
+      }
+
       setOfflineDraft(false);
       localStorage.removeItem("draftData");
 
       console.log(result.message);
+      return result;
     } catch (error) {
       console.error('Error saving data:', error);
       saveDataOffline(loadedIDRef.current);
+      return null;
     }
   };
 
@@ -693,7 +766,7 @@ const CreatePageStandards = () => {
     if (formData.title.trim() === "") return; // Don't save without a valid title
 
     if (loadedIDRef.current === '') {
-      saveData(); // First time save
+      saveData(null, { skipFileUpload: false });
       console.log("📝 autoSaveDraft() triggered 1");
       toast.dismiss();
       toast.clearWaitingQueue();
@@ -704,7 +777,7 @@ const CreatePageStandards = () => {
         }
       });
     } else {
-      updateData(userIDsRef.current); // Update existing draft
+      updateData(userIDsRef.current, { skipFileUpload: false });
       console.log("📝 autoSaveDraft() triggered 2");
       toast.dismiss();
       toast.clearWaitingQueue();
@@ -2170,7 +2243,7 @@ const CreatePageStandards = () => {
             onRemoveAimSection={handleRemoveAimSection}
             onAddBullet={handleAddAimBullet}
             onRemoveBullet={handleRemoveAimBullet}
-            collapsible={false}
+            collapsible={true}
             type="standard"
           />
 
@@ -2201,17 +2274,16 @@ const CreatePageStandards = () => {
             onRemoveScopeSection={handleRemoveScopeSection}
             onAddBullet={handleAddScopeBullet}
             onRemoveBullet={handleRemoveScopeBullet}
-            collapsible={false}
+            collapsible={true}
             type="standard"
           />
 
-          <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-          <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-          <StandardsTable formData={formData} setFormData={setFormData} error={errors.standard} setErrors={setErrors} readOnly={readOnly} />
-          <ChapterTable formData={formData} setFormData={setFormData} readOnly={readOnly} />
-          <ReferenceTable referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} readOnly={readOnly} />
-          <SupportingDocumentTable formData={formData} setFormData={setFormData} readOnly={readOnly} />
-          <PicturesTable picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} readOnly={readOnly} />
+          <AbbreviationTable collapsible={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+          <TermTable collapsible={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+          <StandardsTable collapsible={true} formData={formData} setFormData={setFormData} error={errors.standard} setErrors={setErrors} readOnly={readOnly} />
+          <ChapterTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+          <ReferenceTable collapsible={true} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} readOnly={readOnly} />
+          <SupportingDocumentTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
 
           <div className="input-row">
             <div className={`input-box-3 ${errors.reviewDate ? "error-create" : ""}`}>
@@ -2233,6 +2305,8 @@ const CreatePageStandards = () => {
               />
             </div>
           </div>
+
+          <PicturesTable collapsible={true} picturesRows={formData.pictures} addPicRow={addPicRow} updatePicRow={updatePicRow} removePicRow={removePicRow} readOnly={readOnly} />
 
           <div className="input-row-buttons">
             {/* Generate File Button */}
