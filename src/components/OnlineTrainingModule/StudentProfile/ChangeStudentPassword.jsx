@@ -12,6 +12,43 @@ const ChangeStudentPassword = ({ onClose }) => {
     const [showPasswordCurr, setShowPasswordCurr] = useState(false);
     const [showPasswordNew, setShowPasswordNew] = useState(false);
     const [showPasswordNew2, setShowPasswordNew2] = useState(false);
+    const [newPassInvalid, setNewPassInvalid] = useState(false);
+    const [newPass2Invalid, setNewPass2Invalid] = useState(false);
+
+    const getPasswordErrors = (password) => {
+        const errors = [];
+
+        if (password.length < 8) {
+            errors.push("Less than 8 characters");
+        }
+
+        if (!/[A-Z]/.test(password)) {
+            errors.push("No capital letters");
+        }
+
+        if (!/[0-9]/.test(password)) {
+            errors.push("No number");
+        }
+
+        if (!/[!?@]/.test(password)) {
+            errors.push("No special characters (! ? @)");
+        }
+
+        return errors;
+    };
+
+    const showPasswordValidationToast = (errors) => {
+        toast.dismiss();
+        toast.clearWaitingQueue();
+        toast.error(
+            `Password is invalid:\n${errors.join("\n")}`,
+            {
+                closeButton: false,
+                autoClose: 2500,
+                style: { textAlign: "left", whiteSpace: "pre-line" }
+            }
+        );
+    };
 
     const togglePasswordVisibilityNew = () => {
         setShowPasswordNew((prev) => !prev);
@@ -43,27 +80,28 @@ const ChangeStudentPassword = ({ onClose }) => {
             return;
         }
 
-        if (newPass.trim().length < 8) {
+        setNewPassInvalid(false);
+        setNewPass2Invalid(false);
+
+        const passwordErrors = getPasswordErrors(newPass.trim());
+
+        if (passwordErrors.length > 0) {
             setLoading(false);
-            toast.dismiss();
-            toast.clearWaitingQueue();
-            toast.warn("Ensure that the new password has more than 8 characters.", {
-                closeButton: false,
-                autoClose: 1000, // 1.5 seconds
-                style: {
-                    textAlign: 'center'
-                }
-            });
+            setNewPassInvalid(true);
+            setNewPass2Invalid(true);
+            showPasswordValidationToast(passwordErrors);
             return;
         }
 
-        if (newPass.trim() != newPass2.trim()) {
+        if (newPass.trim() !== newPass2.trim()) {
             setLoading(false);
+            setNewPassInvalid(true);
+            setNewPass2Invalid(true);
             toast.dismiss();
             toast.clearWaitingQueue();
             toast.warn("Ensure that the new passwords match.", {
                 closeButton: false,
-                autoClose: 1000, // 1.5 seconds
+                autoClose: 1000,
                 style: {
                     textAlign: 'center'
                 }
@@ -151,7 +189,7 @@ const ChangeStudentPassword = ({ onClose }) => {
                                 type={showPasswordNew ? 'text' : 'password'}
                                 value={newPass}
                                 onChange={(e) => setNewPass(e.target.value)}
-                                className="password-reset-popup-input"
+                                className={`password-reset-popup-input ${newPassInvalid ? "password-invalid" : ""}`}
                                 required
                                 placeholder="New Password"
                             />
@@ -173,7 +211,7 @@ const ChangeStudentPassword = ({ onClose }) => {
                                 type={showPasswordNew2 ? 'text' : 'password'}
                                 value={newPass2}
                                 onChange={(e) => setNewPass2(e.target.value)}
-                                className="password-reset-popup-input"
+                                className={`password-reset-popup-input ${newPass2Invalid ? "password-invalid" : ""}`}
                                 required
                                 placeholder="Retype New Password"
                             />

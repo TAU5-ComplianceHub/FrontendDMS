@@ -7,11 +7,14 @@ import EditUserModal from './UserManagement/EditUserModal';
 import UserTable from "./UserManagement/UserTable";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faFolderOpen, faUserGroup } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faChevronLeft, faChevronRight, faCaretLeft, faCaretRight, faFolderOpen, faUserGroup, faTrashCan, faUserPlus, faPlus, faCircle } from '@fortawesome/free-solid-svg-icons';
 import DeletePopupUM from "./UserManagement/DeletePopupUM";
 import TopBar from "./Notifications/TopBar";
 import { getCurrentUser, can, canIn, isAdmin } from "../utils/auth";
 import BatchUploadUsers from "./UserManagement/BatchUploadUsers";
+import DeletedUserTable from "./UserManagement/DeletedUserTable";
+import DeletePopupUserManagement from "./UserManagement/DeletePopupUserManagement";
+import ChangePasswordModal from "./UserManagement/ChangePasswordModal";
 
 const UserManagement = () => {
     const [error, setError] = useState(null);
@@ -33,6 +36,73 @@ const UserManagement = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [isOpenBatch, setIsOpenBatch] = useState(false);
     const navigate = useNavigate();
+    const [deletedUsers, setDeletedUsers] = useState([]);
+    const [isDeletedView, setIsDeletedView] = useState(false);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordUser, setPasswordUser] = useState(null);
+
+    const openPasswordModal = (user) => {
+        setPasswordUser(user);
+        setIsPasswordModalOpen(true);
+    };
+
+    const changePassword = async (password) => {
+
+        try {
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/user/change-password/${passwordUser._id}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        password
+                    })
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed");
+            }
+
+            toast.success("Password Updated", {
+                autoClose: 800
+            });
+
+            setIsPasswordModalOpen(false);
+
+        } catch (err) {
+            toast.error("Failed to update password");
+        }
+
+    };
+
+    const fetchDeletedUsers = async () => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/user/deleted`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch deleted users');
+            }
+
+            const data = await response.json();
+
+            const sortedUsers = data.users.sort((a, b) => {
+                return a.username.localeCompare(b.username);
+            });
+
+            setDeletedUsers(sortedUsers);
+        } catch (error) {
+            setError(error.message);
+        }
+    };
 
     const openBatch = () => {
         setIsOpenBatch(true);
@@ -109,10 +179,14 @@ const UserManagement = () => {
     };
 
     useEffect(() => {
-        if (loggedInUserId) {
-            fetchUsers();
+        if (loggedInUserId && token) {
+            if (isDeletedView) {
+                fetchDeletedUsers();
+            } else {
+                fetchUsers();
+            }
         }
-    }, [loggedInUserId]);
+    }, [loggedInUserId, token, isDeletedView]);
 
     const normalizeUserPayload = (user) => ({
         ...user,
@@ -177,6 +251,74 @@ const UserManagement = () => {
         return matchesSearchQuery && matchesFilters;
     });
 
+    const filteredDeletedUsers = deletedUsers.filter((user) => {
+        const matchesSearchQuery = (
+            user.username.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        const matchesFilters = !selectedRole || selectedRole === user.role;
+
+        return matchesSearchQuery && matchesFilters;
+    });
+
+    const openActiveUsersView = () => {
+        setIsDeletedView(false);
+    };
+
+    const openDeletedUsersView = () => {
+        setIsDeletedView(true);
+    };
+
+    const restoreUser = async (userId) => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/user/restore/${userId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+            });
+
+            if (!response.ok) throw new Error('Failed to restore user');
+
+            toast.success("User restored successfully.", {
+                closeButton: false,
+                autoClose: 800,
+                style: { textAlign: 'center' }
+            });
+
+            fetchDeletedUsers();
+            fetchUsers();
+        } catch (error) {
+            setError(error.message);
+        }
+    };
+
+    const permanentlyDeleteUser = async (userId) => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/user/permanent-delete/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+            });
+
+            if (!response.ok) throw new Error('Failed to permanently delete user');
+
+            toast.success("User permanently deleted.", {
+                closeButton: false,
+                autoClose: 800,
+                style: { textAlign: 'center' }
+            });
+
+            fetchDeletedUsers();
+            fetchUsers();
+        } catch (error) {
+            setError(error.message);
+        }
+
+        setIsDeleteModalOpen(false);
+    };
+
     const deleteUser = async (userId) => {
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}/api/user/delete/${userId}`, {
@@ -185,8 +327,17 @@ const UserManagement = () => {
                     'Authorization': `Bearer ${token}`
                 },
             });
+
             if (!response.ok) throw new Error('Failed to delete user');
+
+            toast.success("User deleted successfully.", {
+                closeButton: false,
+                autoClose: 800,
+                style: { textAlign: 'center' }
+            });
+
             fetchUsers();
+            fetchDeletedUsers();
         } catch (error) {
             setError(error.message);
         }
@@ -242,10 +393,6 @@ const UserManagement = () => {
         setIsEditModalOpen(true);
     };
 
-    if (error) {
-        return <div>Error: {error}</div>;
-    }
-
     return (
         <div className="user-info-container">
             {isSidebarVisible && (
@@ -273,21 +420,14 @@ const UserManagement = () => {
                         </div>
                     </div>
 
-                    <div className="button-container-um">
-                        <button className="but-um" onClick={openModal}>
+                    {!isDeletedView && (<div className="button-container-um">
+                        <button className="but-um" onClick={openDeletedUsersView}>
                             <div className="button-content">
-                                <FontAwesomeIcon icon={faUser} className="button-icon" />
-                                <span className="button-text">Add User</span>
+                                <FontAwesomeIcon icon={faTrashCan} className="button-icon" />
+                                <span className="button-text">Deleted Users</span>
                             </div>
                         </button>
-
-                        <button className="but-um" onClick={openBatch}>
-                            <div className="button-content">
-                                <FontAwesomeIcon icon={faUserGroup} className="button-icon" />
-                                <span className="button-text">Batch Register Users</span>
-                            </div>
-                        </button>
-                    </div>
+                    </div>)}
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/adminUsersInverted.svg`} alt="Control Attributes" className="icon-risk-rm" />
@@ -307,8 +447,81 @@ const UserManagement = () => {
             <div className="main-box-user">
                 <div className="top-section-um">
                     <div className="burger-menu-icon-um">
-                        <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
+                        <FontAwesomeIcon onClick={() => {
+                            if (isDeletedView) {
+                                openActiveUsersView()
+                            } else {
+                                navigate(-1)
+                            }
+                        }} icon={faArrowLeft} title="Back" />
                     </div>
+
+                    {!isDeletedView && (
+                        <div className="burger-menu-icon-um">
+                            <span
+                                className="fa-layers fa-fw"
+                                style={{ fontSize: "28px" }}
+                                title="Add User"
+                                onClick={openModal}
+                            >
+                                {/* Main user icon */}
+                                <FontAwesomeIcon icon={faUser} color="gray" />
+
+                                {/* Outer "cut-out" circle (page background color) */}
+                                <FontAwesomeIcon
+                                    icon={faCircle}
+                                    transform="shrink-6 down-4 right-7"
+                                    color="white"   // match your page background
+                                />
+
+                                {/* Inner gray circle */}
+                                <FontAwesomeIcon
+                                    icon={faCircle}
+                                    transform="shrink-8 down-4 right-7"
+                                    color="gray"
+                                />
+
+                                {/* Plus icon */}
+                                <FontAwesomeIcon
+                                    icon={faPlus}
+                                    transform="shrink-11 down-4 right-7"
+                                    color="white"
+                                />
+                            </span>
+                        </div>
+                    )}
+
+                    {!isDeletedView && (<div className="burger-menu-icon-um" onClick={openBatch}>
+                        <span
+                            className="fa-layers fa-fw"
+                            style={{ fontSize: "28px", cursor: "pointer" }}
+                            title="Batch Register Users"
+                        >
+                            {/* Main group icon */}
+                            <FontAwesomeIcon icon={faUserGroup} color="gray" />
+
+                            {/* Outer cut-out circle (match page background) */}
+                            <FontAwesomeIcon
+                                icon={faCircle}
+                                transform="shrink-6 down-4 right-12"
+                                color="white"
+                            />
+
+                            {/* Inner badge circle */}
+                            <FontAwesomeIcon
+                                icon={faCircle}
+                                transform="shrink-8 down-4 right-12"
+                                color="gray"
+                            />
+
+                            {/* Plus icon */}
+                            <FontAwesomeIcon
+                                icon={faPlus}
+                                transform="shrink-11 down-4 right-12"
+                                color="white"
+                            />
+                        </span>
+                    </div>)}
 
                     <div className="um-input-container">
                         <input
@@ -322,7 +535,9 @@ const UserManagement = () => {
                         {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
                     </div>
 
-                    <div className="info-box-um">Number of Users: {filteredUsers.length}</div>
+                    <div className={`info-box-um ${isDeletedView ? 'trashed' : ''}`}>
+                        {isDeletedView ? `Number of Deleted Users: ${filteredDeletedUsers.length}` : `Number of Users: ${filteredUsers.length}`}
+                    </div>
 
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
@@ -330,14 +545,26 @@ const UserManagement = () => {
                     {/* Container for right-aligned icons */}
                     <TopBar />
                 </div>
-                <UserTable
-                    filteredUsers={filteredUsers}
-                    openEditModal={openEditModal}
-                    setUserToDelete={setUserToDelete}
-                    setIsDeleteModalOpen={setIsDeleteModalOpen}
-                    formatRole={formatRole}
-                    loggedInUserId={loggedInUserId}
-                />
+                {isDeletedView ? (
+                    <DeletedUserTable
+                        filteredUsers={filteredDeletedUsers}
+                        restoreUser={restoreUser}
+                        setUserToDelete={setUserToDelete}
+                        setIsDeleteModalOpen={setIsDeleteModalOpen}
+                        formatRole={formatRole}
+                        loggedInUserId={loggedInUserId}
+                    />
+                ) : (
+                    <UserTable
+                        filteredUsers={filteredUsers}
+                        openEditModal={openEditModal}
+                        setUserToDelete={setUserToDelete}
+                        setIsDeleteModalOpen={setIsDeleteModalOpen}
+                        formatRole={formatRole}
+                        loggedInUserId={loggedInUserId}
+                        openPasswordModal={openPasswordModal}
+                    />
+                )}
             </div>
 
             <AddUserModal
@@ -352,10 +579,10 @@ const UserManagement = () => {
             />
 
             {isDeleteModalOpen && (
-                <DeletePopupUM
-                    deleteUser={deleteUser}
+                <DeletePopupUserManagement
+                    deleteUser={isDeletedView ? permanentlyDeleteUser : deleteUser}
                     department={"none"}
-                    form={"user"}
+                    form={isDeletedView ? "deleted" : "user"}
                     setIsDeleteModalOpen={setIsDeleteModalOpen}
                     userToDelete={userToDelete}
                 />
@@ -371,6 +598,13 @@ const UserManagement = () => {
                 current={access}
                 isAdmin={isAdmin}
             />
+
+            {isPasswordModalOpen && (<ChangePasswordModal
+                isOpen={isPasswordModalOpen}
+                setIsOpen={setIsPasswordModalOpen}
+                changePassword={changePassword}
+                user={passwordUser}
+            />)}
 
             {isOpenBatch && (<BatchUploadUsers onClose={closeBatch} refresh={fetchUsers} />)}
             <ToastContainer />

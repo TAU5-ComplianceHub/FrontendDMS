@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { jwtDecode } from 'jwt-decode';
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faFolderOpen, faFileCirclePlus, faFolder, faCloudUploadAlt, faUsersCog, faSitemap, faCaretLeft, faCaretRight, faPersonChalkboard, faBookOpen, faBullhorn, faChalkboardTeacher, faDownload, faLaptop, faCircle } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faFolderOpen, faFileCirclePlus, faFolder, faCloudUploadAlt, faUsersCog, faSitemap, faCaretLeft, faCaretRight, faPersonChalkboard, faBookOpen, faBullhorn, faChalkboardTeacher, faDownload, faLaptop, faCircle, faFileAlt, faBars } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "../Notifications/TopBar";
 import CreateProfilePopup from "../VisitorsInduction/Popups/CreateProfilePopup";
+import { canIn, getCurrentUser } from "../../utils/auth";
 
 const TMSHomePage = () => {
+    const access = getCurrentUser();
     const [error, setError] = useState(null);
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [token, setToken] = useState('');
@@ -52,13 +54,6 @@ const TMSHomePage = () => {
                     <div className="sidebar-logo-um">
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Training Management</p>
-                    </div>
-                    <div className="button-container-rm-home">
-                        <button className="but-rm-home" onClick={() => navigate("/FrontendDMS/futureEnhancementTMS")}>
-                            <div className="button-content">
-                                <span className="button-text">Coming Soon</span>
-                            </div>
-                        </button>
                     </div>
                 </div>
             )}

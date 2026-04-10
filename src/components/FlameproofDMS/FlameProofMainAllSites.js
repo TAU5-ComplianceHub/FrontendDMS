@@ -23,6 +23,7 @@ import ModifyComponentsPopup from "./Popups/ModifyComponentsPopup";
 import PopupMenuOptions from "./Popups/PopupMenuOptions";
 import PopupMenuOptionsAssets from "./Popups/PopupMenuOptionsAssets";
 import { saveAs } from "file-saver";
+import RestoreAsset from "./Popups/RestoreAsset";
 
 const FlameProofMainAllSites = () => {
   const { type } = useParams();
@@ -60,6 +61,20 @@ const FlameProofMainAllSites = () => {
   const [siteName, setSiteName] = useState("");
   const [openComponentUpdate, setOpenComponentUpdate] = useState(false);
   const [componentAssetUpdate, setComponentAssetUpdate] = useState("");
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restoreAssetData, setRestoreAssetData] = useState(null);
+
+  const formatDeletedDate = (dateString) => {
+    if (!dateString) return "";
+    const d = new Date(dateString);
+    if (isNaN(d)) return "";
+    return d.toLocaleDateString("en-ZA");
+  };
+
+  const getDeletedByName = (row) => {
+    return row?.deletedBy?.username || row?.deletedBy?.name || "";
+  };
 
   // --- EXCEL FILTER STATE ---
   const excelPopupRef = useRef(null);
@@ -203,27 +218,90 @@ const FlameProofMainAllSites = () => {
     if (token && hasRole(access, "FCMS")) {
       fetchFiles();
     }
-  }, [token]);
+  }, [token, isTrashView, type]);
+
+  const openRestoreModal = (asset) => {
+    setRestoreAssetData(asset);
+    setIsRestoreModalOpen(true);
+  };
+
+  const closeRestoreModal = () => {
+    setRestoreAssetData(null);
+    setIsRestoreModalOpen(false);
+  };
 
   const deleteAsset = async () => {
     if (!selectedFileId) return;
     try {
       setLoading(true);
 
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/flameproof/assets/${selectedFileId}/permanent`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Failed to delete the file');
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/flameproof/assets/${selectedFileId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete asset");
+
       setIsModalOpen(false);
       setSelectedFileId(null);
+      setSelectedAsset(null);
       fetchFiles();
     } catch (error) {
-      console.error('Error deleting file:', error);
+      console.error("Error deleting asset:", error);
     } finally {
-      setLoading(false); // Reset loading state after response
+      setLoading(false);
+    }
+  };
+
+  const restoreAsset = async (assetId) => {
+    try {
+      setLoading(true);
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/flameproof/assets/trash/restore/${assetId}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to restore asset");
+
+      fetchFiles();
+      setIsRestoreModalOpen(false);
+    } catch (error) {
+      console.error("Error restoring asset:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const permanentlyDeleteAsset = async () => {
+    if (!selectedFileId) return;
+    try {
+      setLoading(true);
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/flameproof/assets/${selectedFileId}/permanent`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to permanently delete asset");
+
+      setIsModalOpen(false);
+      setSelectedFileId(null);
+      setSelectedAsset(null);
+      fetchFiles();
+    } catch (error) {
+      console.error("Error permanently deleting asset:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -279,34 +357,44 @@ const FlameProofMainAllSites = () => {
 
   const fetchFiles = async () => {
     setIsLoadingTable(true);
-    const route = `/api/flameproof/assetsRetrieve/all-org-assets/type/${type}`;
+
+    setFiles([]);
+    setShowNoAssets(false);
+
+    const normalRoute = `/api/flameproof/assetsRetrieve/all-org-assets/type/${type}`;
+    const trashRoute = `/api/flameproof/assets/trash/all-org/type/${type}`;
+
+    const route = isTrashView ? trashRoute : normalRoute;
+
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {
-        headers: {
-          // 'Authorization': `Bearer ${token}` // Uncomment and fill in the token if needed
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      if (!response.ok) {
-        throw new Error('Failed to fetch files');
-      }
+
+      if (!response.ok) throw new Error("Failed to fetch files");
+
       const data = await response.json();
-      const sortedFiles = sortByAssetNr(data.assets);
+      const assets = Array.isArray(data.assets) ? data.assets : [];
+      const sortedFiles = sortByAssetNr(assets);
+
       setFiles(sortedFiles);
 
-      const uniqueOpAreas = [...new Set(data.assets.map(file => file.operationalArea))].sort();
-      const uniqueStatus = [...new Set(data.assets.map(file => file.complianceStatus))].sort();
-      const uniqueTypes = [...new Set(data.assets.map(file => file.assetType))].sort();
+      const uniqueOpAreas = [...new Set(assets.map(file => file.operationalArea).filter(Boolean))].sort();
+      const uniqueTypes = [...new Set(assets.map(file => file.assetType).filter(Boolean))].sort();
+      const uniqueStatus = !isTrashView
+        ? [...new Set(assets.map(file => file.complianceStatus).filter(Boolean))].sort()
+        : [];
 
       setAreas(uniqueOpAreas);
       setStatus(uniqueStatus);
       setAssetTypes(uniqueTypes);
     } catch (error) {
       setError(error.message);
+      setFiles([]);
     } finally {
       setIsLoadingTable(false);
     }
   };
-
   const clearSearch = () => {
     setSearchQuery("");
   };
@@ -354,17 +442,16 @@ const FlameProofMainAllSites = () => {
   const BLANK = "(Blanks)";
   const getFilterValuesForCell = (row, colId) => {
     let val;
+
     if (colId === "site") val = row.siteName;
     else if (colId === "assetType") val = row.assetType;
     else if (colId === "assetNr") val = row.assetNr;
     else if (colId === "area") val = row.operationalArea;
     else if (colId === "owner") val = row.assetOwner;
-    else if (colId === "deptHead") {
-      // Department head can be array
-      val = row.departmentHead;
-      if (Array.isArray(val)) return val.map(v => v ? String(v).trim() : BLANK);
-    }
+    else if (colId === "deptHead") val = row.departmentHead;
     else if (colId === "status") val = row.complianceStatus;
+    else if (colId === "deletedBy") val = getDeletedByName(row);
+    else if (colId === "dateDeleted") val = formatDeletedDate(row.deletedAt || row.dateDeleted);
     else val = row[colId];
 
     const s = val == null ? "" : String(val).trim();
@@ -466,14 +553,23 @@ const FlameProofMainAllSites = () => {
   const filteredFiles = useMemo(() => {
     let current = [...files];
 
-    // 1. Search (Existing)
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      current = current.filter(file => (
-        file.assetNr.toLowerCase().includes(q) ||
-        file.operationalArea.toLowerCase().includes(q) ||
-        file.assetOwner.toLowerCase().includes(q)
-      ));
+      current = current.filter(file => {
+        const deletedBy = getDeletedByName(file).toLowerCase();
+        const deletedDate = formatDeletedDate(file.deletedAt || file.dateDeleted).toLowerCase();
+
+        return (
+          (file.assetNr || "").toLowerCase().includes(q) ||
+          (file.operationalArea || "").toLowerCase().includes(q) ||
+          (file.assetOwner || "").toLowerCase().includes(q) ||
+          (file.siteName || "").toLowerCase().includes(q) ||
+          (!isTrashView && (file.departmentHead || "").toLowerCase().includes(q)) ||
+          (!isTrashView && (file.complianceStatus || "").toLowerCase().includes(q)) ||
+          (isTrashView && deletedBy.includes(q)) ||
+          (isTrashView && deletedDate.includes(q))
+        );
+      });
     }
 
     // 2. Sidebar Filters (Existing)
@@ -571,10 +667,6 @@ const FlameProofMainAllSites = () => {
     setFilterMenu({ isOpen: false, anchorRect: null });
   };
 
-  const getFilterBtnClass = () => {
-    return "top-right-button-control-att-2";
-  };
-
   // Add this helper
   const getAvailableOptions = (colId) => {
     let current = files;
@@ -605,6 +697,30 @@ const FlameProofMainAllSites = () => {
     ).sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }));
   };
 
+  const getDeletedTitle = () => {
+    if (type.includes("All")) return "Deleted Assets";
+    return `Deleted ${type}s`;
+  };
+
+  const getMainTitle = () => {
+    if (isTrashView) return getDeletedTitle();
+    return type.includes("All") ? type : `${type}s`;
+  };
+
+  const getAssetCountLabel = () => {
+    if (isTrashView) return `Deleted Assets: ${filteredFiles.length}`;
+    return `Number of ${formatAssetTypeLabel(type + "s", type.includes("All"))}: ${filteredFiles.length}`;
+  };
+
+  const getSidebarIcon = () => {
+    if (isTrashView) return "/trashIcon.svg";
+    return getIcon(type);
+  };
+
+  const getFilterBtnClass = () => {
+    return isTrashView ? "top-right-button-control-att" : "top-right-button-control-att-2";
+  };
+
   return (
     <div className="file-info-container">
       {isSidebarVisible && (
@@ -617,13 +733,24 @@ const FlameProofMainAllSites = () => {
             <p className="logo-text-um">EPA Management</p>
           </div>
 
-          {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+          {!isTrashView && (<div className="filter-dm-fi-2">
+            <div className="button-container-dm-fi">
+              <button className="but-dm-fi" onClick={() => setIsTrashView(true)}>
+                <div className="button-content">
+                  <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                  <span className="button-text">Deleted Assets</span>
+                </div>
+              </button>
+            </div>
+          </div>)}
+
+          {false && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
             <div className="filter-dm-fi-2">
               <div className="button-container-dm-fi">
-                <button className="but-dm-fi" onClick={openUpload}>
+                <button className="but-dm-fi" onClick={() => setIsTrashView(true)}>
                   <div className="button-content">
                     <FontAwesomeIcon icon={faFileCirclePlus} className="button-logo-custom" />
-                    <span className="button-text">Upload Single Certificate</span>
+                    <span className="button-text">Deleted Assets</span>
                   </div>
                 </button>
                 <button className="but-dm-fi" onClick={openRegister}>
@@ -637,8 +764,10 @@ const FlameProofMainAllSites = () => {
           )}
           <div className="sidebar-logo-dm-fi">
             <img src={`${process.env.PUBLIC_URL}${getIcon(type)}`} alt="Logo" className="icon-risk-rm" />
-            <p className="logo-text-dm-fi">{(`${type.includes("All") ? type : type + "s"}`)}</p>
-            <p className="logo-text-dm-fi" style={{ marginTop: "0px" }}>{"All Sites"}</p>
+            <p className="logo-text-dm-fi">{getMainTitle()}</p>
+            {!isTrashView && !type.includes("All") && (
+              <p className="logo-text-dm-fi" style={{ marginTop: "0px" }}>{"All Sites"}</p>
+            )}
           </div>
         </div>
       )}
@@ -654,8 +783,27 @@ const FlameProofMainAllSites = () => {
       <div className="main-box-file-info">
         <div className="top-section-um">
           <div className="burger-menu-icon-um">
-            <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
+            <FontAwesomeIcon
+              onClick={() => {
+                if (isTrashView) setIsTrashView(false);
+                else navigate(-1);
+              }}
+              icon={faArrowLeft}
+              title="Back"
+            />
           </div>
+
+          {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+            <>
+              <div className="burger-menu-icon-um">
+                <FontAwesomeIcon icon={faFileCirclePlus} title="Upload Single Certificate" onClick={openUpload} />
+              </div>
+
+              <div className="burger-menu-icon-um">
+                <FontAwesomeIcon icon={faTableList} title="Register Single Asset" onClick={openRegister} />
+              </div>
+            </>
+          )}
 
           <div className="um-input-container">
             <input
@@ -670,7 +818,9 @@ const FlameProofMainAllSites = () => {
             {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
           </div>
 
-          <div className={`info-box-fih`}>{type.includes("All") ? `Number of Assets: ${filteredFiles.length}` : `Number of ${formatAssetTypeLabel(type + "s", type.includes("All"))}: ${filteredFiles.length}`}</div>
+          <div className={isTrashView ? "info-box-fih trashed" : "info-box-fih"}>
+            {getAssetCountLabel()}
+          </div>
 
           <div className="spacer"></div>
 
@@ -679,13 +829,13 @@ const FlameProofMainAllSites = () => {
 
         <div className="table-flameproof-card">
           <div className="flameproof-table-header-label-wrapper">
-            <label className="risk-control-label">{type.includes("All") ? type : type + "s"}</label>
-            <FontAwesomeIcon
+            <label className="risk-control-label">{getMainTitle()}</label>
+            {!isTrashView && (<FontAwesomeIcon
               icon={faDownload}
               title="Export to Excel"
               className="top-right-button-control-att"
               onClick={exportSID}
-            />
+            />)}
             <FontAwesomeIcon
               icon={faFilter}
               className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)
@@ -703,36 +853,50 @@ const FlameProofMainAllSites = () => {
           </div>
           <div className="table-container-file-flameproof-all-assets">
             <table>
-              <thead>
+              <thead className={`${isTrashView ? "trashed" : ""}`}>
                 <tr>
                   <th className="flame-num-filter col">Nr</th>
                   {renderHeader("site", "Site")}
-                  {type.includes("All") && renderHeader("assetType", "Asset Type")}
                   {renderHeader("assetNr", "Asset Nr")}
                   {renderHeader("area", "Area")}
                   {renderHeader("owner", "Asset Owner")}
-                  {renderHeader("deptHead", "Department Head")}
-                  {renderHeader("status", "Compliance Status")}
-                  {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<th className="flame-act-filter col">Action</th>)}
+
+                  {!isTrashView ? (
+                    <>
+                      {renderHeader("deptHead", "Department Head")}
+                      {renderHeader("status", "Compliance Status")}
+                    </>
+                  ) : (
+                    <>
+                      {renderHeader("deletedBy", "Deleted By")}
+                      {renderHeader("dateDeleted", "Date Deleted")}
+                    </>
+                  )}
+
+                  {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+                    <th className="flame-act-filter col">Action</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {isLoadingTable && (
                   <tr>
-                    <td colSpan={
-                      6 + (type.includes("All") ? 1 : 0) + (canIn(access, "FCMS", ["systemAdmin", "contributor"]) ? 1 : 0)
-                    } style={{ textAlign: "center", padding: 20 }}>
-                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading assets.
+                    <td
+                      colSpan={6 + (type.includes("All") ? 1 : 0) + (canIn(access, "FCMS", ["systemAdmin", "contributor"]) ? 1 : 0)}
+                      style={{ textAlign: "center", padding: 20 }}
+                    >
+                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp;
+                      {isTrashView ? "Loading deleted assets." : "Loading assets."}
                     </td>
                   </tr>
                 )}
-
                 {!isLoadingTable && showNoAssets && (
                   <tr>
-                    <td colSpan={
-                      6 + (type.includes("All") ? 1 : 0) + (canIn(access, "FCMS", ["systemAdmin", "contributor"]) ? 1 : 0)
-                    } style={{ textAlign: "center", padding: 20 }}>
-                      No Assets Registered.
+                    <td
+                      colSpan={7 + (type.includes("All") ? 1 : 0) + (canIn(access, "FCMS", ["systemAdmin", "contributor"]) ? 1 : 0)}
+                      style={{ textAlign: "center", padding: 20 }}
+                    >
+                      {isTrashView ? "No deleted assets found." : "No assets found."}
                     </td>
                   </tr>
                 )}
@@ -741,52 +905,85 @@ const FlameProofMainAllSites = () => {
                   <tr key={index} className={`file-info-row-height`} style={{ cursor: "pointer" }}
                     onClick={() => setHoveredFileId(hoveredFileId === file._id ? null : file._id)}>
                     <td className="col">{index + 1}</td>
-                    <td className="col" style={{ textAlign: "center" }}>{file.siteName}</td>
-                    {type.includes("All") && (<td className="col" style={{ textAlign: "center" }}>{file.assetType}</td>)}
-                    <td
-                      className="file-name-cell"
-                      style={{ textAlign: "center" }}
-                    >
-                      {(file.assetNr)}
-
-                      {(hoveredFileId === file._id) && (
-                        <PopupMenuOptionsAssets file={file} isOpen={hoveredFileId === file._id} setHoveredFileId={setHoveredFileId} canIn={canIn} access={access} openModifyModal={openComponentModify} />
+                    <td className="col">{file.siteName}</td>
+                    <td className="file-name-cell" style={{ textAlign: "center" }}>
+                      {file.assetNr}
+                      {!isTrashView && hoveredFileId === file._id && (
+                        <PopupMenuOptionsAssets
+                          file={file}
+                          isOpen={hoveredFileId === file._id}
+                          setHoveredFileId={setHoveredFileId}
+                          canIn={canIn}
+                          access={access}
+                          openModifyModal={openComponentModify}
+                        />
                       )}
                     </td>
                     <td className="col">{file.operationalArea}</td>
-                    <td className={`col`}>{(file.assetOwner)}</td>
-                    <td className="col">{file.departmentHead}</td>
+                    <td className="col">{file.assetOwner}</td>
 
-                    <td className={`col ${getComplianceColor(file.complianceStatus)}`}>{(file.complianceStatus)}</td>
-                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<td className={"col-act"}>
-                      <button
-                        className={"flame-delete-button-fi col-but-res"}
-                        onClick={(e) => {
-                          e.stopPropagation();         // ⛔ prevent row click
-                          openModify(file);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faEdit} title="Modify Asset" />
-                      </button>
-                      {false && (<button
-                        className={"flame-delete-button-fi col-but-res"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openModifyDate(file);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faMagnifyingGlass} title="Modify Components" />
-                      </button>)}
-                      <button
-                        className={"flame-delete-button-fi col-but"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openModal(file._id, file);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faTrash} title="Delete Asset" />
-                      </button>
-                    </td>)}
+                    {!isTrashView ? (
+                      <>
+                        <td className="col">{file.departmentHead}</td>
+                        <td className={`col ${getComplianceColor(file.complianceStatus)}`}>
+                          {file.complianceStatus}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="col">{getDeletedByName(file) || "—"}</td>
+                        <td className="col">{formatDeletedDate(file.deletedAt || file.dateDeleted) || "—"}</td>
+                      </>
+                    )}
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+                      <td className="col-act">
+                        {!isTrashView ? (
+                          <>
+                            <button
+                              className="flame-delete-button-fi col-but-res"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openModify(file);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faEdit} title="Modify Asset" />
+                            </button>
+
+                            <button
+                              className="flame-delete-button-fi col-but"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openModal(file._id, file);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrash} title="Delete Asset" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="flame-delete-button-fi col-but-res"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRestoreModal(file);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faArrowsRotate} title="Restore Asset" />
+                            </button>
+
+                            <button
+                              className="flame-delete-button-fi col-but"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openModal(file._id, file);
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faTrash} title="Permanently Delete Asset" />
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -937,7 +1134,22 @@ const FlameProofMainAllSites = () => {
         </div>
       )}
 
-      {isModalOpen && (<DeleteAsset closeModal={closeModal} deleteAsset={deleteAsset} asset={selectedAsset} />)}
+      {isModalOpen && (
+        <DeleteAsset
+          closeModal={closeModal}
+          deleteAsset={isTrashView ? permanentlyDeleteAsset : deleteAsset}
+          asset={selectedAsset}
+          permanent={isTrashView}
+        />
+      )}
+
+      {isRestoreModalOpen && (
+        <RestoreAsset
+          closeModal={closeRestoreModal}
+          restoreAsset={() => restoreAsset(restoreAssetData._id)}
+          asset={restoreAssetData}
+        />
+      )}
       {upload && (<UploadComponentPopup onClose={closeUpload} refresh={fetchFiles} assetType={type.includes("All") ? "" : type} />)}
       {register && (<RegisterAssetPopup onClose={closeRegister} refresh={fetchFiles} assetType={type.includes("All") ? "" : type} exit={exitRegister} />)}
       {modifyAsset && (<ModifyAssetPopup onClose={closeModify} asset={modifyingAsset} refresh={fetchFiles} />)}

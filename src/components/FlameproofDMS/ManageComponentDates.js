@@ -221,37 +221,42 @@ const ManageComponentDates = () => {
                     <TopBar />
                 </div>
 
-                <div className="table-container-file">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th className="col" style={{ width: "5%" }}>Nr</th>
-                                <th className="col" style={{ width: "20%" }}>Component Name</th>
-                                <th className="col" style={{ width: "20%" }}>Serial Number</th>
-                                <th className="col" style={{ width: "20%" }}>Component Update/Installation Date</th>
-                                <th className="col" style={{ width: "20%" }}>User Updated</th>
-                                <th className="col" style={{ width: "5%" }}>Action</th></tr>
-                        </thead>
-                        <tbody>
-                            {filteredFiles.map((file, index) => (
-                                <tr key={index} className={`file-info-row-height`}>
-                                    <td className="col">{index + 1}</td>
-                                    <td style={{ textAlign: "center" }} className="col">{(file.component) ?? ""}</td>
-                                    <td style={{ textAlign: "center" }} className="col">{formatSerial(rows[index]?.serialNumber) ?? "-"}</td>
-                                    <td style={{ textAlign: "center" }} className="col">{formatSerial(rows[index]?.dateUpdatedStr) ?? "-"}</td>
-                                    <td className="col">{file?.updater}</td>
-                                    <td className={"col-act"}>
-                                        <button
-                                            className={"modify-asset-button-fi col-but-res"}
-                                            onClick={() => openModify(index, file.component, rows[index]?.dateUpdatedStr, rows[index]?.serialNumber)}
-                                        >
-                                            <FontAwesomeIcon icon={faEdit} title="Edit Component" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                <div className="table-flameproof-card">
+                    <div className="flameproof-table-header-label-wrapper">
+                        <label className="risk-control-label">Manage Components</label>
+                    </div>
+                    <div className="table-container-file">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th className="col" style={{ width: "5%" }}>Nr</th>
+                                    <th className="col" style={{ width: "20%" }}>Component Name</th>
+                                    <th className="col" style={{ width: "20%" }}>Serial Number</th>
+                                    <th className="col" style={{ width: "20%" }}>Component Update/Installation Date</th>
+                                    <th className="col" style={{ width: "20%" }}>User Updated</th>
+                                    <th className="col" style={{ width: "5%" }}>Action</th></tr>
+                            </thead>
+                            <tbody>
+                                {filteredFiles.map((file, index) => (
+                                    <tr key={index} className={`file-info-row-height`}>
+                                        <td className="col">{index + 1}</td>
+                                        <td style={{ textAlign: "center" }} className="col">{(file.component) ?? ""}</td>
+                                        <td style={{ textAlign: "center" }} className="col">{formatSerial(rows[index]?.serialNumber) ?? "-"}</td>
+                                        <td style={{ textAlign: "center" }} className="col">{formatSerial(rows[index]?.dateUpdatedStr) ?? "-"}</td>
+                                        <td className="col">{file?.updater}</td>
+                                        <td className={"col-act"}>
+                                            <button
+                                                className={"modify-asset-button-fi col-but-res"}
+                                                onClick={() => openModify(index, file.component, rows[index]?.dateUpdatedStr, rows[index]?.serialNumber)}
+                                            >
+                                                <FontAwesomeIcon icon={faEdit} title="Edit Component" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             {modify && (<ModifySerialDate isOpen={true} component={component} index={index} onClose={closeModify} serialNum={serialNumber} setRows={setRows} updateDate={updateDate} rows={rows} onUpdate={submitUpdates} />)}

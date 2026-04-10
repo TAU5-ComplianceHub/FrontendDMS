@@ -4,7 +4,7 @@ import { jwtDecode } from "jwt-decode";
 import "./RiskHomePage.css";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCog, faCogs, faHardHat, faListCheck, faNetworkWired, faChevronLeft, faChevronRight, faArrowsRotate, faUserTie, faExclamationTriangle, faTriangleExclamation, faArrowLeft, faCaretLeft, faCaretRight, faCircle } from '@fortawesome/free-solid-svg-icons';
+import { faCog, faCogs, faHardHat, faListCheck, faNetworkWired, faChevronLeft, faChevronRight, faArrowsRotate, faUserTie, faExclamationTriangle, faTriangleExclamation, faArrowLeft, faCaretLeft, faCaretRight, faCircle, faFile, faFileAlt, faBars } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "../Notifications/TopBar";
 import TopBarDD from "../Notifications/TopBarDD";
 import { getCurrentUser, canIn } from "../../utils/auth";
@@ -28,17 +28,18 @@ const RiskHomePage = () => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src="CH_Logo.svg" alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Risk Management</p>
                     </div>
 
-                    <div className="button-container-rm-home">
-                        <button className="but-rm-home" onClick={() => navigate("/FrontendDMS/futureEnhancementRMS")}>
+                    {false && canIn(access, "RMS", ["systemAdmin"]) && (<div className="button-container-rm-home">
+                        <button className="but-um" onClick={() => navigate("/FrontendDMS/rmsAdmin")}>
                             <div className="button-content">
-                                <span className="button-text">Coming Soon</span>
+                                <FontAwesomeIcon icon={faBars} src={`${process.env.PUBLIC_URL}/dmsAdmin.svg`} size="xs" className={"button-logo-custom"} />
+                                <span className="button-text">Manage RMS</span>
                             </div>
                         </button>
-                    </div>
+                    </div>)}
                 </div>
             )}
 
@@ -73,7 +74,7 @@ const RiskHomePage = () => {
                     </div>
                     <div
                         className="document-card-risk-home"
-                        onClick={() => navigate("/FrontendDMS/riskBLRA/BLRA/new")}
+                        onClick={() => navigate("/FrontendDMS/blraHome")}
                     >
                         <>
                             <div className="icon-risk">
@@ -87,7 +88,7 @@ const RiskHomePage = () => {
                     </div>
                     <div
                         className="document-card-risk-home"
-                        onClick={() => navigate("/FrontendDMS/riskIBRA/IBRA/new")}
+                        onClick={() => navigate("/FrontendDMS/ibraHome")}
                     >
                         <>
                             <div className="icon-risk">
@@ -108,7 +109,7 @@ const RiskHomePage = () => {
                                 <h3 className="document-title-risk-home">IBRA<br /><span style={{ fontWeight: "normal", fontSize: "16px" }}>(Using the BTA tool)</span></h3>
                             </>
                         </div>)}
-                    <div className={`document-card-risk-home`} onClick={() => navigate("/FrontendDMS/riskJRA/JRA/new")}>
+                    <div className={`document-card-risk-home`} onClick={() => navigate("/FrontendDMS/jraHome")}>
                         <>
                             <div className="icon-risk">
                                 <img src={`${process.env.PUBLIC_URL}/jra.svg`} alt="Control Attributes" className="icon-risk" />

@@ -350,7 +350,6 @@ const DeletedDocumentsSI = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Document Development</p>
                     </div>
-
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/specialInstInverted.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"Deleted Special Instructions"}</p>

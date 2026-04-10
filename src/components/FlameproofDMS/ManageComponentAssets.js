@@ -144,51 +144,56 @@ const ManageComponentAssets = () => {
                     <TopBar />
                 </div>
 
-                <div className="table-container-file">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th className="col" style={{ width: "5%" }}>Nr</th>
-                                <th className="col" style={{ width: "30%" }}>Asset Number</th>
-                                <th className="col" style={{ width: "25%" }}>Site</th>
-                                <th className="col" style={{ width: "35%" }}>Number of Flameproof Components</th>
-                                <th className="col" style={{ width: "5%" }}>Action</th></tr>
-                        </thead>
-                        <tbody>
-                            {isLoadingTable && (
+                <div className="table-flameproof-card">
+                    <div className="flameproof-table-header-label-wrapper">
+                        <label className="risk-control-label">{"Manage " + type + "s"}</label>
+                    </div>
+                    <div className="table-container-file">
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td colSpan={5} style={{ textAlign: "center", padding: 20 }}>
-                                        <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading registered assets.
-                                    </td>
-                                </tr>
-                            )}
+                                    <th className="col" style={{ width: "5%" }}>Nr</th>
+                                    <th className="col" style={{ width: "30%" }}>Asset Number</th>
+                                    <th className="col" style={{ width: "25%" }}>Site</th>
+                                    <th className="col" style={{ width: "35%" }}>Number of Flameproof Components</th>
+                                    <th className="col" style={{ width: "5%" }}>Action</th></tr>
+                            </thead>
+                            <tbody>
+                                {isLoadingTable && (
+                                    <tr>
+                                        <td colSpan={5} style={{ textAlign: "center", padding: 20 }}>
+                                            <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading registered assets.
+                                        </td>
+                                    </tr>
+                                )}
 
-                            {!isLoadingTable && showNoAssets && (
-                                <tr>
-                                    <td colSpan={5} style={{ textAlign: "center", padding: 20 }}>
-                                        No Assets Registered.
-                                    </td>
-                                </tr>
-                            )}
+                                {!isLoadingTable && showNoAssets && (
+                                    <tr>
+                                        <td colSpan={5} style={{ textAlign: "center", padding: 20 }}>
+                                            No Assets Registered.
+                                        </td>
+                                    </tr>
+                                )}
 
-                            {filteredFiles.map((file, index) => (
-                                <tr key={index} className={`file-info-row-height`}>
-                                    <td className="col">{index + 1}</td>
-                                    <td style={{ textAlign: "center" }} className="col">{(file.assetNr) ?? ""}</td>
-                                    <td style={{ textAlign: "center" }} className="col">{file.site?.site ?? "-"}</td>
-                                    <td style={{ textAlign: "center" }} className="col">{file.componentCount}</td>
-                                    <td className={"col-act"}>
-                                        <button
-                                            className={"modify-asset-button-fi col-but-res"}
-                                            title={file.isBaseAsset || file.isBaseComponent ? "Edit Standard Asset" : "Edit Asset Components"}
-                                        >
-                                            <FontAwesomeIcon icon={faEdit} onClick={() => openUpdateSiteName(file)} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                                {filteredFiles.map((file, index) => (
+                                    <tr key={index} className={`file-info-row-height`}>
+                                        <td className="col">{index + 1}</td>
+                                        <td style={{ textAlign: "center" }} className="col">{(file.assetNr) ?? ""}</td>
+                                        <td style={{ textAlign: "center" }} className="col">{file.site?.site ?? "-"}</td>
+                                        <td style={{ textAlign: "center" }} className="col">{file.componentCount}</td>
+                                        <td className={"col-act"}>
+                                            <button
+                                                className={"modify-asset-button-fi col-but-res"}
+                                                title={file.isBaseAsset || file.isBaseComponent ? "Edit Standard Asset" : "Edit Asset Components"}
+                                            >
+                                                <FontAwesomeIcon icon={faEdit} onClick={() => openUpdateSiteName(file)} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

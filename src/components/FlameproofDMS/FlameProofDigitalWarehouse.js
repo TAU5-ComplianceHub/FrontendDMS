@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCaretLeft, faCaretRight, faColumns, faDownload, faEdit, faSearch, faTrash, faWrench, faSort, faFilter, faSortUp, faSortDown, faSpinner, faX, faFileCirclePlus, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
+import { faCaretLeft, faCaretRight, faColumns, faDownload, faEdit, faSearch, faTrash, faWrench, faSort, faFilter, faSortUp, faSortDown, faSpinner, faX, faFileCirclePlus, faArrowLeft, faTableList } from '@fortawesome/free-solid-svg-icons';
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
 import { toast, ToastContainer } from 'react-toastify';
@@ -601,18 +601,6 @@ const FlameProofDigitalWarehouse = () => {
             <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
             <p className="logo-text-um">EPA Management</p>
           </div>
-          {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
-            <div className="filter-dm-fi-2">
-              <div className="button-container-dm-fi">
-                <button className="but-dm-fi" onClick={() => openUpload()} style={{ paddingTop: "10px", paddingBottom: "10px" }}>
-                  <div className="button-content"><FontAwesomeIcon icon={faFileCirclePlus} className="button-logo-custom" /><span className="button-text">Register Single Component</span></div>
-                </button>
-                <button className="but-dm-fi" style={{ paddingTop: "10px", paddingBottom: "10px" }} onClick={() => openBatch()}>
-                  <div className="button-content"><FontAwesomeIcon icon={faFileCirclePlus} className="button-logo-custom" /><span className="button-text">Register Multiple Components</span></div>
-                </button>
-              </div>
-            </div>
-          )}
           <div className="sidebar-logo-dm-fi">
             <img src={`${process.env.PUBLIC_URL}/flameWarehouse2.svg`} alt="Logo" className="icon-risk-rm" />
             <p className="logo-text-dm-fi">{(`Digital Warehouse`)}</p>
@@ -625,6 +613,12 @@ const FlameProofDigitalWarehouse = () => {
       <div className="main-box-file-info">
         <div className="top-section-um">
           <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" /></div>
+          {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+            <>
+              <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={openUpload} icon={faFileCirclePlus} title="Register Component" /></div>
+              <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={openBatch} icon={faTableList} title="Batch Register Components" /></div>
+            </>
+          )}
           <div className="um-input-container">
             <input className="search-input-um" type="text" placeholder="Search Components" autoComplete="off" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             {searchQuery !== "" && (<i><FontAwesomeIcon icon={faX} onClick={clearSearch} className="icon-um-search" title="Clear Search" /></i>)}

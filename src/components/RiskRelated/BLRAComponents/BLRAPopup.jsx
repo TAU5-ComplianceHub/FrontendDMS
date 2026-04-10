@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import MaterialUE from '../RiskInfo/MaterialUE';
 import DatePicker from "react-multi-date-picker";
 import { faCalendarDays, faX } from '@fortawesome/free-solid-svg-icons';
+import ClosePopupConfirmation from '../ClosePopupConfirmation';
 
 const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availableControls }) => {
     const [mainFlag, setMainFlag] = useState("");
@@ -77,6 +78,79 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
     const [selectedDescription, setSelectedDescription] = useState("");
     const [selectedPerformance, setSelectedPerformance] = useState("");
     const [showDescription, setShowDescription] = useState(false);
+    const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
+    const initialSnapshotRef = useRef("");
+
+    const buildPopupSnapshot = () => ({
+        mainFlag,
+        subFlag,
+        ownerFlag,
+        oddsFlag,
+        riskRankFlag,
+        hazardFlag,
+        controlFlag,
+        ueFlag,
+        additionalFlag,
+        maxConsequenceFlag,
+        sourceFlag,
+        priorityFlag,
+        materialFlag,
+
+        main: selectedMainArea || '',
+        sub: selectedSubArea || '',
+        owner: selectedOwner || '',
+        odds: selectedLikelihood || '',
+        UE: selectedUE || '',
+        maxConsequence: maxConsequence || '',
+        additional: additionalComments || '',
+        source: riskSource || '',
+
+        possible: riskTreatmentRows.map(row => ({
+            action: row.action || '',
+            responsible: row.responsible || '',
+            dueDate: row.dueDate || ''
+        })),
+
+        hazards: hazardRows.map(row => row.value || ''),
+        controls: controlRows.map(row => row.value || ''),
+
+        riskRanks: riskRankRows.map(row => ({
+            label: row.label,
+            value: row.value || '-'
+        })),
+    });
+
+    const hasUnsavedChanges = () => {
+        if (readOnly) return false;
+        return JSON.stringify(buildPopupSnapshot()) !== initialSnapshotRef.current;
+    };
+
+    const handleAttemptClose = () => {
+        if (readOnly) {
+            onClose();
+            return;
+        }
+
+        if (hasUnsavedChanges()) {
+            setShowCloseConfirmation(true);
+            return;
+        }
+        onClose();
+    };
+
+    const handleCloseConfirmationOnly = () => {
+        setShowCloseConfirmation(false);
+        onClose();
+    };
+
+    const handleDismissCloseConfirmation = () => {
+        setShowCloseConfirmation(false);
+    };
+
+    const handleSubmitAndCloseFromConfirmation = () => {
+        setShowCloseConfirmation(false);
+        handleSubmit();
+    };
 
     const [riskTreatmentRows, setRiskTreatmentRows] = useState([
         {
@@ -481,6 +555,70 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                 setAvailableSubAreas(groupedAreas[selectedMainArea] || []);
             }
         }
+    }, [data]);
+
+    useEffect(() => {
+        if (!data) return;
+
+        const snapshot = {
+            mainFlag: data.mainFlag || false,
+            subFlag: data.subFlag || false,
+            ownerFlag: data.ownerFlag || false,
+            oddsFlag: data.oddsFlag || false,
+            riskRankFlag: data.riskRankFlag || false,
+            hazardFlag: data.hazardFlag || false,
+            controlFlag: data.controlFlag || false,
+            ueFlag: data.ueFlag || false,
+            additionalFlag: data.additionalFlag || false,
+            maxConsequenceFlag: data.maxConsequenceFlag || false,
+            sourceFlag: data.sourceFlag || false,
+            priorityFlag: data.priorityFlag || false,
+            materialFlag: data.materialFlag || false,
+
+            main: data.main || '',
+            sub: data.sub || '',
+            owner: data.owner || '',
+            odds: data.odds || '',
+            UE: data.UE || '',
+            maxConsequence: data.maxConsequence || '',
+            additional: data.additional || '',
+            source: data.source || '',
+
+            possible: (data.possible && Array.isArray(data.possible) && data.possible.length)
+                ? data.possible.flatMap((block) => {
+                    const actions = block.actions || [];
+                    const responsible = block.responsible || [];
+                    const dueDates = block.dueDate || [];
+                    const maxLen = Math.max(actions.length, responsible.length, dueDates.length, 1);
+
+                    return Array.from({ length: maxLen }, (_, index) => ({
+                        action: actions[index]?.action || '',
+                        responsible: responsible[index]?.person || '',
+                        dueDate: dueDates[index]?.date || ''
+                    }));
+                })
+                : [{ action: '', responsible: '', dueDate: '' }],
+
+            hazards: (data.hazards && Array.isArray(data.hazards) && data.hazards.length)
+                ? data.hazards.map(h => h || '')
+                : [''],
+
+            controls: (data.controls && Array.isArray(data.controls) && data.controls.length)
+                ? data.controls.map(c => c || '')
+                : [''],
+
+            riskRanks: [
+                { label: 'S', value: data['S'] || '-' },
+                { label: 'H', value: data['H'] || '-' },
+                { label: 'E', value: data['E'] || '-' },
+                { label: 'C', value: data['C'] || '-' },
+                { label: 'L&R', value: data['LR'] || '-' },
+                { label: 'M', value: data['M'] || '-' },
+                { label: 'R', value: data['R'] || '-' },
+            ],
+        };
+
+        initialSnapshotRef.current = JSON.stringify(snapshot);
     }, [data]);
 
     const handleRiskTreatmentChange = (id, field, value) => {
@@ -1085,7 +1223,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                 <div className="ibra-popup-page-popup-right">
                     <div className="ibra-popup-page-popup-header-right">
                         <h2>Unwanted Event Evaluation</h2>
-                        <button className="review-date-close" onClick={onClose} title="Close Popup">×</button>
+                        <button className="review-date-close" onClick={handleAttemptClose} title="Close Popup">×</button>
                     </div>
 
                     <div className="ibra-popup-page-form-group-main-container">
@@ -1724,6 +1862,14 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                             </li>
                         ))}
                 </ul>
+            )}
+
+            {showCloseConfirmation && (
+                <ClosePopupConfirmation
+                    onClose={handleCloseConfirmationOnly}
+                    onSubmit={handleSubmitAndCloseFromConfirmation}
+                    closePopup={handleDismissCloseConfirmation}
+                />
             )}
 
             {helpFO && (<FunctionalOwnership setClose={closeHelpFO} />)}

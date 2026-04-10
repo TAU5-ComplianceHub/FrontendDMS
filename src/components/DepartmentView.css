@@ -38,3 +38,19 @@
     /* Centers horizontally */
     width: 100%;
 }
+
+.button-container-dept-bottom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Centers buttons horizontally */
+    justify-content: center;
+    /* Centers buttons vertically */
+    position: absolute;
+    /* Adjust as needed */
+    left: 50%;
+    bottom: 150px;
+    transform: translateX(-50%);
+    /* Centers horizontally */
+    width: 100%;
+}

@@ -4,7 +4,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
     faTrash,
     faPenToSquare,
-    faFilter
+    faFilter,
+    faKey
 } from '@fortawesome/free-solid-svg-icons';
 import './UserTable.css';
 
@@ -14,7 +15,8 @@ const UserTable = ({
     setUserToDelete,
     setIsDeleteModalOpen,
     formatRole,
-    loggedInUserId
+    loggedInUserId,
+    openPasswordModal
 }) => {
     const navigate = useNavigate();
     const excelPopupRef = useRef(null);
@@ -216,281 +218,300 @@ const UserTable = ({
         isSortActive(colId) || isFilterActive(colId);
 
     return (
-        <div className="table-container-user">
-            <table>
-                <thead>
-                    <tr>
-                        {columns.map((col) => (
-                            <th
-                                key={col.id}
-                                className={
-                                    col.id === "nr" ? "user-man-num-user" :
-                                        col.id === "username" ? "user-man-name-user" :
-                                            col.id === "email" ? "user-man-email-user" :
-                                                col.id === "role" ? "user-man-role-user" :
-                                                    col.id === "dateAdded" ? "user-man-day-user" :
-                                                        col.id === "reportingTo" ? "user-man-rt-user" :
-                                                            col.id === "department" ? "user-man-dept-user" :
-                                                                col.id === "designation" ? "user-man-des-user" :
-                                                                    "user-man-action-user"
-                                }
-                                onClick={(e) => {
-                                    if (col.id !== "nr" && col.id !== "action") {
-                                        openExcelFilter(col.id, e);
+        <div className="table-flameproof-card">
+            <div className="flameproof-table-header-label-wrapper">
+                <label className="risk-control-label">Manage Users</label>
+            </div>
+            <div className="table-container-user">
+                <table>
+                    <thead>
+                        <tr>
+                            {columns.map((col) => (
+                                <th
+                                    key={col.id}
+                                    className={
+                                        col.id === "nr" ? "user-man-num-user" :
+                                            col.id === "username" ? "user-man-name-user" :
+                                                col.id === "email" ? "user-man-email-user" :
+                                                    col.id === "role" ? "user-man-role-user" :
+                                                        col.id === "dateAdded" ? "user-man-day-user" :
+                                                            col.id === "reportingTo" ? "user-man-rt-user" :
+                                                                col.id === "department" ? "user-man-dept-user" :
+                                                                    col.id === "designation" ? "user-man-des-user" :
+                                                                        "user-man-action-user"
                                     }
-                                }}
-                                style={{
-                                    cursor: col.id !== "nr" && col.id !== "action" ? "pointer" : "default",
-                                    position: "relative"
-                                }}
-                            >
-                                {col.title}
+                                    onClick={(e) => {
+                                        if (col.id !== "nr" && col.id !== "action") {
+                                            openExcelFilter(col.id, e);
+                                        }
+                                    }}
+                                    style={{
+                                        cursor: col.id !== "nr" && col.id !== "action" ? "pointer" : "default",
+                                        position: "relative"
+                                    }}
+                                >
+                                    {col.title}
 
-                                {col.id !== "nr" && col.id !== "action" && isHeaderIconVisible(col.id) && (
-                                    <FontAwesomeIcon
-                                        icon={faFilter}
-                                        style={{
-                                            marginLeft: "8px",
-                                            pointerEvents: "none"
-                                        }}
-                                    />
-                                )}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {displayedUsers.map((user, index) => (
-                        <tr key={user._id}>
-                            <td className="col-um">{index + 1}</td>
-                            <td
-                                className="col-um"
-                                onClick={() => navigate(`/userActivity/${user._id}`)}
-                                style={{ cursor: "pointer" }}
-                            >
-                                {user.username}
-                            </td>
-                            <td className="col-um">{user.email || ""}</td>
-                            <td className="col-um">{formatRole(user.role)}</td>
-                            <td className="col-um">
-                                {user.dateAdded
-                                    ? (() => {
-                                        const date = new Date(user.dateAdded);
-                                        const year = date.getFullYear();
-                                        const month = String(date.getMonth() + 1).padStart(2, '0');
-                                        const day = String(date.getDate()).padStart(2, '0');
-                                        return `${day}.${month}.${year}`;
-                                    })()
-                                    : ""}
-                            </td>
-                            <td className="col-um">{user.reportingTo ? user.reportingTo.username : "N/A"}</td>
-                            <td className="col-um">{user.department || "N/A"}</td>
-                            <td className="col-um">{user.designation || "N/A"}</td>
-                            <td className="col-um">
-                                <div className='inline-actions-um'>
-                                    <button
-                                        className={user._id !== loggedInUserId ? `action-button-user edit-button-user` : "action-button-user edit-button-user-hidden"}
-                                        onClick={() => openEditModal(user)}
-                                        disabled={!(user._id !== loggedInUserId)}
-                                    >
-                                        <FontAwesomeIcon icon={faPenToSquare} title="Edit User" />
-                                    </button>
-                                    <button
-                                        className={user._id !== loggedInUserId ? "action-button-user delete-button-user" : "action-button-user edit-button-user-hidden"}
-                                        onClick={() => {
-                                            setUserToDelete(user);
-                                            setIsDeleteModalOpen(true);
-                                        }}
-                                        disabled={!(user._id !== loggedInUserId)}
-                                    >
-                                        <FontAwesomeIcon icon={faTrash} title="Delete User" />
-                                    </button>
-                                </div>
-                            </td>
+                                    {col.id !== "nr" && col.id !== "action" && isHeaderIconVisible(col.id) && (
+                                        <FontAwesomeIcon
+                                            icon={faFilter}
+                                            style={{
+                                                marginLeft: "8px",
+                                                pointerEvents: "none"
+                                            }}
+                                        />
+                                    )}
+                                </th>
+                            ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
 
-            {excelFilter.open && (
-                <div
-                    className="excel-filter-popup"
-                    ref={excelPopupRef}
-                    style={{
-                        position: "fixed",
-                        top: excelFilter.pos.top,
-                        left: excelFilter.pos.left,
-                        width: excelFilter.pos.width,
-                        zIndex: 9999,
-                    }}
-                    onWheel={(e) => e.stopPropagation()}
-                >
-                    <div className="excel-filter-sortbar">
-                        <button
-                            type="button"
-                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
-                                sortConfig.direction === "asc" ? "active" : ""
-                                }`}
-                            onClick={() => toggleSort(excelFilter.colId, "asc")}
-                        >
-                            Sort A to Z
-                        </button>
-
-                        <button
-                            type="button"
-                            className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
-                                sortConfig.direction === "desc" ? "active" : ""
-                                }`}
-                            onClick={() => toggleSort(excelFilter.colId, "desc")}
-                        >
-                            Sort Z to A
-                        </button>
-                    </div>
-
-                    <input
-                        type="text"
-                        className="excel-filter-search"
-                        placeholder="Search"
-                        value={excelSearch}
-                        onChange={(e) => setExcelSearch(e.target.value)}
-                    />
-
-                    {(() => {
-                        const colId = excelFilter.colId;
-                        const allValues = getAvailableOptions(colId);
-
-                        const visibleValues = allValues.filter(v =>
-                            String(v).toLowerCase().includes(excelSearch.toLowerCase())
-                        );
-
-                        const isAllVisibleSelected =
-                            visibleValues.length > 0 &&
-                            visibleValues.every(v => excelSelected.has(v));
-
-                        const toggleAll = (checked) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                if (checked) {
-                                    visibleValues.forEach(v => next.add(v));
-                                } else {
-                                    visibleValues.forEach(v => next.delete(v));
-                                }
-                                return next;
-                            });
-                        };
-
-                        const toggleValue = (v) => {
-                            setExcelSelected(prev => {
-                                const next = new Set(prev);
-                                if (next.has(v)) next.delete(v);
-                                else next.add(v);
-                                return next;
-                            });
-                        };
-
-                        const onOk = () => {
-                            let finalSelection = new Set(excelSelected);
-
-                            if (excelSearch.trim() !== "") {
-                                const visibleSet = new Set(visibleValues);
-                                finalSelection = new Set(
-                                    Array.from(excelSelected).filter(v => visibleSet.has(v))
-                                );
-                            }
-
-                            const selectedArr = Array.from(finalSelection);
-
-                            const isTotalReset =
-                                allValues.length > 0 &&
-                                allValues.length === selectedArr.length &&
-                                selectedArr.every(v => finalSelection.has(v));
-
-                            setFilters(prev => {
-                                const next = { ...prev };
-                                if (isTotalReset) {
-                                    delete next[colId];
-                                } else {
-                                    next[colId] = selectedArr;
-                                }
-                                return next;
-                            });
-
-                            setExcelFilter({
-                                open: false,
-                                colId: null,
-                                anchorRect: null,
-                                pos: { top: 0, left: 0, width: 0 }
-                            });
-                        };
-
-                        const onCancel = () => {
-                            setExcelFilter({
-                                open: false,
-                                colId: null,
-                                anchorRect: null,
-                                pos: { top: 0, left: 0, width: 0 }
-                            });
-                        };
-
-                        return (
-                            <>
-                                <div className="excel-filter-list">
-                                    <label className="excel-filter-item">
-                                        <span className="excel-filter-checkbox">
-                                            <input
-                                                type="checkbox"
-                                                className="checkbox-excel-attend"
-                                                checked={isAllVisibleSelected}
-                                                onChange={(e) => toggleAll(e.target.checked)}
+                    <tbody>
+                        {displayedUsers.map((user, index) => (
+                            <tr key={user._id}>
+                                <td className="col-um">{index + 1}</td>
+                                <td
+                                    className="col-um"
+                                    onClick={() => navigate(`/FrontendDMS/userActivity/${user._id}`)}
+                                    style={{ cursor: "pointer" }}
+                                >
+                                    {user.username}
+                                </td>
+                                <td className="col-um">{user.email || ""}</td>
+                                <td className="col-um">{formatRole(user.role)}</td>
+                                <td className="col-um">
+                                    {user.dateAdded
+                                        ? (() => {
+                                            const date = new Date(user.dateAdded);
+                                            const year = date.getFullYear();
+                                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                                            const day = String(date.getDate()).padStart(2, '0');
+                                            return `${day}.${month}.${year}`;
+                                        })()
+                                        : ""}
+                                </td>
+                                <td className="col-um">{user.reportingTo ? user.reportingTo.username : "N/A"}</td>
+                                <td className="col-um">{user.department || "N/A"}</td>
+                                <td className="col-um">{user.designation || "N/A"}</td>
+                                <td className="col-um">
+                                    <div className='inline-actions-um'>
+                                        <button
+                                            className={
+                                                user._id !== loggedInUserId
+                                                    ? "action-button-user edit-button-user"
+                                                    : "action-button-user edit-button-user-hidden"
+                                            }
+                                            onClick={() => openPasswordModal(user)}
+                                            disabled={!(user._id !== loggedInUserId)}
+                                        >
+                                            <FontAwesomeIcon
+                                                icon={faKey}
+                                                title="Change User Password"
                                             />
-                                        </span>
-                                        <span className="excel-filter-text">
-                                            {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
-                                        </span>
-                                    </label>
+                                        </button>
+                                        <button
+                                            className={user._id !== loggedInUserId ? `action-button-user edit-button-user` : "action-button-user edit-button-user-hidden"}
+                                            onClick={() => openEditModal(user)}
+                                            disabled={!(user._id !== loggedInUserId)}
+                                        >
+                                            <FontAwesomeIcon icon={faPenToSquare} title="Edit User" />
+                                        </button>
+                                        <button
+                                            className={user._id !== loggedInUserId ? "action-button-user delete-button-user" : "action-button-user edit-button-user-hidden"}
+                                            onClick={() => {
+                                                setUserToDelete(user);
+                                                setIsDeleteModalOpen(true);
+                                            }}
+                                            disabled={!(user._id !== loggedInUserId)}
+                                        >
+                                            <FontAwesomeIcon icon={faTrash} title="Delete User" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
 
-                                    {visibleValues.map(v => (
-                                        <label className="excel-filter-item" key={String(v)}>
+                {excelFilter.open && (
+                    <div
+                        className="excel-filter-popup"
+                        ref={excelPopupRef}
+                        style={{
+                            position: "fixed",
+                            top: excelFilter.pos.top,
+                            left: excelFilter.pos.left,
+                            width: excelFilter.pos.width,
+                            zIndex: 9999,
+                        }}
+                        onWheel={(e) => e.stopPropagation()}
+                    >
+                        <div className="excel-filter-sortbar">
+                            <button
+                                type="button"
+                                className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                    sortConfig.direction === "asc" ? "active" : ""
+                                    }`}
+                                onClick={() => toggleSort(excelFilter.colId, "asc")}
+                            >
+                                Sort A to Z
+                            </button>
+
+                            <button
+                                type="button"
+                                className={`excel-sort-btn ${sortConfig.colId === excelFilter.colId &&
+                                    sortConfig.direction === "desc" ? "active" : ""
+                                    }`}
+                                onClick={() => toggleSort(excelFilter.colId, "desc")}
+                            >
+                                Sort Z to A
+                            </button>
+                        </div>
+
+                        <input
+                            type="text"
+                            className="excel-filter-search"
+                            placeholder="Search"
+                            value={excelSearch}
+                            onChange={(e) => setExcelSearch(e.target.value)}
+                        />
+
+                        {(() => {
+                            const colId = excelFilter.colId;
+                            const allValues = getAvailableOptions(colId);
+
+                            const visibleValues = allValues.filter(v =>
+                                String(v).toLowerCase().includes(excelSearch.toLowerCase())
+                            );
+
+                            const isAllVisibleSelected =
+                                visibleValues.length > 0 &&
+                                visibleValues.every(v => excelSelected.has(v));
+
+                            const toggleAll = (checked) => {
+                                setExcelSelected(prev => {
+                                    const next = new Set(prev);
+                                    if (checked) {
+                                        visibleValues.forEach(v => next.add(v));
+                                    } else {
+                                        visibleValues.forEach(v => next.delete(v));
+                                    }
+                                    return next;
+                                });
+                            };
+
+                            const toggleValue = (v) => {
+                                setExcelSelected(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(v)) next.delete(v);
+                                    else next.add(v);
+                                    return next;
+                                });
+                            };
+
+                            const onOk = () => {
+                                let finalSelection = new Set(excelSelected);
+
+                                if (excelSearch.trim() !== "") {
+                                    const visibleSet = new Set(visibleValues);
+                                    finalSelection = new Set(
+                                        Array.from(excelSelected).filter(v => visibleSet.has(v))
+                                    );
+                                }
+
+                                const selectedArr = Array.from(finalSelection);
+
+                                const isTotalReset =
+                                    allValues.length > 0 &&
+                                    allValues.length === selectedArr.length &&
+                                    selectedArr.every(v => finalSelection.has(v));
+
+                                setFilters(prev => {
+                                    const next = { ...prev };
+                                    if (isTotalReset) {
+                                        delete next[colId];
+                                    } else {
+                                        next[colId] = selectedArr;
+                                    }
+                                    return next;
+                                });
+
+                                setExcelFilter({
+                                    open: false,
+                                    colId: null,
+                                    anchorRect: null,
+                                    pos: { top: 0, left: 0, width: 0 }
+                                });
+                            };
+
+                            const onCancel = () => {
+                                setExcelFilter({
+                                    open: false,
+                                    colId: null,
+                                    anchorRect: null,
+                                    pos: { top: 0, left: 0, width: 0 }
+                                });
+                            };
+
+                            return (
+                                <>
+                                    <div className="excel-filter-list">
+                                        <label className="excel-filter-item">
                                             <span className="excel-filter-checkbox">
                                                 <input
                                                     type="checkbox"
                                                     className="checkbox-excel-attend"
-                                                    checked={excelSelected.has(v)}
-                                                    onChange={() => toggleValue(v)}
+                                                    checked={isAllVisibleSelected}
+                                                    onChange={(e) => toggleAll(e.target.checked)}
                                                 />
                                             </span>
-                                            <span className="excel-filter-text">{v}</span>
+                                            <span className="excel-filter-text">
+                                                {excelSearch === "" ? "(Select All)" : "(Select All Search Results)"}
+                                            </span>
                                         </label>
-                                    ))}
 
-                                    {visibleValues.length === 0 && (
-                                        <div
-                                            style={{
-                                                padding: "8px",
-                                                color: "#888",
-                                                fontStyle: "italic",
-                                                fontSize: "12px"
-                                            }}
-                                        >
-                                            No matches found
-                                        </div>
-                                    )}
-                                </div>
+                                        {visibleValues.map(v => (
+                                            <label className="excel-filter-item" key={String(v)}>
+                                                <span className="excel-filter-checkbox">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="checkbox-excel-attend"
+                                                        checked={excelSelected.has(v)}
+                                                        onChange={() => toggleValue(v)}
+                                                    />
+                                                </span>
+                                                <span className="excel-filter-text">{v}</span>
+                                            </label>
+                                        ))}
 
-                                <div className="excel-filter-actions">
-                                    <button type="button" className="excel-filter-btn" onClick={onOk}>
-                                        Apply
-                                    </button>
-                                    <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>
-                                        Cancel
-                                    </button>
-                                </div>
-                            </>
-                        );
-                    })()}
-                </div>
-            )}
+                                        {visibleValues.length === 0 && (
+                                            <div
+                                                style={{
+                                                    padding: "8px",
+                                                    color: "#888",
+                                                    fontStyle: "italic",
+                                                    fontSize: "12px"
+                                                }}
+                                            >
+                                                No matches found
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="excel-filter-actions">
+                                        <button type="button" className="excel-filter-btn" onClick={onOk}>
+                                            Apply
+                                        </button>
+                                        <button type="button" className="excel-filter-btn-cnc" onClick={onCancel}>
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

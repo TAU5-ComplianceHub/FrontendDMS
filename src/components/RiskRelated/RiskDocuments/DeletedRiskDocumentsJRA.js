@@ -213,7 +213,7 @@ const DeletedRiskDocumentsJRA = () => {
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/jra2.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"Deleted JRA Documents"}</p>
+                        <p className="logo-text-dm-fi">{"Deleted JRAs"}</p>
                     </div>
                 </div>
             )}
@@ -236,7 +236,7 @@ const DeletedRiskDocumentsJRA = () => {
                 </div>
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
-                        <label className="risk-control-label">{"Deleted JRA Documents"}</label>
+                        <label className="risk-control-label">{"Deleted JRAs"}</label>
                         <FontAwesomeIcon icon={faColumns} className="top-right-button-control-att" onClick={() => setShowColumnSelector(v => !v)} />
                         <FontAwesomeIcon
                             icon={faFilter}

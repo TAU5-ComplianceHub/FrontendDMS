@@ -183,6 +183,17 @@ import SGIAdminPage from './components/SystemAdmin/SGIAdminPage';
 import SGIVersionHistory from './components/SystemAdmin/SGIVersionHistory';
 import DeletedControlAttributes from './components/RiskRelated/DeletedControls/DeletedControlAttributes';
 import DeletedControlVersionHistory from './components/RiskRelated/DeletedControls/DeletedControlVersionHistory';
+import DraftsPage from './components/CreatePage/DraftsPage';
+import RiskDraftsPage from './components/RiskRelated/RiskDraftsPage';
+import DeletedRiskDraftsPage from './components/RiskRelated/DeletedRiskDraftsPage';
+import DeletedDMSDraftsPage from './components/CreatePage/DeletedDMSDraftsPage';
+import ProcedureHomePage from './components/CreatePage/HomePages/ProcedureHomePage';
+import StandardHomePage from './components/CreatePage/HomePages/StandardHomePage';
+import SpecialHomePage from './components/CreatePage/HomePages/SpecialHomePage';
+import JRAHomePage from './components/RiskRelated/HomePages/JRAHomePage';
+import BLRAHomePage from './components/RiskRelated/HomePages/BLRAHomePage';
+import IBRAHomePage from './components/RiskRelated/HomePages/IBRAHomePage';
+import DeletedTMSDraftsPage from './components/TrainingManagement/Drafts/DeletedTMSDraftsPage';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -432,6 +443,17 @@ function App() {
         <Route path="FrontendDMS/sgiVersionHistory" element={<SGIVersionHistory />} />
         <Route path="FrontendDMS/deletedControls" element={<DeletedControlAttributes />} />
         <Route path="FrontendDMS/deletedControlsHistory/:id" element={<DeletedControlVersionHistory />} />
+        <Route path="FrontendDMS/documentDevelopmentDrafts/:type" element={<DraftsPage />} />
+        <Route path="FrontendDMS/riskManagementDrafts/:type" element={<RiskDraftsPage />} />
+        <Route path="FrontendDMS/deletedRiskDrafts/:type" element={<DeletedRiskDraftsPage />} />
+        <Route path="FrontendDMS/deletedDDSDrafts/:type" element={<DeletedDMSDraftsPage />} />
+        <Route path="FrontendDMS/deletedTMSDrafts/:type" element={<DeletedTMSDraftsPage />} />
+        <Route path="FrontendDMS/procedureHome" element={<ProcedureHomePage />} />
+        <Route path="FrontendDMS/standardHome" element={<StandardHomePage />} />
+        <Route path="FrontendDMS/specialHome" element={<SpecialHomePage />} />
+        <Route path="FrontendDMS/jraHome" element={<JRAHomePage />} />
+        <Route path="FrontendDMS/ibraHome" element={<IBRAHomePage />} />
+        <Route path="FrontendDMS/blraHome" element={<BLRAHomePage />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

@@ -4,7 +4,7 @@ import { jwtDecode } from "jwt-decode";
 import "./DCHomePage.css";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faScaleBalanced, faCertificate, faListOl, faChevronLeft, faChevronRight, faArrowLeft, faCaretLeft, faCaretRight, faCircle } from '@fortawesome/free-solid-svg-icons';
+import { faScaleBalanced, faCertificate, faListOl, faChevronLeft, faChevronRight, faArrowLeft, faCaretLeft, faCaretRight, faCircle, faFileAlt, faBars } from '@fortawesome/free-solid-svg-icons';
 import TopBarDD from "./Notifications/TopBarDD";
 import TopBar from "./Notifications/TopBar";
 import { getCurrentUser, canIn } from "../utils/auth";
@@ -32,6 +32,15 @@ const DCHomePage = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Document Development</p>
                     </div>
+
+                    {false && canIn(access, "DDS", ["systemAdmin"]) && (<div className="button-container-rm-home">
+                        <button className="but-um" onClick={() => navigate("/ddsAdmin")}>
+                            <div className="button-content">
+                                <FontAwesomeIcon icon={faBars} src={"/dmsAdmin.svg"} size="xs" className={"button-logo-custom"} />
+                                <span className="button-text">Manage DDS</span>
+                            </div>
+                        </button>
+                    </div>)}
                 </div>
             )}
 
@@ -55,7 +64,7 @@ const DCHomePage = () => {
                 </div>
 
                 <div className="scrollable-box-dc-home">
-                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/documentCreateProc/Procedure/new")}>
+                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/procedureHome")}>
                         <>
                             <div className="icon-dc">
                                 <img src={`${process.env.PUBLIC_URL}/proceduresDMS.svg`} className={"icon-dc"} />
@@ -63,7 +72,7 @@ const DCHomePage = () => {
                             <h3 className="document-title-dc-home">Procedures</h3>
                         </>
                     </div>
-                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/documentCreateStand/Standard/new")}>
+                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/standardHome")}>
                         <>
                             <div className="icon-dc">
                                 <img src={`${process.env.PUBLIC_URL}/standardsDMS.svg`} className={"icon-dc"} />
@@ -71,7 +80,7 @@ const DCHomePage = () => {
                             <h3 className="document-title-dc-home">Standards</h3>
                         </>
                     </div>
-                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/documentCreateSI/Special Instruction/new")}>
+                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/specialHome")}>
                         <>
                             <div className="icon-dc">
                                 <img src={`${process.env.PUBLIC_URL}/specialInst.svg`} className={"icon-dc"} />

@@ -30,6 +30,7 @@ import ApproveApprovalProcessPopup from "./Popups/ApproveApprovalProcessPopup";
 import { v4 as uuidv4 } from "uuid";
 import AimBulletComponent from "./CreatePage/AimBulletComponent";
 import ScopeBulletComponent from "./CreatePage/ScopeBulletComponent";
+import HazardsControlsTable from "./CreatePage/HazardsControlsTable";
 
 const ReviewPage = () => {
     const navigate = useNavigate();
@@ -143,6 +144,46 @@ const ReviewPage = () => {
         setIsSaveAsModalOpen(false);
     };
 
+    const addHazardControlRow = () => {
+        setFormData((prev) => ({
+            ...prev,
+            hazardsControls: [
+                ...(Array.isArray(prev.hazardsControls) ? prev.hazardsControls : []),
+                { hazard: "", unwantedEvent: "", control: "" }
+            ]
+        }));
+    };
+
+    const removeHazardControlRow = (indexToRemove) => {
+        setFormData((prev) => ({
+            ...prev,
+            hazardsControls: (Array.isArray(prev.hazardsControls) ? prev.hazardsControls : []).filter(
+                (_, index) => index !== indexToRemove
+            )
+        }));
+    };
+
+    const updateHazardControlRow = (index, field, value) => {
+        setFormData((prev) => {
+            const updatedRows = [...(Array.isArray(prev.hazardsControls) ? prev.hazardsControls : [])];
+            updatedRows[index] = {
+                ...updatedRows[index],
+                [field]: value
+            };
+            return {
+                ...prev,
+                hazardsControls: updatedRows
+            };
+        });
+    };
+
+    const updateHazardControlRows = (newRows) => {
+        setFormData((prev) => ({
+            ...prev,
+            hazardsControls: newRows
+        }));
+    };
+
     const [formData, setFormData] = useState({
         title: "",
         documentType: type,
@@ -161,6 +202,7 @@ const ReviewPage = () => {
         abbrRows: [],
         termRows: [],
         chapters: [],
+        hazardsControls: [],
         references: [],
         PPEItems: [],
         HandTools: [],
@@ -2032,6 +2074,17 @@ const ReviewPage = () => {
                     <MaterialsTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} />
                     <AbbreviationTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} />
                     <TermTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} />
+                    <HazardsControlsTable
+                        collapsible={true}
+                        defaultCollapsed={true}
+                        hazardControlRows={formData.hazardsControls || []}
+                        addHazardControlRow={addHazardControlRow}
+                        removeHazardControlRow={removeHazardControlRow}
+                        updateHazardControlRow={updateHazardControlRow}
+                        updateHazardControlRows={updateHazardControlRows}
+                        readOnly={readOnly}
+                        required={false}
+                    />
                     <ProcedureTable collapsible={true} readOnly={readOnly} ref={procedureTableRef} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} />
                     <ChapterTable collapsible={true} readOnly={readOnly} formData={formData} setFormData={setFormData} />
                     <ReferenceTable collapsible={true} readOnly={readOnly} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} />

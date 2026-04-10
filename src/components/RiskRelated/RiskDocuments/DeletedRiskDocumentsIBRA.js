@@ -213,7 +213,7 @@ const DeletedRiskDocumentsIBRA = () => {
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/ibra2.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"Deleted IBRA Documents"}</p>
+                        <p className="logo-text-dm-fi">{"Deleted IBRAs"}</p>
                     </div>
                 </div>
             )}
@@ -236,7 +236,7 @@ const DeletedRiskDocumentsIBRA = () => {
                 </div>
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
-                        <label className="risk-control-label">{"Deleted IBRA Documents"}</label>
+                        <label className="risk-control-label">{"Deleted IBRAs"}</label>
                         <FontAwesomeIcon icon={faColumns} className="top-right-button-control-att" onClick={() => setShowColumnSelector(v => !v)} />
 
                         <FontAwesomeIcon

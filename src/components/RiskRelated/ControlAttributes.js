@@ -1194,12 +1194,12 @@ const ControlAttributes = () => {
 
                         {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
                             <>
-                                <button className="but-um" onClick={openAddControl}>
+                                {false && (<button className="but-um" onClick={openAddControl}>
                                     <div className="button-content">
                                         <FontAwesomeIcon icon={faCirclePlus} className="button-logo-custom" />
                                         <span className="button-text">Add Control</span>
                                     </div>
-                                </button>
+                                </button>)}
                                 <button className="but-um" onClick={() => navigate("/FrontendDMS/suggestedControls/new")}>
                                     <div className="button-content">
                                         <FontAwesomeIcon icon={faFile} className="button-logo-custom" />
@@ -1235,6 +1235,14 @@ const ControlAttributes = () => {
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
+
+                    {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
+                        <>
+                            <div className="burger-menu-icon-um">
+                                <FontAwesomeIcon icon={faCirclePlus} title="Add Control" onClick={openAddControl} />
+                            </div>
+                        </>
+                    )}
 
                     <div className="um-input-container">
                         <input

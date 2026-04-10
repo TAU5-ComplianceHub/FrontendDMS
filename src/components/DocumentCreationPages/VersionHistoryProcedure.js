@@ -6,6 +6,7 @@ import BurgerMenuFI from "../FileInfo/BurgerMenuFI";
 import DownloadPopup from "../FileInfo/DownloadPopup";
 import { jwtDecode } from 'jwt-decode';
 import "./VersionHistoryDC.css";
+import TopBar from "../Notifications/TopBar";
 
 const VersionHistoryProcedure = () => {
     const [error, setError] = useState(null);
@@ -143,39 +144,38 @@ const VersionHistoryProcedure = () => {
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
 
-                    {/* Container for right-aligned icons */}
-                    <div className="icons-container">
-                        <div className="burger-menu-icon-um">
-                            <FontAwesomeIcon icon={faCircleUser} onClick={() => setIsMenuOpen(!isMenuOpen)} title="Menu" />
-                        </div>
-                        {isMenuOpen && (<BurgerMenuFI isOpen={isMenuOpen} setIsOpen={setIsMenuOpen} />)}
-                    </div>
+                    <TopBar />
                 </div>
-                <div className="table-containerdc-version-history-file-info">
-                    <table className="dc-version-history-file-info-table">
-                        <thead className="dc-version-history-file-info-head">
-                            <tr>
-                                <th className="dc-version-history-file-th">Nr</th>
-                                <th className="dc-version-history-file-th">Name</th>
-                                <th className="dc-version-history-file-th">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {versions.length > 0 ? (
-                                versions.map((ver, index) => (
-                                    <tr key={index} className={`file-info-row-height dc-version-history-file-info-tr`}>
-                                        <td className="dc-version-history-file-nr">{index + 1}</td>
-                                        <td className="dc-version-history-file-fn">{removeFileExtension(ver.fileName)}</td>
-                                        <td className="dc-version-history-file-ver"><button className="verion-download-button" onClick={() => openDownloadModal(ver.azureFileName, ver.fileName)}><FontAwesomeIcon icon={faDownload} title="Download" /></button></td>
-                                    </tr>
-                                ))
-                            ) : (
+                <div className="table-flameproof-card">
+                    <div className="flameproof-table-header-label-wrapper">
+                        <label className="risk-control-label">Version History</label>
+                    </div>
+                    <div className="table-containerdc-version-history-file-info">
+                        <table className="dc-version-history-file-info-table">
+                            <thead className="dc-version-history-file-info-head">
                                 <tr>
-                                    <td colSpan="3">No Version History</td>
+                                    <th className="dc-version-history-file-th">Nr</th>
+                                    <th className="dc-version-history-file-th">Name</th>
+                                    <th className="dc-version-history-file-th">Action</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {versions.length > 0 ? (
+                                    versions.map((ver, index) => (
+                                        <tr key={index} className={`file-info-row-height dc-version-history-file-info-tr`}>
+                                            <td className="dc-version-history-file-nr">{index + 1}</td>
+                                            <td className="dc-version-history-file-fn">{removeFileExtension(ver.fileName)}</td>
+                                            <td className="dc-version-history-file-ver"><button className="verion-download-button" onClick={() => openDownloadModal(ver.azureFileName, ver.fileName)}><FontAwesomeIcon icon={faDownload} title="Download" /></button></td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No Version History</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

@@ -1,15 +1,22 @@
 import React, { useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlusCircle, faCopy, faChevronDown, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlusCircle, faCopy, faChevronDown, faInfoCircle, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 import TypeSelectorPopup from "../VisitorsInduction/InductionCreation/TypeSelectorPopup";
 import AssessmentNote from "./AssessmentNote";
 
-const OTCourseAssessment = ({ formData, setFormData, readOnly = false }) => {
+const OTCourseAssessment = ({ collapsible = false, formData, setFormData, readOnly = false }) => {
     const QUESTION_TYPES = {
         MCQ: "MCQ",
         TEXT: "TEXT",
     };
     const [help, setHelp] = useState(false);
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const emptyQuestion = (type) => {
         const base = { id: crypto.randomUUID(), type, question: "", collapsed: false };
@@ -121,149 +128,164 @@ const OTCourseAssessment = ({ formData, setFormData, readOnly = false }) => {
                 </button>
                 <h3 className="font-fam-labels">Assessment</h3>
 
-                {formData.assessment.map((question, index) => (
-                    <div
-                        className={`course-ass-file-card ${question.collapsed ? "course-ass-file-is-collapsed" : ""}`}
-                        key={question.id}
-                    >
-                        <div className="course-ass-file-card-header">
-                            <div className="course-ass-file-header-left">
-                                <button
-                                    type="button"
-                                    className="course-ass-file-collapse-btn"
-                                    aria-label={question.collapsed ? "Expand options" : "Collapse options"}
-                                    onClick={() =>
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            assessment: prev.assessment.map(q =>
-                                                q.id === question.id ? { ...q, collapsed: !q.collapsed } : q
-                                            )
-                                        }))
-                                    }
-                                >
-                                    <FontAwesomeIcon icon={faChevronDown} />
-                                </button>
-                                <div className="course-ass-file-qtitle">Question {index + 1}</div>
-                            </div>
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                            {!readOnly && (
-                                <div className="course-ass-file-qactions">
-                                    <button
-                                        className="course-ass-file-icon-btn"
-                                        aria-label="Duplicate question"
-                                        type="button"
-                                        title="Duplicate Question"
-                                        onClick={() =>
-                                            setFormData(prev => {
-                                                const list = [...prev.assessment];
-                                                const idx = list.findIndex(q => q.id === question.id);
-                                                const copy = {
-                                                    id: crypto.randomUUID(),
-                                                    type: question.type || "MCQ",
-                                                    question: question.question,
-                                                    answer: question.answer,
-                                                    options: question.type === "TEXT" ? [] : [...(question.options || [])],
-                                                    collapsed: false
-                                                };
-                                                list.splice(idx + 1, 0, copy);
-                                                return { ...prev, assessment: list };
-                                            })
-                                        }
-                                    >
-                                        <FontAwesomeIcon icon={faCopy} />
-                                    </button>
+                {/* Display selected abbreviations in a table */}
+                {(!isCollapsed) && (
+                    <>
+                        {formData.assessment.map((question, index) => (
+                            <div
+                                className={`course-ass-file-card ${question.collapsed ? "course-ass-file-is-collapsed" : ""}`}
+                                key={question.id}
+                            >
+                                <div className="course-ass-file-card-header">
+                                    <div className="course-ass-file-header-left">
+                                        <button
+                                            type="button"
+                                            className="course-ass-file-collapse-btn"
+                                            aria-label={question.collapsed ? "Expand options" : "Collapse options"}
+                                            onClick={() =>
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    assessment: prev.assessment.map(q =>
+                                                        q.id === question.id ? { ...q, collapsed: !q.collapsed } : q
+                                                    )
+                                                }))
+                                            }
+                                        >
+                                            <FontAwesomeIcon icon={faChevronDown} />
+                                        </button>
+                                        <div className="course-ass-file-qtitle">Question {index + 1}</div>
+                                    </div>
 
-                                    <button
-                                        className="course-ass-file-icon-btn"
-                                        aria-label="Remove question"
-                                        title={onlyOneQuestionLeft ? "At least one question is required" : "Remove question"}
-                                        onClick={() => removeQuestion(question.id)}
-                                        type="button"
-                                        disabled={onlyOneQuestionLeft}
-                                    >
-                                        <FontAwesomeIcon icon={faTrash} />
-                                    </button>
+                                    {!readOnly && (
+                                        <div className="course-ass-file-qactions">
+                                            <button
+                                                className="course-ass-file-icon-btn"
+                                                aria-label="Duplicate question"
+                                                type="button"
+                                                title="Duplicate Question"
+                                                onClick={() =>
+                                                    setFormData(prev => {
+                                                        const list = [...prev.assessment];
+                                                        const idx = list.findIndex(q => q.id === question.id);
+                                                        const copy = {
+                                                            id: crypto.randomUUID(),
+                                                            type: question.type || "MCQ",
+                                                            question: question.question,
+                                                            answer: question.answer,
+                                                            options: question.type === "TEXT" ? [] : [...(question.options || [])],
+                                                            collapsed: false
+                                                        };
+                                                        list.splice(idx + 1, 0, copy);
+                                                        return { ...prev, assessment: list };
+                                                    })
+                                                }
+                                            >
+                                                <FontAwesomeIcon icon={faCopy} />
+                                            </button>
 
-                                    <button
-                                        className="course-ass-file-icon-btn"
-                                        aria-label="Add question"
-                                        onClick={() => setQuestionPickerOpen(true)}
-                                        title="Add Question"
-                                        type="button"
-                                    >
-                                        <FontAwesomeIcon icon={faPlusCircle} />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                                            <button
+                                                className="course-ass-file-icon-btn"
+                                                aria-label="Remove question"
+                                                title={onlyOneQuestionLeft ? "At least one question is required" : "Remove question"}
+                                                onClick={() => removeQuestion(question.id)}
+                                                type="button"
+                                                disabled={onlyOneQuestionLeft}
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} />
+                                            </button>
 
-                        <div className="course-ass-file-qbody">
-                            <textarea
-                                className="course-ass-file-question-input"
-                                placeholder="Insert Question"
-                                value={question.question}
-                                readOnly={readOnly}
-                                onChange={(e) => updateQuestionText(question.id, e.target.value)}
-                            />
-
-                            {question.type !== "TEXT" && (
-                                <div className="course-ass-file-options">
-                                    {(question.options || []).map((opt, optIndex) => (
-                                        <div className="course-ass-file-option-row" key={`${question.id}-${optIndex}`}>
-                                            <div className="course-ass-file-radio-wrap">
-                                                <input
-                                                    type="radio"
-                                                    name={`q-${question.id}`}
-                                                    disabled={readOnly}
-                                                    checked={String(optIndex) === String(question.answer)}
-                                                    onChange={() => setCorrectAnswer(question.id, optIndex)}
-                                                />
-                                            </div>
-
-                                            <input
-                                                type="text"
-                                                className="course-ass-file-option-input"
-                                                placeholder={`Insert Option ${optIndex + 1}`}
-                                                value={opt}
-                                                readOnly={readOnly}
-                                                onChange={(e) => updateOptionText(question.id, optIndex, e.target.value)}
-                                            />
-
-                                            {!readOnly && (
-                                                <div className="course-ass-file-option-actions">
-                                                    <button
-                                                        className="course-ass-file-icon-btn"
-                                                        aria-label="Remove option"
-                                                        title="Remove option"
-                                                        onClick={() => removeOption(question.id, optIndex)}
-                                                        type="button"
-                                                    >
-                                                        <FontAwesomeIcon icon={faTrash} />
-                                                    </button>
-                                                    <button
-                                                        className="course-ass-file-icon-btn"
-                                                        aria-label="Add option"
-                                                        title="Add option"
-                                                        onClick={() => addOption(question.id, optIndex)}
-                                                        type="button"
-                                                    >
-                                                        <FontAwesomeIcon icon={faPlusCircle} />
-                                                    </button>
-                                                </div>
-                                            )}
+                                            <button
+                                                className="course-ass-file-icon-btn"
+                                                aria-label="Add question"
+                                                onClick={() => setQuestionPickerOpen(true)}
+                                                title="Add Question"
+                                                type="button"
+                                            >
+                                                <FontAwesomeIcon icon={faPlusCircle} />
+                                            </button>
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
-                            )}
 
-                            {question.type === "TEXT" && (
-                                <div className="course-ass-file-text-placeholder">
-                                    <em>No options for this question. Student will type an answer.</em>
+                                <div className="course-ass-file-qbody">
+                                    <textarea
+                                        className="course-ass-file-question-input"
+                                        placeholder="Insert Question"
+                                        value={question.question}
+                                        readOnly={readOnly}
+                                        onChange={(e) => updateQuestionText(question.id, e.target.value)}
+                                    />
+
+                                    {question.type !== "TEXT" && (
+                                        <div className="course-ass-file-options">
+                                            {(question.options || []).map((opt, optIndex) => (
+                                                <div className="course-ass-file-option-row" key={`${question.id}-${optIndex}`}>
+                                                    <div className="course-ass-file-radio-wrap">
+                                                        <input
+                                                            type="radio"
+                                                            name={`q-${question.id}`}
+                                                            disabled={readOnly}
+                                                            checked={String(optIndex) === String(question.answer)}
+                                                            onChange={() => setCorrectAnswer(question.id, optIndex)}
+                                                        />
+                                                    </div>
+
+                                                    <input
+                                                        type="text"
+                                                        className="course-ass-file-option-input"
+                                                        placeholder={`Insert Option ${optIndex + 1}`}
+                                                        value={opt}
+                                                        readOnly={readOnly}
+                                                        onChange={(e) => updateOptionText(question.id, optIndex, e.target.value)}
+                                                    />
+
+                                                    {!readOnly && (
+                                                        <div className="course-ass-file-option-actions">
+                                                            <button
+                                                                className="course-ass-file-icon-btn"
+                                                                aria-label="Remove option"
+                                                                title="Remove option"
+                                                                onClick={() => removeOption(question.id, optIndex)}
+                                                                type="button"
+                                                            >
+                                                                <FontAwesomeIcon icon={faTrash} />
+                                                            </button>
+                                                            <button
+                                                                className="course-ass-file-icon-btn"
+                                                                aria-label="Add option"
+                                                                title="Add option"
+                                                                onClick={() => addOption(question.id, optIndex)}
+                                                                type="button"
+                                                            >
+                                                                <FontAwesomeIcon icon={faPlusCircle} />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {question.type === "TEXT" && (
+                                        <div className="course-ass-file-text-placeholder">
+                                            <em>No options for this question. Student will type an answer.</em>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                            </div>
+                        ))}
+                    </>
+                )}
             </div>
 
             {questionPickerOpen && (<TypeSelectorPopup

@@ -7,6 +7,7 @@ import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { aiRewrite, aiRewriteWED } from "../../utils/jraAI";
 import { v4 as uuidv4 } from 'uuid';
+import ClosePopupConfirmation from './ClosePopupConfirmation';
 
 const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) => {
     const [activeHazardCell, setActiveHazardCell] = useState(null);
@@ -36,6 +37,78 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
     const controlsScrollRefs = useRef([]);
     const [wedHistory, setWedHistory] = useState({});
     const [controlHistory, setControlHistory] = useState({});
+    const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
+    const initialSnapshotRef = useRef("");
+
+    const buildJRASnapshot = (value) => {
+        if (!value) return "";
+
+        return JSON.stringify({
+            rowFlagged: !!value.rowFlagged,
+            main: value.main || '',
+            jraBody: (value.jraBody || []).map((body) => ({
+                subStepFlagged: !!body.subStepFlagged,
+
+                hazards: (body.hazards || []).map((h, index) => ({
+                    hazard: h?.hazard || '',
+                    flagged: index === 0 ? !!h?.flagged : false,
+                })),
+
+                UE: (body.UE || []).map((u, index) => ({
+                    ue: u?.ue || '',
+                    flagged: index === 0 ? !!u?.flagged : false,
+                })),
+
+                sub: (body.sub || []).map((s) => ({
+                    task: s?.task || '',
+                })),
+
+                taskExecution: (body.taskExecution || []).map((te) => ({
+                    R: te?.R || '',
+                })),
+
+                controls: (body.controls || []).map((c) => ({
+                    control: c?.control || '',
+                })),
+
+                go_noGo: (body.go_noGo || []).map((g) => ({
+                    go: g?.go || '',
+                })),
+            })),
+        });
+    };
+
+    const hasUnsavedChanges = () => {
+        if (readOnly) return false;
+        return buildJRASnapshot(jraData) !== initialSnapshotRef.current;
+    };
+
+    const handleAttemptClose = () => {
+        if (readOnly) {
+            onClose();
+            return;
+        }
+
+        if (hasUnsavedChanges()) {
+            setShowCloseConfirmation(true);
+            return;
+        }
+        onClose();
+    };
+
+    const handleDismissCloseConfirmation = () => {
+        setShowCloseConfirmation(false);
+    };
+
+    const handleCloseMainPopup = () => {
+        setShowCloseConfirmation(false);
+        onClose();
+    };
+
+    const handleSubmitAndCloseFromConfirmation = () => {
+        setShowCloseConfirmation(false);
+        onSubmit(jraData);
+    };
 
     useEffect(() => {
         // cleanups for each slider
@@ -452,6 +525,10 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
 
     useEffect(() => {
         console.log("JRAPopup data:", data);
+    }, [data]);
+
+    useEffect(() => {
+        initialSnapshotRef.current = buildJRASnapshot(data);
     }, [data]);
 
     const handleMainStepInput = (value) => {
@@ -1034,7 +1111,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                 <div className="jra-popup-page-popup-right">
                     <div className="jra-popup-page-popup-header-right">
                         <h2>Main Step Evaluation</h2>
-                        <button className="review-date-close" onClick={onClose} title="Close Popup">×</button>
+                        <button className="review-date-close" onClick={handleAttemptClose} title="Close Popup">×</button>
                     </div>
 
                     <div className="jra-popup-page-form-group-main-container">
@@ -1497,6 +1574,14 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {showCloseConfirmation && (
+                <ClosePopupConfirmation
+                    onClose={handleCloseMainPopup}
+                    onSubmit={handleSubmitAndCloseFromConfirmation}
+                    closePopup={handleDismissCloseConfirmation}
+                />
             )}
         </div >
     );

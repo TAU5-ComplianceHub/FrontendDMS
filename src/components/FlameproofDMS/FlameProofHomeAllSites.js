@@ -247,6 +247,17 @@ const FlameProofHomeAllSites = () => {
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+                        <>
+                            <div className="burger-menu-icon-um">
+                                <FontAwesomeIcon icon={faFileCirclePlus} title="Upload Single Certificate" onClick={openUpload} />
+                            </div>
+
+                            <div className="burger-menu-icon-um">
+                                <FontAwesomeIcon icon={faTableList} title="Register Single Asset" onClick={openRegister} />
+                            </div>
+                        </>
+                    )}
                     <div className="um-input-container">
                         <input
                             className="search-input-um"

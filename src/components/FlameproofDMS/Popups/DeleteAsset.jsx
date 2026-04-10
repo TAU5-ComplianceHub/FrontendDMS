@@ -1,4 +1,4 @@
-const DeleteAsset = ({ closeModal, asset, deleteAsset }) => {
+const DeleteAsset = ({ closeModal, asset, deleteAsset, permanent = false }) => {
     return (
         <div className="delete-popup-overlay">
             <div className="delete-popup-content">
@@ -8,7 +8,7 @@ const DeleteAsset = ({ closeModal, asset, deleteAsset }) => {
                 </div>
 
                 <div className="delete-file-group">
-                    <div className="delete-file-text">{"Are you sure you want to delete this asset?"}</div>
+                    <div className="delete-file-text">{permanent ? "Are you sure you want to permanently delete this asset?" : "Are you sure you want to delete this asset?"}</div>
                     <div>{asset.assetNr}</div>
                 </div>
 

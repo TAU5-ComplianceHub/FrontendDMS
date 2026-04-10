@@ -44,22 +44,13 @@ const DDSAdminPage = () => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/home')} title="Home" />
-                        <p className="logo-text-um">Admin Page</p>
-                    </div>
-
-                    <div className="button-container-create">
-                        <button className="but-um">
-                            <div className="button-content">
-                                <FontAwesomeIcon icon={faDownload} className="button-logo-custom" />
-                                <span className="button-text">Templates</span>
-                            </div>
-                        </button>
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
+                        <p className="logo-text-um">Document Development</p>
                     </div>
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/ddsAdmin2.svg`} alt="Logo" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"DDS Admin"}</p>
+                        <p className="logo-text-dm-fi">{"Manage DDS"}</p>
                     </div>
                 </div>
             )}
@@ -85,6 +76,14 @@ const DDSAdminPage = () => {
                 </div>
 
                 <div className="scrollable-box-fi-home">
+                    <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/allDDSDrafts")}>
+                        <>
+                            <div className="icon-dept">
+                                <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} className={"icon-dept"} />
+                            </div>
+                            <h3 className="document-title-fi-home">Migrate DDS Drafts</h3>
+                        </>
+                    </div>
                 </div>
             </div>
             <ToastContainer />

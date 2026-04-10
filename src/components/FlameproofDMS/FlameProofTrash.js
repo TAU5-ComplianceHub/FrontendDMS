@@ -337,102 +337,107 @@ const FlameProofTrash = () => {
           <TopBarFPC canIn={canIn} access={access} openSort={openSortModal} />
         </div>
 
-        <div className="table-container-file">
-          <table>
-            <thead>
-              <tr className={'trashed'}>
-                <th className="flame-trash-num-filter col" style={{ fontSize: "14px" }}>Nr</th>
-                <th className="flame-trash-site-filter col" style={{ fontSize: "14px" }}>Site</th>
-                <th className="flame-trash-type-filter col" style={{ fontSize: "14px" }}>Asset Type</th>
-                <th className="flame-trash-ass-nr-filter col">Asset Nr</th>
-                <th className="flame-trash-area-filter col">Area</th>
-                <th className="flame-trash-owner-filter col">Asset Owner</th>
-                <th className="flame-trash-cert-filter col">Certificate Nr</th>
-                <th className="flame-trash-comp-filter col">Component</th>
-                <th className={`flame-trash-head-filter`}>Department Head</th>
-                <th className={`flame-trash-status-filter col`}>Status</th>
-                <th className="flame-trash-date-filter col">Issue Date</th>
-                <th className="flame-trash-act-filter col" style={{ fontSize: "14px" }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingTable && (
-                <tr>
-                  <td colSpan={
-                    12
-                  } style={{ textAlign: "center", padding: 20 }}>
-                    <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading removed certificates.
-                  </td>
+        <div className="table-flameproof-card">
+          <div className="flameproof-table-header-label-wrapper">
+            <label className="risk-control-label">Version History</label>
+          </div>
+          <div className="table-container-file">
+            <table>
+              <thead>
+                <tr className={'trashed'}>
+                  <th className="flame-trash-num-filter col" style={{ fontSize: "14px" }}>Nr</th>
+                  <th className="flame-trash-site-filter col" style={{ fontSize: "14px" }}>Site</th>
+                  <th className="flame-trash-type-filter col" style={{ fontSize: "14px" }}>Asset Type</th>
+                  <th className="flame-trash-ass-nr-filter col">Asset Nr</th>
+                  <th className="flame-trash-area-filter col">Area</th>
+                  <th className="flame-trash-owner-filter col">Asset Owner</th>
+                  <th className="flame-trash-cert-filter col">Certificate Nr</th>
+                  <th className="flame-trash-comp-filter col">Component</th>
+                  <th className={`flame-trash-head-filter`}>Department Head</th>
+                  <th className={`flame-trash-status-filter col`}>Status</th>
+                  <th className="flame-trash-date-filter col">Issue Date</th>
+                  <th className="flame-trash-act-filter col" style={{ fontSize: "14px" }}>Action</th>
                 </tr>
-              )}
-
-              {!isLoadingTable && showNoAssets && (
-                <tr>
-                  <td colSpan={
-                    12
-                  } style={{ textAlign: "center", padding: 20 }}>
-                    No Removed Certificates Found.
-                  </td>
-                </tr>
-              )}
-
-              {filteredFiles.map((file, index) => (
-                <tr key={index} style={{ fontSize: "14px", cursor: "pointer" }} className={`tr-trash file-info-row-height`} onClick={() => setHoveredFileId(hoveredFileId === file._id ? null : file._id)}>
-                  <td className="col">{index + 1}</td>
-                  <td
-                    style={{ textAlign: "center" }}
-                    className="col"
-                  >
-                    {(file.asset.site.site)}
-                  </td>
-                  <td
-
-                    style={{ textAlign: "center" }}
-                    className="col"
-                  >
-                    {(file.asset.assetType)}
-                  </td>
-                  <td
-                    className="col" style={{ textAlign: "center", position: "relative" }}
-                  >
-                    {file.asset.assetNr}
-                  </td>
-                  <td
-                    style={{ textAlign: "center" }}
-                    className="col"
-                  >
-                    {(file.asset.operationalArea)}
-                  </td>
-                  <td className="col">{file.asset.assetOwner}</td>
-                  <td className="col">{file.certNr}</td>
-                  <td className="col">{formatStatus(file.component)}</td>
-                  <td className="col">{file.asset.departmentHead}</td>
-                  <td className={`col ${getComplianceColor(file.status)}`}>{formatStatus(file.status)}</td>
-                  <td className={`col`}>{formatDate(file.issueDate)}</td>
-                  {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
-                    <td className={"col-act trashed"}>
-                      <button
-                        className={"delete-button-fi col-but trashed-color"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openModal(file._id, file.fileName);
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faTrash} title="Delete Document" />
-                      </button>
-
-                      <button
-                        className={"delete-button-fi col-but-res trashed-color"}
-                        onClick={() => restoreFile(file._id)}
-                      >
-                        <FontAwesomeIcon icon={faRotate} title="Restore Document" />
-                      </button>
+              </thead>
+              <tbody>
+                {isLoadingTable && (
+                  <tr>
+                    <td colSpan={
+                      12
+                    } style={{ textAlign: "center", padding: 20 }}>
+                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading removed certificates.
                     </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </tr>
+                )}
+
+                {!isLoadingTable && showNoAssets && (
+                  <tr>
+                    <td colSpan={
+                      12
+                    } style={{ textAlign: "center", padding: 20 }}>
+                      No Removed Certificates Found.
+                    </td>
+                  </tr>
+                )}
+
+                {filteredFiles.map((file, index) => (
+                  <tr key={index} style={{ fontSize: "14px", cursor: "pointer" }} className={`tr-trash file-info-row-height`} onClick={() => setHoveredFileId(hoveredFileId === file._id ? null : file._id)}>
+                    <td className="col">{index + 1}</td>
+                    <td
+                      style={{ textAlign: "center" }}
+                      className="col"
+                    >
+                      {(file.asset.site.site)}
+                    </td>
+                    <td
+
+                      style={{ textAlign: "center" }}
+                      className="col"
+                    >
+                      {(file.asset.assetType)}
+                    </td>
+                    <td
+                      className="col" style={{ textAlign: "center", position: "relative" }}
+                    >
+                      {file.asset.assetNr}
+                    </td>
+                    <td
+                      style={{ textAlign: "center" }}
+                      className="col"
+                    >
+                      {(file.asset.operationalArea)}
+                    </td>
+                    <td className="col">{file.asset.assetOwner}</td>
+                    <td className="col">{file.certNr}</td>
+                    <td className="col">{formatStatus(file.component)}</td>
+                    <td className="col">{file.asset.departmentHead}</td>
+                    <td className={`col ${getComplianceColor(file.status)}`}>{formatStatus(file.status)}</td>
+                    <td className={`col`}>{formatDate(file.issueDate)}</td>
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+                      <td className={"col-act trashed"}>
+                        <button
+                          className={"delete-button-fi col-but trashed-color"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openModal(file._id, file.fileName);
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faTrash} title="Delete Document" />
+                        </button>
+
+                        <button
+                          className={"delete-button-fi col-but-res trashed-color"}
+                          onClick={() => restoreFile(file._id)}
+                        >
+                          <FontAwesomeIcon icon={faRotate} title="Restore Document" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

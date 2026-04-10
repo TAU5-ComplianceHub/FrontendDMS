@@ -18,6 +18,43 @@ function ForgotPassword() {
     const [deadlineMs, setDeadlineMs] = useState(null); // absolute end time
     const [nowMs, setNowMs] = useState(Date.now());
     const navigate = useNavigate();
+    const [newPasswordInvalid, setNewPasswordInvalid] = useState(false);
+    const [confirmPasswordInvalid, setConfirmPasswordInvalid] = useState(false);
+
+    const getPasswordErrors = (password) => {
+        const errors = [];
+
+        if (password.length < 8) {
+            errors.push("Less than 8 characters");
+        }
+
+        if (!/[A-Z]/.test(password)) {
+            errors.push("No capital letters");
+        }
+
+        if (!/[0-9]/.test(password)) {
+            errors.push("No number");
+        }
+
+        if (!/[!?@]/.test(password)) {
+            errors.push("No special characters (! ? @)");
+        }
+
+        return errors;
+    };
+
+    const showPasswordValidationToast = (errors) => {
+        toast.dismiss();
+        toast.clearWaitingQueue();
+        toast.error(
+            `Password is invalid:\n${errors.join("\n")}`,
+            {
+                closeButton: false,
+                autoClose: 2500,
+                style: { textAlign: "left", whiteSpace: "pre-line" }
+            }
+        );
+    };
 
     useEffect(() => {
         if (step !== 2 || !deadlineMs) return;
@@ -109,20 +146,21 @@ function ForgotPassword() {
             }
         } else if (step === 3) {
             // Step 3: New Password and Confirm Password
-            if (newPassword.length < 8 || confirmPassword.length < 8) {
-                toast.dismiss();
-                toast.clearWaitingQueue();
-                toast.error('Password must be at least 8 characters.', {
-                    closeButton: false,
-                    autoClose: 800,
-                    style: {
-                        textAlign: 'center',
-                    },
-                });
+            setNewPasswordInvalid(false);
+            setConfirmPasswordInvalid(false);
+
+            const passwordErrors = getPasswordErrors(newPassword.trim());
+
+            if (passwordErrors.length > 0) {
+                setNewPasswordInvalid(true);
+                setConfirmPasswordInvalid(true);
+                showPasswordValidationToast(passwordErrors);
                 return;
             }
 
             if (newPassword !== confirmPassword) {
+                setNewPasswordInvalid(true);
+                setConfirmPasswordInvalid(true);
                 toast.dismiss();
                 toast.clearWaitingQueue();
                 toast.error('Passwords do not match.', {
@@ -241,7 +279,11 @@ function ForgotPassword() {
                                     <input
                                         type="password"
                                         value={newPassword}
-                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        onChange={(e) => {
+                                            setNewPassword(e.target.value);
+                                            setNewPasswordInvalid(false);
+                                        }}
+                                        className={newPasswordInvalid ? "password-invalid" : ""}
                                         required
                                     />
                                 </div>
@@ -252,7 +294,11 @@ function ForgotPassword() {
                                     <input
                                         type="password"
                                         value={confirmPassword}
-                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        onChange={(e) => {
+                                            setConfirmPassword(e.target.value);
+                                            setConfirmPasswordInvalid(false);
+                                        }}
+                                        className={confirmPasswordInvalid ? "password-invalid" : ""}
                                         required
                                     />
                                 </div>

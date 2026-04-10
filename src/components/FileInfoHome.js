@@ -6,10 +6,11 @@ import "./FileInfoHome.css";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import UploadPopup from "./FileInfo/UploadPopup";
-import { faX, faArrowLeft, faSearch, faFileCirclePlus, faCaretLeft, faCaretRight, faGripVertical, faBars } from '@fortawesome/free-solid-svg-icons';
+import { faX, faArrowLeft, faSearch, faFileCirclePlus, faCaretLeft, faCaretRight, faGripVertical, faBars, faArrowRight, faUser } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "./Notifications/TopBar";
 import ChangePassword from "./UserManagement/ChangePassword";
 import { getCurrentUser, can, isAdmin, canIn } from "../utils/auth";
+import MigrateOwnership from "./FileInfo/MigrateOwnership";
 
 const FileInfoHome = () => {
     const [error, setError] = useState(null);
@@ -25,6 +26,7 @@ const FileInfoHome = () => {
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [showDelayedLoading, setShowDelayedLoading] = useState(false);
+    const [migrate, setMigrate] = useState(false);
 
     useEffect(() => {
         let timer;
@@ -47,6 +49,14 @@ const FileInfoHome = () => {
 
     const closeUpload = () => {
         setUpload(!upload);
+    };
+
+    const openMigrate = () => {
+        setMigrate(true);
+    };
+
+    const closeMigrate = () => {
+        setMigrate(!migrate);
     };
 
     useEffect(() => {
@@ -126,7 +136,7 @@ const FileInfoHome = () => {
                         <p className="logo-text-um">Document Management</p>
                     </div>
 
-                    {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
+                    {false && canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
                         <div className="filter-dm-fi-2">
                             <div className="button-container-dm-fi">
                                 <button className="but-dm-fi" onClick={openUpload}>
@@ -167,6 +177,35 @@ const FileInfoHome = () => {
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
+                    {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
+                        <div className="burger-menu-icon-um">
+                            <FontAwesomeIcon icon={faFileCirclePlus} title="Upload Single Document" onClick={openUpload} />
+                        </div>
+                    )}
+
+                    {false && (<div className="burger-menu-icon-um">
+                        <span
+                            className="fa-layers fa-fw user-migrate-icon"
+                            onClick={openMigrate}
+                            title="Batch Migrate Documents"
+                        >
+                            <FontAwesomeIcon icon={faUser} transform="left-7 shrink-3" />
+                            <FontAwesomeIcon icon={faUser} transform="right-7 shrink-3" />
+
+                            {/* White outline */}
+                            <FontAwesomeIcon
+                                icon={faArrowRight}
+                                transform="shrink-7 down-1"
+                                style={{ color: "white" }}
+                            />
+
+                            {/* Arrow */}
+                            <FontAwesomeIcon
+                                icon={faArrowRight}
+                                transform="shrink-8 down-1"
+                            />
+                        </span>
+                    </div>)}
                     <div className="um-input-container">
                         <input
                             className="search-input-um"
@@ -213,6 +252,7 @@ const FileInfoHome = () => {
                 </div>
             </div>
             {reset && <ChangePassword onClose={() => setReset(false)} />}
+            {migrate && (<MigrateOwnership onClose={closeMigrate} />)}
             <ToastContainer />
         </div>
     );

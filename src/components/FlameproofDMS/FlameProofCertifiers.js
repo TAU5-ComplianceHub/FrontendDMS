@@ -649,6 +649,18 @@ const FlameProofCertifiers = () => {
             </div>
           </div>
           {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+            <div className="filter-dm-fi-2" >
+              <div className="button-container-dm-fi">
+                <button className="but-dm-fi" onClick={() => setIsTrashView(true)}>
+                  <div className="button-content">
+                    <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                    <span className="button-text">Deleted Certification Bodies</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+          {false && !isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
             <div className="filter-dm-fi-2">
               <div className="button-container-dm-fi">
                 <button className="but-dm-fi" onClick={openUpload}>
@@ -678,8 +690,20 @@ const FlameProofCertifiers = () => {
       <div className="main-box-file-info">
         <div className="top-section-um">
           <div className="burger-menu-icon-um">
-            <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
+            <FontAwesomeIcon onClick={() => {
+              if (isTrashView) { setIsTrashView(false) } else {
+                navigate(-1)
+              }
+            }
+            } icon={faArrowLeft} title="Back" />
           </div>
+          {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+            <>
+              <div className="burger-menu-icon-um">
+                <FontAwesomeIcon icon={faFileCirclePlus} title="Add Certification Body" onClick={openUpload} />
+              </div>
+            </>
+          )}
 
           <div className="um-input-container">
             <input
@@ -703,7 +727,7 @@ const FlameProofCertifiers = () => {
 
           {isTrashView && (
             <>
-              <div className={`info-box-fih trashed`}>{`Deleted Certificates: ${filteredFiles.length}`}</div>
+              <div className={`info-box-fih trashed`}>{`Deleted Certification Bodies: ${filteredFiles.length}`}</div>
             </>
           )}
 

@@ -99,33 +99,38 @@ const UserActivity = () => {
                     {/* Container for right-aligned icons */}
                     <TopBar />
                 </div>
-                <div className="table-container-user-activity-log">
-                    <table className="user-activity-log-table">
-                        <thead className="user-activity-log-head">
-                            <tr>
-                                <th className="user-activity-log-th">Nr</th>
-                                <th className="user-activity-log-th">Action</th>
-                                <th className="user-activity-log-th">Date</th>
-                                <th className="user-activity-log-th">Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activity.length > 0 ? (
-                                activity.map((act, index) => (
-                                    <tr key={act._id} className={`file-info-row-height user-activity-log-tr`}>
-                                        <td className="user-activity-log-nr">{index + 1}</td>
-                                        <td className="user-activity-log-ver" style={{ textAlign: "left" }}>{act.action}</td>
-                                        <td className="user-activity-log-fn">{formatDate(act.timestamp)}</td>
-                                        <td className="user-activity-log-stat">{formatTime(act.timestamp)}</td>
-                                    </tr>
-                                ))
-                            ) : (
+                <div className="table-flameproof-card">
+                    <div className="flameproof-table-header-label-wrapper">
+                        <label className="risk-control-label">User Activity Log</label>
+                    </div>
+                    <div className="table-container-user-activity-log">
+                        <table className="user-activity-log-table">
+                            <thead className="user-activity-log-head">
                                 <tr>
-                                    <td colSpan="3">No Activity Log Present</td>
+                                    <th className="user-activity-log-th">Nr</th>
+                                    <th className="user-activity-log-th">Action</th>
+                                    <th className="user-activity-log-th">Date</th>
+                                    <th className="user-activity-log-th">Time</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {activity.length > 0 ? (
+                                    activity.map((act, index) => (
+                                        <tr key={act._id} className={`file-info-row-height user-activity-log-tr`}>
+                                            <td className="user-activity-log-nr">{index + 1}</td>
+                                            <td className="user-activity-log-ver" style={{ textAlign: "left" }}>{act.action}</td>
+                                            <td className="user-activity-log-fn">{formatDate(act.timestamp)}</td>
+                                            <td className="user-activity-log-stat">{formatTime(act.timestamp)}</td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No Activity Log Present</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div >

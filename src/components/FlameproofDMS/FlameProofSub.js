@@ -224,18 +224,65 @@ const FlameProofSub = () => {
 
   const fetchFiles = async () => {
     setIsLoadingTable(true);
-    const route = isTrashView ? `/api/flameproof/trash/load` : `/api/flameproof/certificates/by-asset/${assetId}`;
+
+    // Clear existing files immediately when swapping views
+    setFiles([]);
+    setShowNoAssets(false);
+
+    const route = isTrashView
+      ? `/api/flameproof/trash/load`
+      : `/api/flameproof/certificates/by-asset/${assetId}`;
+
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {});
       if (!response.ok) throw new Error('Failed to fetch files');
+
       const data = await response.json();
-      const uniqueOpAreas = [...new Set(data.certificates.map(file => file.asset.operationalArea))].sort();
-      const uniqueStatus = [...new Set(data.certificates.map(file => file.status))].sort();
-      const uniqueTypes = [...new Set(data.certificates.map(file => file.asset.assetType))].sort();
-      setAreas(uniqueOpAreas); setStatus(uniqueStatus); setTypes(uniqueTypes);
-      setFiles(data.certificates);
-    } catch (error) { setError(error.message); }
-    finally { setIsLoadingTable(false); }
+
+      let certificates = Array.isArray(data.certificates)
+        ? data.certificates
+        : [];
+
+      // Only show applicable deleted certificates
+      if (isTrashView) {
+        certificates = certificates.filter(file => {
+          const fileAssetId =
+            file?.asset?._id ||
+            file?.assetId;
+
+          return String(fileAssetId) === String(assetId);
+        });
+      }
+
+      const uniqueOpAreas = [...new Set(
+        certificates
+          .map(file => file?.asset?.operationalArea)
+          .filter(Boolean)
+      )].sort();
+
+      const uniqueStatus = [...new Set(
+        certificates
+          .map(file => file?.status)
+          .filter(Boolean)
+      )].sort();
+
+      const uniqueTypes = [...new Set(
+        certificates
+          .map(file => file?.asset?.assetType)
+          .filter(Boolean)
+      )].sort();
+
+      setAreas(uniqueOpAreas);
+      setStatus(uniqueStatus);
+      setTypes(uniqueTypes);
+      setFiles(certificates);
+
+    } catch (error) {
+      setError(error.message);
+      setFiles([]);
+    } finally {
+      setIsLoadingTable(false);
+    }
   };
 
   const clearSearch = () => setSearchQuery("");
@@ -558,12 +605,12 @@ const FlameProofSub = () => {
           {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
             <div className="filter-dm-fi-2" >
               <div className="button-container-dm-fi">
-                <button className="but-dm-fi" onClick={openUpload}>
+                {false && (<button className="but-dm-fi" onClick={openUpload}>
                   <div className="button-content">
                     <FontAwesomeIcon icon={faFileCirclePlus} className="button-logo-custom" />
                     <span className="button-text">Upload Single Certificate</span>
                   </div>
-                </button>
+                </button>)}
 
                 <button className="but-dm-fi" onClick={() => setIsTrashView(true)}>
                   <div className="button-content">
@@ -587,12 +634,19 @@ const FlameProofSub = () => {
         <div className="top-section-um">
           <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={() => { if (isTrashView) { setIsTrashView(false) } else { navigate(-1) } }} icon={faArrowLeft} title="Back" />
           </div>
+          {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+            <>
+              <div className="burger-menu-icon-um">
+                <FontAwesomeIcon icon={faFileCirclePlus} title="Upload Single Certificate" onClick={openUpload} />
+              </div>
+            </>
+          )}
           <div className="um-input-container">
             <input className="search-input-um" type="text" placeholder="Search Certificate Number" autoComplete="off" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             {searchQuery !== "" && (<i><FontAwesomeIcon icon={faX} onClick={clearSearch} className="icon-um-search" title="Clear Search" /></i>)}
             {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
           </div>
-          <div className={isTrashView ? `info-box-fih trashed` : `info-box-fih`}>Valid Certificates: {validCount}</div>
+          <div className={isTrashView ? `info-box-fih trashed` : `info-box-fih`}>{isTrashView ? `Deleted Certificates: ${validCount}` : `Valid Certificates: ${validCount}`}</div>
           {!isTrashView && (<div className={`info-box-fih ${invalidCount === 0 ? `no-invalid` : `trashed`}`} style={invalidCount === 0 ? { backgroundColor: '#002060' } : undefined}>Outstanding Certificates: {invalidCount}</div>)}
           <div className="spacer"></div>
           <TopBarFPC isOpen={isMenuOpen} setIsOpen={setIsMenuOpen} toggleTrashView={toggleTrashView} isTrashView={isTrashView} canIn={canIn} access={access} openSort={openSortModal} />

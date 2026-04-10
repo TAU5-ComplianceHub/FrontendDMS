@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from 'jwt-decode';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrash, faCircleLeft, faPenToSquare, faRotateLeft, faArrowsRotate, faMagnifyingGlass, faCircleXmark, faX, faFilter, faSortUp, faSortDown, faArrowLeft, faCaretRight, faCaretLeft, faSearch, faEdit, faFile } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrash, faCircleLeft, faPenToSquare, faRotateLeft, faArrowsRotate, faMagnifyingGlass, faCircleXmark, faX, faFilter, faSortUp, faSortDown, faArrowLeft, faCaretRight, faCaretLeft, faSearch, faEdit, faFile, faArrowRight, faUser } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "../../Notifications/TopBar";
 import TrainingDraftOwnership from "./TrainingDraftOwnership";
 import { toast, ToastContainer } from "react-toastify";
@@ -335,17 +335,41 @@ const TrainingDrafts = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
-                    <div className="button-container-create">
+                    {false && (<div className="button-container-create">
                         <button className="but-um" onClick={() => openBatch()}>
                             <div className="button-content">
                                 <FontAwesomeIcon icon={faFile} className="button-logo-custom" />
                                 <span className="button-text">Batch Migrate</span>
                             </div>
                         </button>
-                    </div>
-                    <div className="sidebar-logo-dm-fi">
-                        <img src={`${process.env.PUBLIC_URL}/migrate2.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"All TMS Drafts"}</p>
+                    </div>)}
+
+                    <div className="button-container-rm-home">
+                        <button className="but-um" onClick={openBatch}>
+                            <div className="button-content">
+                                <span
+                                    className="fa-layers fa-fw user-migrate-icon"
+                                    style={{ left: "-15px" }}
+                                >
+                                    <FontAwesomeIcon icon={faUser} transform="left-7 shrink-3" />
+                                    <FontAwesomeIcon icon={faUser} transform="right-7 shrink-3" />
+
+                                    {/* White outline */}
+                                    <FontAwesomeIcon
+                                        icon={faArrowRight}
+                                        transform="shrink-7 down-1"
+                                        style={{ color: "white" }}
+                                    />
+
+                                    {/* Arrow */}
+                                    <FontAwesomeIcon
+                                        icon={faArrowRight}
+                                        transform="shrink-8 down-1"
+                                    />
+                                </span>
+                                <span className="button-text">Batch Migrate Drafts</span>
+                            </div>
+                        </button>
                     </div>
                 </div>
             )}
@@ -382,7 +406,7 @@ const TrainingDrafts = () => {
                 </div>
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
-                        <label className="risk-control-label">{"All TMS Drafts"}</label>
+                        <label className="risk-control-label">{"Migrate TMS Drafts"}</label>
                         <FontAwesomeIcon
                             icon={faFilter}
                             className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)

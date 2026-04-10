@@ -68,7 +68,7 @@ const AdminPage = () => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src="CH_Logo.svg" alt="Logo" className="logo-img-um" onClick={() => navigate('/home')} title="Home" />
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Admin Page</p>
                     </div>
                 </div>
@@ -126,7 +126,7 @@ const AdminPage = () => {
                         </>
                     )}
 
-                    {canIn(access, "DMS", "systemAdmin") && <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/migrationPage")} >
+                    {true && canIn(access, "DMS", "systemAdmin") && <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/migrationPage")} >
                         <>
                             <div className="icon-dept">
                                 <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} className={"icon-dept"} />

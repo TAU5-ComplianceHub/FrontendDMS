@@ -49,22 +49,13 @@ const TMSAdminPage = () => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/home')} title="Home" />
-                        <p className="logo-text-um">Admin Page</p>
-                    </div>
-
-                    <div className="button-container-create">
-                        <button className="but-um">
-                            <div className="button-content">
-                                <FontAwesomeIcon icon={faDownload} className="button-logo-custom" />
-                                <span className="button-text">Templates</span>
-                            </div>
-                        </button>
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
+                        <p className="logo-text-um">Training Management</p>
                     </div>
 
                     <div className="sidebar-logo-dm-fi">
-                        <img src={`${process.env.PUBLIC_URL}/tmsAdmin2.svg`} alt="Logo" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"TMS Admin"}</p>
+                        <img src={`${process.env.PUBLIC_URL}/migrate2.svg`} alt="Logo" className="icon-risk-rm" />
+                        <p className="logo-text-dm-fi">{"Manage TMS"}</p>
                     </div>
                 </div>
             )}
@@ -90,20 +81,12 @@ const TMSAdminPage = () => {
                 </div>
 
                 <div className="scrollable-box-fi-home">
-                    <div className={`document-card-fi-home`}>
+                    <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/allTMSDrafts")}>
                         <>
                             <div className="icon-dept">
-                                <img src={`${process.env.PUBLIC_URL}/tmsAdminImport.svg`} className={"icon-dept"} />
+                                <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} className={"icon-dept"} />
                             </div>
-                            <h3 className="document-title-fi-home">Import Site Training Information</h3>
-                        </>
-                    </div>
-                    <div className={`document-card-fi-home`} onClick={() => navigate('/tmsAdmin/manageTraining')}>
-                        <>
-                            <div className="icon-dept">
-                                <img src={`${process.env.PUBLIC_URL}/tmsTrainingAdmin.svg`} className={"icon-dept"} />
-                            </div>
-                            <h3 className="document-title-fi-home">Manage Training</h3>
+                            <h3 className="document-title-fi-home">Migrate TMS Drafts</h3>
                         </>
                     </div>
                 </div>

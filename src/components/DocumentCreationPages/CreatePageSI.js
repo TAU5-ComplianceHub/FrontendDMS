@@ -27,6 +27,7 @@ import DatePicker from "react-multi-date-picker";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
 import DuplicateName from "../Popups/DuplicateName";
 import PurposeBackgroundComponent from "../CreatePage/PurposeBackgroundComponent";
+import SaveConfirmationPopup from "../CreatePage/SaveConfirmationPopup";
 
 const CreatePageSI = () => {
   const navigate = useNavigate();
@@ -68,6 +69,7 @@ const CreatePageSI = () => {
   const [approval, setApproval] = useState(false);
   const [inApproval, setInApproval] = useState(false);
   const [isDuplicateName, setIsDuplicateName] = useState(false);
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
 
   const openApproval = () => {
     setApproval(true);
@@ -1598,6 +1600,78 @@ const CreatePageSI = () => {
     )
   });
 
+  const releaseLock = async () => {
+    if (!loadedIDRef.current) return true;
+
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/draft/special/releaseLock/${loadedIDRef.current}`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem("token")}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to release lock");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error releasing lock:", error);
+      return false;
+    }
+  };
+
+  const handleBack = () => {
+    if (loadedIDRef.current) {
+      setIsSaveConfirmOpen(true);
+      return;
+    }
+
+    navigate(-1);
+  };
+
+  const handleBackSaveConfirm = async () => {
+    const result = await updateData(userIDsRef.current);
+
+    if (!result) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.error("Failed to save draft.", {
+        closeButton: true,
+        autoClose: 1200,
+        style: { textAlign: "center" }
+      });
+      return;
+    }
+
+    if (result) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.success("Draft has been saved.", {
+        closeButton: true,
+        autoClose: 1200,
+        style: { textAlign: "center" }
+      });
+    }
+
+    await releaseLock();
+
+    setTimeout(() => {
+      setIsSaveConfirmOpen(false);
+      navigate(-1);
+    }, 1500);
+  };
+
+  const handleBackDiscard = async () => {
+    await releaseLock();
+    setIsSaveConfirmOpen(false);
+    navigate(-1);
+  };
+
   return (
     <div className="file-create-container">
       {isSidebarVisible && (
@@ -1611,7 +1685,7 @@ const CreatePageSI = () => {
           </div>
 
           <div className="button-container-create">
-            <button className="but-um" onClick={() => setLoadPopupOpen(true)}>
+            <button className="but-um" onClick={() => navigate('/FrontendDMS/documentDevelopmentDrafts/specialInstruction')}>
               <div className="button-content">
                 <span className="button-logo-custom" aria-hidden="true">
                   <FontAwesomeIcon icon={faFolderOpenSolid} className="icon-base-draft" />
@@ -1665,7 +1739,7 @@ const CreatePageSI = () => {
         <div className="top-section-create-page">
           <div className="icons-container-create-page">
             <div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
+              <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
             </div>
 
             {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
@@ -2009,6 +2083,14 @@ const CreatePageSI = () => {
       {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
       <ToastContainer />
+      {isSaveConfirmOpen && (
+        <SaveConfirmationPopup
+          setIsSaveModalOpen={setIsSaveConfirmOpen}
+          onConfirmSave={handleBackSaveConfirm}
+          onDiscard={handleBackDiscard}
+          draftTitle={formData.title}
+        />
+      )}
     </div>
   );
 };

@@ -1,10 +1,16 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrash, faPlusCircle, faDownload } from "@fortawesome/free-solid-svg-icons";
+import { faTrash, faPlusCircle, faDownload, faChevronDown, faChevronUp } from "@fortawesome/free-solid-svg-icons";
 
-const CourseResourceTable = ({ formData, setFormData, readOnly = false }) => {
+const CourseResourceTable = ({ collapsible = false, formData, setFormData, readOnly = false }) => {
     const fileInputRef = useRef(null);
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
 
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
     const removeFileExtension = (fileName = "") =>
         fileName.replace(/\.[^/.]+$/, "");
 
@@ -100,76 +106,91 @@ const CourseResourceTable = ({ formData, setFormData, readOnly = false }) => {
             <div className="input-box-ref">
                 <h3 className="font-fam-labels">Course Resources</h3>
 
-                {resources.length > 0 && (
-                    <table className="vcr-table table-borders">
-                        <thead className="cp-table-header">
-                            <tr>
-                                <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
-                                <th className="refColCen refRef" style={{ width: "90%" }}>Name</th>
-                                {!readOnly && (
-                                    <th className="refColCen refBut" style={{ width: "5%" }}>Action</th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {resources.map((row, index) => (
-                                <tr key={index}>
-                                    <td className="refCent">{row.nr}</td>
-                                    <td className="refCent" style={{ textAlign: "left" }}>
-                                        {removeFileExtension(row.name)}
-                                    </td>
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                                    {!readOnly && (
-                                        <td className="procCent action-cell-auth-risk">
-                                            <button
-                                                className="ibra-add-row-button"
-                                                onClick={() => handleDownload(row)}
-                                                title="Download Resource"
-                                            >
-                                                <FontAwesomeIcon icon={faDownload} />
-                                            </button>
+                {/* Display selected abbreviations in a table */}
+                {(!isCollapsed) && (
+                    <>
+                        {resources.length > 0 && (
+                            <table className="vcr-table table-borders">
+                                <thead className="cp-table-header">
+                                    <tr>
+                                        <th className="refColCen refNum" style={{ width: "5%" }}>Nr</th>
+                                        <th className="refColCen refRef" style={{ width: "90%" }}>Name</th>
+                                        {!readOnly && (
+                                            <th className="refColCen refBut" style={{ width: "5%" }}>Action</th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {resources.map((row, index) => (
+                                        <tr key={index}>
+                                            <td className="refCent">{row.nr}</td>
+                                            <td className="refCent" style={{ textAlign: "left" }}>
+                                                {removeFileExtension(row.name)}
+                                            </td>
 
-                                            <button
-                                                className="remove-row-button"
-                                                onClick={() => handleRemoveFile(index)}
-                                                title="Remove Resource"
-                                            >
-                                                <FontAwesomeIcon icon={faTrash} />
-                                            </button>
-                                        </td>
-                                    )}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
+                                            {!readOnly && (
+                                                <td className="procCent action-cell-auth-risk">
+                                                    <button
+                                                        className="ibra-add-row-button"
+                                                        onClick={() => handleDownload(row)}
+                                                        title="Download Resource"
+                                                    >
+                                                        <FontAwesomeIcon icon={faDownload} />
+                                                    </button>
 
-                <input
-                    type="file"
-                    multiple
-                    ref={fileInputRef}
-                    style={{ display: "none" }}
-                    onChange={handleFileChange}
-                />
+                                                    <button
+                                                        className="remove-row-button"
+                                                        onClick={() => handleRemoveFile(index)}
+                                                        title="Remove Resource"
+                                                    >
+                                                        <FontAwesomeIcon icon={faTrash} />
+                                                    </button>
+                                                </td>
+                                            )}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
 
-                {/* ✅ Toggle button same way as AbbreviationTable */}
-                {!readOnly && resources.length === 0 && (
-                    <button
-                        className="add-row-button-ref"
-                        onClick={() => fileInputRef.current.click()}
-                    >
-                        Select
-                    </button>
-                )}
+                        <input
+                            type="file"
+                            multiple
+                            ref={fileInputRef}
+                            style={{ display: "none" }}
+                            onChange={handleFileChange}
+                        />
 
-                {!readOnly && resources.length > 0 && (
-                    <button
-                        className="add-row-button-ref-plus"   // create or reuse your plus-style class
-                        onClick={() => fileInputRef.current.click()}
-                        title="Add Resource"
-                    >
-                        <FontAwesomeIcon icon={faPlusCircle} />
-                    </button>
+                        {/* ✅ Toggle button same way as AbbreviationTable */}
+                        {!readOnly && resources.length === 0 && (
+                            <button
+                                className="add-row-button-ref"
+                                onClick={() => fileInputRef.current.click()}
+                            >
+                                Select
+                            </button>
+                        )}
+
+                        {!readOnly && resources.length > 0 && (
+                            <button
+                                className="add-row-button-ref-plus"   // create or reuse your plus-style class
+                                onClick={() => fileInputRef.current.click()}
+                                title="Add Resource"
+                            >
+                                <FontAwesomeIcon icon={faPlusCircle} />
+                            </button>
+                        )}
+                    </>
                 )}
             </div>
         </div>

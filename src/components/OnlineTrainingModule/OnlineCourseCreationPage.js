@@ -1278,13 +1278,13 @@ const OnlineCourseCreationPage = () => {
                 </div>
               </div>
 
-              <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-              <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-              <InductionContent formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <InductionOutline formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <OnlineTrainingSummary formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <OTCourseAssessment formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <CourseResourceTable formData={formData} setFormData={setFormData} readOnly={readOnly} userID={userID} />
+              <AbbreviationTable collapsible={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+              <TermTable collapsible={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+              <InductionContent collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <InductionOutline collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <OnlineTrainingSummary collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <OTCourseAssessment collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <CourseResourceTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} userID={userID} />
             </>
           )}
         </div>

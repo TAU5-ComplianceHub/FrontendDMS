@@ -43,6 +43,7 @@ import ApproveApprovalProcessPopup from "../Popups/ApproveApprovalProcessPopup";
 import DuplicateName from "../Popups/DuplicateName";
 import RiskAimComponent from "../RiskRelated/RiskAimComponent";
 import RiskScopeIE from "../RiskRelated/RiskScopeIE";
+import SaveConfirmationPopup from "../CreatePage/SaveConfirmationPopup";
 
 const RiskManagementPageBLRA = () => {
     const navigate = useNavigate();
@@ -102,6 +103,7 @@ const RiskManagementPageBLRA = () => {
     const [loadingScopeIRewriteIndex, setLoadingScopeIRewriteIndex] = useState(null);
     const [loadingScopeERewriteIndex, setLoadingScopeERewriteIndex] = useState(null);
     const [loadingAimIndex, setLoadingAimIndex] = useState(null);
+    const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
 
     const openApproval = () => {
         setApproval(true);
@@ -3658,6 +3660,78 @@ const RiskManagementPageBLRA = () => {
         });
     };
 
+    const releaseLock = async () => {
+        if (!loadedIDRef.current) return true;
+
+        try {
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/riskDraft/blra/releaseLock/${loadedIDRef.current}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed to release lock");
+            }
+
+            return true;
+        } catch (error) {
+            console.error("Error releasing lock:", error);
+            return false;
+        }
+    };
+
+    const handleBack = () => {
+        if (loadedIDRef.current) {
+            setIsSaveConfirmOpen(true);
+            return;
+        }
+
+        navigate(-1);
+    };
+
+    const handleBackSaveConfirm = async () => {
+        const result = await updateData(userIDsRef.current);
+
+        if (!result) {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.error("Failed to save draft.", {
+                closeButton: true,
+                autoClose: 1200,
+                style: { textAlign: "center" }
+            });
+            return;
+        }
+
+        if (result) {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.success("Draft has been saved.", {
+                closeButton: true,
+                autoClose: 1200,
+                style: { textAlign: "center" }
+            });
+        }
+
+        await releaseLock();
+
+        setTimeout(() => {
+            setIsSaveConfirmOpen(false);
+            navigate(-1);
+        }, 1500);
+    };
+
+    const handleBackDiscard = async () => {
+        await releaseLock();
+        setIsSaveConfirmOpen(false);
+        navigate(-1);
+    };
+
     return (
         <div className="risk-create-container">
             {isSidebarVisible && (
@@ -3671,7 +3745,7 @@ const RiskManagementPageBLRA = () => {
                     </div>
 
                     <div className="button-container-create">
-                        <button className="but-um" onClick={() => setLoadPopupOpen(true)}>
+                        <button className="but-um" onClick={() => navigate('/FrontendDMS/riskManagementDrafts/blra')}>
                             <div className="button-content">
                                 <span className="button-logo-custom" aria-hidden="true">
                                     <FontAwesomeIcon icon={faFolderOpenSolid} className="icon-base-draft" />
@@ -3729,7 +3803,7 @@ const RiskManagementPageBLRA = () => {
                 <div className="top-section-risk-create-page">
                     <div className="icons-container-risk-create-page">
                         <div className="burger-menu-icon-risk-create-page-1">
-                            <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
+                            <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
                         </div>
 
                         {!readOnly && (
@@ -4046,6 +4120,14 @@ const RiskManagementPageBLRA = () => {
             )}
             {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
             {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
+            {isSaveConfirmOpen && (
+                <SaveConfirmationPopup
+                    setIsSaveModalOpen={setIsSaveConfirmOpen}
+                    onConfirmSave={handleBackSaveConfirm}
+                    onDiscard={handleBackDiscard}
+                    draftTitle={formData.title}
+                />
+            )}
         </div>
     );
 };

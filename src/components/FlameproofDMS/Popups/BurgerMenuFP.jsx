@@ -6,7 +6,7 @@ const BurgerMenuFP = ({ isOpen, setIsOpen, toggleTrashView, isTrashView, canIn, 
     const handleLogout = () => {
         localStorage.removeItem("token");
         sessionStorage.removeItem("token");
-        navigate("/");
+        navigate("/FrontendDMS/");
     };
 
     return (

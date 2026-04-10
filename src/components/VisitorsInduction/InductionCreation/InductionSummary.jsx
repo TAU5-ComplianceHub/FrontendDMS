@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlusCircle, faMagicWandSparkles, faSpinner, faRotateLeft } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlusCircle, faMagicWandSparkles, faSpinner, faRotateLeft, faChevronDown, faChevronUp } from '@fortawesome/free-solid-svg-icons';
 
-const InductionSummary = ({ formData, setFormData, readOnly = false }) => {
+const InductionSummary = ({ collapsible = false, formData, setFormData, readOnly = false }) => {
     const [loadingSummary, setLoadingSummary] = useState(false);
     const [rewriteHistory, setRewriteHistory] = useState({
         summary: []
     });
+
+    const [collapsed, setCollapsed] = useState(true);
+    const isCollapsed = collapsible ? collapsed : false;
+
+    const toggleCollapse = () => {
+        const newState = !collapsed;
+        setCollapsed(newState);
+    };
 
     const pushAiRewriteHistory = (field) => {
         setRewriteHistory(prev => ({
@@ -56,42 +64,57 @@ const InductionSummary = ({ formData, setFormData, readOnly = false }) => {
             <div className={`input-box-ref`}>
                 <h3 className="font-fam-labels">Summary</h3>
 
-                <textarea
-                    style={{ fontSize: "14px" }}
-                    spellcheck="true"
-                    name="summary"
-                    className="aim-textarea font-fam expanding-textarea"
-                    rows="5"
-                    value={formData.summary}
-                    onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                    placeholder="Insert visitor induction summary."
-                    readOnly={readOnly}
-                />
+                {collapsible && (<button
+                    className="top-right-button-ibra"
+                    title={collapsed ? "Expand Section" : "Collapse Section"}
+                    onClick={toggleCollapse}
+                    style={{ color: "gray" }}
+                    type="button"
+                >
+                    <FontAwesomeIcon icon={collapsed ? faChevronDown : faChevronUp} />
+                </button>)}
 
-                {!readOnly && (
+                {/* Display selected abbreviations in a table */}
+                {(!isCollapsed) && (
                     <>
-                        {loadingSummary ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
-                            <FontAwesomeIcon
-                                icon={faMagicWandSparkles}
-                                className="aim-textarea-icon-ibra"
-                                title="AI Rewrite"
-                                style={{ fontSize: "15px" }}
-                                onClick={() => AiRewriteSummary()}
-                            />
-                        )}
-
-                        <FontAwesomeIcon
-                            icon={faRotateLeft}
-                            className="aim-textarea-icon-ibra-undo"
-                            title="Undo AI Rewrite"
-                            onClick={() => undoAiRewrite('summary')}
-                            style={{
-                                marginLeft: '8px',
-                                opacity: rewriteHistory.summary.length ? 1 : 0.3,
-                                cursor: rewriteHistory.summary.length ? 'pointer' : 'not-allowed',
-                                fontSize: "15px"
-                            }}
+                        <textarea
+                            style={{ fontSize: "14px" }}
+                            spellcheck="true"
+                            name="summary"
+                            className="aim-textarea font-fam expanding-textarea"
+                            rows="5"
+                            value={formData.summary}
+                            onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+                            placeholder="Insert visitor induction summary."
+                            readOnly={readOnly}
                         />
+
+                        {!readOnly && (
+                            <>
+                                {loadingSummary ? (<FontAwesomeIcon icon={faSpinner} className="aim-textarea-icon-ibra spin-animation" />) : (
+                                    <FontAwesomeIcon
+                                        icon={faMagicWandSparkles}
+                                        className="aim-textarea-icon-ibra"
+                                        title="AI Rewrite"
+                                        style={{ fontSize: "15px" }}
+                                        onClick={() => AiRewriteSummary()}
+                                    />
+                                )}
+
+                                <FontAwesomeIcon
+                                    icon={faRotateLeft}
+                                    className="aim-textarea-icon-ibra-undo"
+                                    title="Undo AI Rewrite"
+                                    onClick={() => undoAiRewrite('summary')}
+                                    style={{
+                                        marginLeft: '8px',
+                                        opacity: rewriteHistory.summary.length ? 1 : 0.3,
+                                        cursor: rewriteHistory.summary.length ? 'pointer' : 'not-allowed',
+                                        fontSize: "15px"
+                                    }}
+                                />
+                            </>
+                        )}
                     </>
                 )}
             </div>

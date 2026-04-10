@@ -321,6 +321,15 @@ const OnlineTrainingDrafts = () => {
                         <p className="logo-text-um">Training Management</p>
                     </div>
 
+                    <div className="button-container-create">
+                        <button className="but-um" onClick={() => navigate(`/FrontendDMS/deletedTMSDrafts/${`course`}`)}>
+                            <div className="button-content">
+                                <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                                <span className="button-text">Deleted Drafts</span>
+                            </div>
+                        </button>
+                    </div>
+
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/tmsSavedDrafts2.svg`} alt="Control Attributes" className="icon-risk-rm" />
                         <p className="logo-text-dm-fi">{"Saved Drafts"}</p>
@@ -414,7 +423,7 @@ const OnlineTrainingDrafts = () => {
                                     {!isLoading && drafts.length > 0 && filteredDrafts.length > 0 && (
                                         displayDrafts
                                             .map((item, index) => (
-                                                <tr key={item._id} style={{ backgroundColor: item.approvalState ? "#7EAC89" : "transparent", fontSize: "15px" }} className="load-draft-td" onClick={() => navigate(`/FrontendDMS/onlineCreateCourse/${item._id}`)}>
+                                                <tr key={item._id} style={{ backgroundColor: item.approvalState ? "#7EAC89" : "transparent", fontSize: "15px" }} className="load-draft-td" onClick={() => navigate(`/onlineCreateCourse/${item._id}`)}>
                                                     <td style={{ color: item.approvalState ? "white" : "black", fontFamily: "Arial", textAlign: "center" }}>
                                                         {index + 1}
                                                     </td>

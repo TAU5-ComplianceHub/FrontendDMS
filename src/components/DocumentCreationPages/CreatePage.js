@@ -37,6 +37,8 @@ import ImportJRAPopup from "../CreatePage/ImportJRAPopup";
 import { v4 as uuidv4 } from "uuid";
 import AimBulletComponent from "../CreatePage/AimBulletComponent";
 import ScopeBulletComponent from "../CreatePage/ScopeBulletComponent";
+import SaveConfirmationPopup from "../CreatePage/SaveConfirmationPopup";
+import HazardsControlsTable from "../CreatePage/HazardsControlsTable";
 
 const CreatePage = () => {
   const navigate = useNavigate();
@@ -61,6 +63,7 @@ const CreatePage = () => {
   const [userIDs, setUserIDs] = useState([]);
   const autoSaveInterval = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [errors, setErrors] = useState([]);
   const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
   const loadedIDRef = useRef('');
@@ -82,6 +85,7 @@ const CreatePage = () => {
   const [isImportJRAPopupOpen, setIsImportJRAPopupOpen] = useState(false);
   const [loadingAimIndex, setLoadingAimIndex] = useState(null);
   const [isJRA, setIsJRA] = useState(false);
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
 
   const openImportJRA = () => setIsImportJRAPopupOpen(true);
   const closeImportJRA = () => setIsImportJRAPopupOpen(false);
@@ -111,6 +115,124 @@ const CreatePage = () => {
       });
 
     return result;
+  };
+
+  const buildHazardsControlsFromJRA = (jraFormData = {}) => {
+    const jraRows = Array.isArray(jraFormData.jra) ? jraFormData.jra : [];
+
+    const cleaned = [];
+
+    jraRows.forEach((row) => {
+      const bodies = Array.isArray(row?.jraBody) ? row.jraBody : [];
+
+      bodies.forEach((body) => {
+        const hazards = Array.isArray(body?.hazards) ? body.hazards : [];
+        const unwantedEvents = Array.isArray(body?.UE) ? body.UE : [];
+        const controls = Array.isArray(body?.sub) ? body.sub : [];
+
+        const validHazards = hazards
+          .map((h) => cleanLine(h?.hazard))
+          .filter((hazard) => hazard && hazard.toLowerCase() !== "work execution");
+
+        const validUEs = unwantedEvents
+          .map((u) => cleanLine(u?.ue))
+          .filter(Boolean);
+
+        const validControls = controls
+          .map((c) => cleanLine(c?.task))
+          .filter(Boolean);
+
+        validHazards.forEach((hazard) => {
+          validUEs.forEach((unwantedEvent) => {
+            validControls.forEach((control) => {
+              cleaned.push({
+                hazard,
+                unwantedEvent,
+                control
+              });
+            });
+
+            // keep the UE even if no control came through
+            if (validControls.length === 0) {
+              cleaned.push({
+                hazard,
+                unwantedEvent,
+                control: ""
+              });
+            }
+          });
+        });
+      });
+    });
+
+    const seen = new Set();
+
+    return cleaned
+      .filter((row) => row.hazard && row.unwantedEvent)
+      .filter((row) => {
+        const key = `${row.hazard.toLowerCase()}|||${row.unwantedEvent.toLowerCase()}|||${row.control.toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => {
+        const hazardCompare = a.hazard.localeCompare(b.hazard, undefined, {
+          sensitivity: "base",
+          numeric: true
+        });
+        if (hazardCompare !== 0) return hazardCompare;
+
+        const ueCompare = a.unwantedEvent.localeCompare(b.unwantedEvent, undefined, {
+          sensitivity: "base",
+          numeric: true
+        });
+        if (ueCompare !== 0) return ueCompare;
+
+        return a.control.localeCompare(b.control, undefined, {
+          sensitivity: "base",
+          numeric: true
+        });
+      });
+  };
+
+  const addHazardControlRow = () => {
+    setFormData((prev) => ({
+      ...prev,
+      hazardsControls: [
+        ...(Array.isArray(prev.hazardsControls) ? prev.hazardsControls : []),
+        { hazard: "", unwantedEvent: "", control: "" }
+      ]
+    }));
+  };
+
+  const removeHazardControlRow = (indexToRemove) => {
+    setFormData((prev) => ({
+      ...prev,
+      hazardsControls: (Array.isArray(prev.hazardsControls) ? prev.hazardsControls : []).filter(
+        (_, index) => index !== indexToRemove
+      )
+    }));
+  };
+
+  const updateHazardControlRow = (index, field, value) => {
+    setFormData((prev) => {
+      const updatedRows = [...(Array.isArray(prev.hazardsControls) ? prev.hazardsControls : [])];
+      updatedRows[index] = {
+        ...updatedRows[index],
+        [field]: value
+      };
+      return {
+        ...prev,
+        hazardsControls: updatedRows
+      };
+    });
+  };
+
+  const updateHazardControlRows = (newRows) => {
+    setFormData((prev) => ({
+      ...prev,
+      hazardsControls: newRows
+    }));
   };
 
   const buildProcedureRowsFromJRA = (jraFormData = {}) => {
@@ -250,6 +372,7 @@ const CreatePage = () => {
       MobileMachine: Array.isArray(importedFormData.MobileMachine) ? importedFormData.MobileMachine : [],
       Materials: Array.isArray(importedFormData.Materials) ? importedFormData.Materials : [],
 
+      hazardsControls: buildHazardsControlsFromJRA(importedFormData),
       jra: filterJRAWithoutWorkExecution(importedFormData),
 
       isJRA: true
@@ -734,6 +857,27 @@ const CreatePage = () => {
     }
   };
 
+  const handleClickPDF = () => {
+    const newErrors = validateForm();
+
+    if (Object.keys(newErrors).length > 0) {
+      if (titleSet)
+        setGeneratePopup(true);
+
+      if (!titleSet) {
+        toast.error("Please fill in a title", {
+          closeButton: true,
+          autoClose: 800, // 1.5 seconds
+          style: {
+            textAlign: 'center'
+          }
+        });
+      }
+    } else {
+      handleGeneratePDFReport();  // Call your function when the form is valid
+    }
+  };
+
   const cancelGenerate = () => {
     const newErrors = validateForm();
     setErrors(newErrors);
@@ -873,6 +1017,7 @@ const CreatePage = () => {
     }],
     abbrRows: [],
     termRows: [],
+    hazardsControls: [],
     chapters: [],
     references: [],
     PPEItems: [],
@@ -1492,6 +1637,63 @@ const CreatePage = () => {
     } catch (error) {
       console.error("Error generating document:", error);
       setLoading(false);
+    }
+  };
+
+  const handleGeneratePDFReport = async () => {
+    let flowchartImages = [];
+
+    // 1. Fetch Images from Flowchart
+    if (procedureTableRef.current) {
+      console.log("Generating flowchart images for backend...");
+      try {
+        flowchartImages = await procedureTableRef.current.getFlowchartImages();
+        console.log(`Captured ${flowchartImages.length} images.`);
+      } catch (err) {
+        console.error("Error capturing flowchart images:", err);
+        // Optional: Decide if you want to stop or continue without images
+      }
+    }
+
+    const dataToStore = {
+      usedAbbrCodes,
+      usedTermCodes,
+      usedPPEOptions,
+      usedHandTools,
+      usedEquipment,
+      usedMobileMachine,
+      usedMaterials,
+      formData: getSanitizedFormData(formData),
+      userID,
+      azureFN: "",
+      flowchartImages
+    };
+
+    if (generatePopup) {
+      setGeneratePopup(false);
+    }
+    const documentName = capitalizeWords(formData.title) + ' ' + formData.documentType;
+    setPdfLoading(true);
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/docCreate/generate-doc-pdf`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("token")}`
+        },
+        body: JSON.stringify(dataToStore),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate document");
+
+      const blob = await response.blob();
+      saveAs(blob, `${documentName}.pdf`);
+      setPdfLoading(false);
+      openDraftNote();
+    } catch (error) {
+      console.error("Error generating document:", error);
+      setPdfLoading(false);
     }
   };
 
@@ -2302,6 +2504,78 @@ const CreatePage = () => {
     }
   };
 
+  const releaseLock = async () => {
+    if (!loadedIDRef.current) return true;
+
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/draft/releaseLock/${loadedIDRef.current}`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem("token")}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to release lock");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error releasing lock:", error);
+      return false;
+    }
+  };
+
+  const handleBack = () => {
+    if (loadedIDRef.current) {
+      setIsSaveConfirmOpen(true);
+      return;
+    }
+
+    navigate(-1);
+  };
+
+  const handleBackSaveConfirm = async () => {
+    const result = await updateData(userIDsRef.current);
+
+    if (!result) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.error("Failed to save draft.", {
+        closeButton: true,
+        autoClose: 1200,
+        style: { textAlign: "center" }
+      });
+      return;
+    }
+
+    if (result) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.success("Draft has been saved.", {
+        closeButton: true,
+        autoClose: 1200,
+        style: { textAlign: "center" }
+      });
+    }
+
+    await releaseLock();
+
+    setTimeout(() => {
+      setIsSaveConfirmOpen(false);
+      navigate(-1);
+    }, 1500);
+  };
+
+  const handleBackDiscard = async () => {
+    await releaseLock();
+    setIsSaveConfirmOpen(false);
+    navigate(-1);
+  };
+
   return (
     <div className="file-create-container">
       {isSidebarVisible && (
@@ -2315,7 +2589,7 @@ const CreatePage = () => {
           </div>
 
           <div className="button-container-create">
-            <button className="but-um" onClick={() => setLoadPopupOpen(true)}>
+            <button className="but-um" onClick={() => navigate('/FrontendDMS/documentDevelopmentDrafts/procedure')}>
               <div className="button-content">
                 <span className="button-logo-custom" aria-hidden="true">
                   <FontAwesomeIcon icon={faFolderOpenSolid} className="icon-base-draft" />
@@ -2369,7 +2643,7 @@ const CreatePage = () => {
         <div className="top-section-create-page">
           <div className="icons-container-create-page">
             <div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faArrowLeft} onClick={() => navigate(-1)} title="Back" />
+              <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
             </div>
 
             {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
@@ -2544,6 +2818,17 @@ const CreatePage = () => {
           <MaterialsTable collapsible={true} formData={formData} setFormData={setFormData} usedMaterials={usedMaterials} setUsedMaterials={setUsedMaterials} userID={userID} readOnly={readOnly} />
           <AbbreviationTable collapsible={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
           <TermTable collapsible={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+          <HazardsControlsTable
+            collapsible={true}
+            defaultCollapsed={true}
+            hazardControlRows={formData.hazardsControls || []}
+            addHazardControlRow={addHazardControlRow}
+            removeHazardControlRow={removeHazardControlRow}
+            updateHazardControlRow={updateHazardControlRow}
+            updateHazardControlRows={updateHazardControlRows}
+            readOnly={readOnly}
+            required={false}
+          />
           <ProcedureTable collapsible={true} ref={procedureTableRef} formData={formData} setFormData={setFormData} procedureRows={formData.procedureRows} addRow={addProRow} removeRow={removeProRow} updateRow={updateRow} error={errors.procedureRows} title={formData.title} documentType={formData.documentType} updateProcRows={updateProcedureRows} setErrors={setErrors} readOnly={readOnly} />
           <ChapterTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
           <ReferenceTable collapsible={true} referenceRows={formData.references} addRefRow={addRefRow} removeRefRow={removeRefRow} updateRefRow={updateRefRow} updateRefRows={updateRefRows} setErrors={setErrors} error={errors.reference} required={true} readOnly={readOnly} />
@@ -2608,6 +2893,14 @@ const CreatePage = () => {
           loadData={importJRAData}
           userID={userID}
           type={type}
+        />
+      )}
+      {isSaveConfirmOpen && (
+        <SaveConfirmationPopup
+          setIsSaveModalOpen={setIsSaveConfirmOpen}
+          onConfirmSave={handleBackSaveConfirm}
+          onDiscard={handleBackDiscard}
+          draftTitle={formData.title}
         />
       )}
     </div>

@@ -33,6 +33,7 @@ import {
     faUniversity, faChevronLeft, faChevronRight
 } from "@fortawesome/free-solid-svg-icons";
 import TopBar from "./Notifications/TopBar";
+import DeletePopupDM from "./UserManagement/DeletePopupDM";
 
 const DepartmentView = () => {
     const { deptId } = useParams();
@@ -49,6 +50,7 @@ const DepartmentView = () => {
     const [department, setDepartment] = useState([]);
     const [addMembersPopup, setAddMembersPopup] = useState(false);
     const navigate = useNavigate();
+    const [isDeleteDepartmentModalOpen, setIsDeleteDepartmentModalOpen] = useState(false);
 
     const clearSearch = () => {
         setSearchQuery("");
@@ -100,6 +102,34 @@ const DepartmentView = () => {
     };
 
     const formatRole = (role) => roleMapping[role] || role;
+
+    const deleteDepartment = async () => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/department/delete/${deptId}`, {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to delete department');
+            }
+
+            toast.success("Department deleted successfully.", {
+                autoClose: 800,
+                closeButton: false,
+                style: {
+                    textAlign: 'center'
+                }
+            });
+
+            setIsDeleteDepartmentModalOpen(false);
+            navigate(-1);
+        } catch (error) {
+            setError(error.message);
+        }
+    };
 
     const fetchUsers = async () => {
         try {
@@ -222,7 +252,7 @@ const DepartmentView = () => {
                         <p className="logo-text-dept">Manage Departments</p>
                     </div>
 
-                    <div className="filter-fih">
+                    {false && (<div className="filter-fih">
                         <div className="button-container-dept">
                             <button className="but-um" onClick={showPopup}>
                                 <div className="button-content">
@@ -231,7 +261,7 @@ const DepartmentView = () => {
                                 </div>
                             </button>
                         </div>
-                    </div>
+                    </div>)}
 
                     <div className="sidebar-logo-dm-fi">
                         <FontAwesomeIcon icon={iconMap[department.icon]} alt="Logo" className="logo-img-dept-view" />
@@ -252,6 +282,10 @@ const DepartmentView = () => {
                 <div className="top-section-um">
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
+                    </div>
+
+                    <div className="burger-menu-icon-um">
+                        <FontAwesomeIcon icon={faCirclePlus} title="Add member" onClick={showPopup} />
                     </div>
 
                     <div className="um-input-container">
@@ -281,6 +315,7 @@ const DepartmentView = () => {
                     setIsDeleteModalOpen={setIsDeleteModalOpen}
                     formatRole={formatRole}
                     loggedInUserId={loggedInUserId}
+                    onDeleteDepartment={() => setIsDeleteDepartmentModalOpen(true)}
                 />
             </div>
             {addMembersPopup && (
@@ -298,6 +333,13 @@ const DepartmentView = () => {
                     form={"none"}
                     setIsDeleteModalOpen={setIsDeleteModalOpen}
                     userToDelete={userToDelete}
+                />
+            )}
+            {isDeleteDepartmentModalOpen && (
+                <DeletePopupDM
+                    setIsDeleteModalOpen={setIsDeleteDepartmentModalOpen}
+                    handleDelete={deleteDepartment}
+                    departmentName={department.department}
                 />
             )}
             <ToastContainer />

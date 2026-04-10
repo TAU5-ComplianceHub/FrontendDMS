@@ -180,7 +180,7 @@ const FlameProofAllSites = () => {
                         <p className="logo-text-um">EPA Management</p>
                     </div>
 
-                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+                    {false && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
                         <>
                             <div className="button-container-create">
                                 <button className="but-um" onClick={openUpload}>
@@ -203,7 +203,7 @@ const FlameProofAllSites = () => {
                             <div className="risk-button-container-create-bot">
                                 <button className="but-um" onClick={() => navigate("/FrontendDMS/fcmsAdmin")}>
                                     <div className="button-content">
-                                        <FontAwesomeIcon icon={faBars} src={`${process.env.PUBLIC_URL}/dmsAdmin.svg`} size="xs" className={"button-logo-custom"} />
+                                        <FontAwesomeIcon icon={faBars} src={"/dmsAdmin.svg"} size="xs" className={"button-logo-custom"} />
                                         <span className="button-text">Manage FMM</span>
                                     </div>
                                 </button>
@@ -227,6 +227,17 @@ const FlameProofAllSites = () => {
                     <div className="burger-menu-icon-um">
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+                        <>
+                            <div className="burger-menu-icon-um">
+                                <FontAwesomeIcon icon={faFileCirclePlus} title="Upload Single Certificate" onClick={openUpload} />
+                            </div>
+
+                            <div className="burger-menu-icon-um">
+                                <FontAwesomeIcon icon={faTableList} title="Register Single Asset" onClick={openRegister} />
+                            </div>
+                        </>
+                    )}
                     <div className="um-input-container">
                         <input
                             className="search-input-um"

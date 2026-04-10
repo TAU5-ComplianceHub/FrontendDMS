@@ -350,10 +350,9 @@ const DeletedDocumentsProcedure = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Document Development</p>
                     </div>
-
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/proceduresDMSInverted.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"Deleted Procedure Documents"}</p>
+                        <p className="logo-text-dm-fi">{"Deleted Procedures"}</p>
                     </div>
                 </div>
             )}
@@ -389,7 +388,7 @@ const DeletedDocumentsProcedure = () => {
                 </div>
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
-                        <label className="risk-control-label">{"Deleted Procedure Documents"}</label>
+                        <label className="risk-control-label">{"Deleted Procedures"}</label>
                         <FontAwesomeIcon
                             icon={faFilter}
                             className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)

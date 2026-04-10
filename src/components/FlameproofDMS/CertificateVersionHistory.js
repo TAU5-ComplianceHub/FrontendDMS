@@ -184,41 +184,46 @@ const CertificateVersionHistory = () => {
 
                     <TopBar />
                 </div>
-                <div className="table-containerversion-history-file-info">
-                    <table className="version-history-file-info-table">
-                        <thead className="version-history-file-info-head">
-                            <tr>
-                                <th className="certificate-version-history-file-nr">Nr</th>
-                                <th className="certificate-version-history-file-name">Name</th>
-                                <th className="certificate-version-history-file-version">Version</th>
-                                <th className="certificate-version-history-file-certAuth">Certification Body</th>
-                                <th className="certificate-version-history-file-certNr">Certificate Number</th>
-                                <th className="certificate-version-history-file-issueDate">Issue Date</th>
-                                <th className="certificate-version-history-file-dateReplaced">Date Replaced</th>
-                                <th className="certificate-version-history-file-actions">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activity.length > 0 ? (
-                                activity.map((act, index) => (
-                                    <tr key={act._id} className={`file-info-row-height version-history-file-info-tr`}>
-                                        <td className="certificate-version-history-file-nr">{index + 1}</td>
-                                        <td className="certificate-version-history-file-name">{removeFileExtension(act.fileName)}</td>
-                                        <td className="certificate-version-history-file-version">{act.version}</td>
-                                        <td className="certificate-version-history-file-certAuth">{act.certAuth}</td>
-                                        <td className="certificate-version-history-file-certNr">{act.certNr}</td>
-                                        <td className="certificate-version-history-file-issueDate">{formatDate(act.issueDate)}</td>
-                                        <td className="certificate-version-history-file-dateReplaced">{formatDate(act.dateReplaced)}</td>
-                                        <td className="certificate-version-history-file-actions"><button className="verion-download-button" onClick={() => openDownloadModal(act._id, act.fileName)}><FontAwesomeIcon icon={faDownload} title="Download" /></button></td>
-                                    </tr>
-                                ))
-                            ) : (
+                <div className="table-flameproof-card">
+                    <div className="flameproof-table-header-label-wrapper">
+                        <label className="risk-control-label">Version History</label>
+                    </div>
+                    <div className="table-containerversion-history-file-info">
+                        <table className="version-history-file-info-table">
+                            <thead className="version-history-file-info-head">
                                 <tr>
-                                    <td colSpan="3">No Version History</td>
+                                    <th className="certificate-version-history-file-nr">Nr</th>
+                                    <th className="certificate-version-history-file-name">Name</th>
+                                    <th className="certificate-version-history-file-version">Version</th>
+                                    <th className="certificate-version-history-file-certAuth">Certification Body</th>
+                                    <th className="certificate-version-history-file-certNr">Certificate Number</th>
+                                    <th className="certificate-version-history-file-issueDate">Issue Date</th>
+                                    <th className="certificate-version-history-file-dateReplaced">Date Replaced</th>
+                                    <th className="certificate-version-history-file-actions">Action</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {activity.length > 0 ? (
+                                    activity.map((act, index) => (
+                                        <tr key={act._id} className={`file-info-row-height version-history-file-info-tr`}>
+                                            <td className="certificate-version-history-file-nr">{index + 1}</td>
+                                            <td className="certificate-version-history-file-name">{removeFileExtension(act.fileName)}</td>
+                                            <td className="certificate-version-history-file-version">{act.version}</td>
+                                            <td className="certificate-version-history-file-certAuth">{act.certAuth}</td>
+                                            <td className="certificate-version-history-file-certNr">{act.certNr}</td>
+                                            <td className="certificate-version-history-file-issueDate">{formatDate(act.issueDate)}</td>
+                                            <td className="certificate-version-history-file-dateReplaced">{formatDate(act.dateReplaced)}</td>
+                                            <td className="certificate-version-history-file-actions"><button className="verion-download-button" onClick={() => openDownloadModal(act._id, act.fileName)}><FontAwesomeIcon icon={faDownload} title="Download" /></button></td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No Version History</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

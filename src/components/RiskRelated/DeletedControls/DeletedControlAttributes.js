@@ -1159,7 +1159,7 @@ const DeletedControlAttributes = () => {
                                     {visibleIdentificationColumns.length > 0 && (
                                         <th
                                             colSpan={visibleIdentificationColumns.length}
-                                            className="risk-control-attributes-split"
+                                            className="risk-control-attributes-split trashed"
                                         >
                                             Control Identification
                                         </th>
@@ -1167,7 +1167,7 @@ const DeletedControlAttributes = () => {
                                     {visibleCerColumns.length > 0 && (
                                         <th
                                             colSpan={visibleCerColumns.length}
-                                            className="risk-control-attributes-th"
+                                            className="risk-control-attributes-th trashed"
                                         >
                                             Control Effectiveness Rating (CER)
                                         </th>
@@ -1175,7 +1175,7 @@ const DeletedControlAttributes = () => {
 
                                     {showColumns.includes("updatedAt") && (
                                         <th
-                                            className="risk-control-attributes-category"
+                                            className="risk-control-attributes-category trashed"
                                             rowSpan={2}
                                             style={{
                                                 position: "relative",
@@ -1203,7 +1203,7 @@ const DeletedControlAttributes = () => {
 
                                     {showColumns.includes("deletedAt") && (
                                         <th
-                                            className="risk-control-attributes-category"
+                                            className="risk-control-attributes-category trashed"
                                             rowSpan={2}
                                             style={{
                                                 position: "relative",
@@ -1231,7 +1231,7 @@ const DeletedControlAttributes = () => {
 
                                     {showColumns.includes("deletingUser") && (
                                         <th
-                                            className="risk-control-attributes-category"
+                                            className="risk-control-attributes-category trashed"
                                             rowSpan={2}
                                             style={{
                                                 position: "relative",
@@ -1259,7 +1259,7 @@ const DeletedControlAttributes = () => {
 
                                     {showColumns.includes("action") && (
                                         <th
-                                            className="risk-control-attributes-action"
+                                            className="risk-control-attributes-action-del trashed"
                                             rowSpan={2}
                                             style={{
                                                 position: "relative",
@@ -1268,7 +1268,9 @@ const DeletedControlAttributes = () => {
                                                     : undefined,
                                                 minWidth: columnSizeLimits.action?.min,
                                                 maxWidth: columnSizeLimits.action?.max,
-                                                cursor: "default"
+                                                cursor: "default",
+                                                backgroundColor: "#CB6F6F",
+                                                color: "white",
                                             }}
                                         >
                                             <span>Action</span>

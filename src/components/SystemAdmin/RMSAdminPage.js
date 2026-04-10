@@ -50,22 +50,13 @@ const RMSAdminPage = () => {
                         <FontAwesomeIcon icon={faCaretLeft} />
                     </div>
                     <div className="sidebar-logo-um">
-                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/home')} title="Home" />
-                        <p className="logo-text-um">Admin Page</p>
-                    </div>
-
-                    <div className="button-container-create">
-                        <button className="but-um">
-                            <div className="button-content">
-                                <FontAwesomeIcon icon={faDownload} className="button-logo-custom" />
-                                <span className="button-text">Templates</span>
-                            </div>
-                        </button>
+                        <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
+                        <p className="logo-text-um">Risk Management</p>
                     </div>
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/rmsAdmin2.svg`} alt="Logo" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"RMS Admin"}</p>
+                        <p className="logo-text-dm-fi">{"Manage RMS"}</p>
                     </div>
                 </div>
             )}
@@ -91,6 +82,14 @@ const RMSAdminPage = () => {
                 </div>
 
                 <div className="scrollable-box-fi-home">
+                    <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/allRiskDrafts")}>
+                        <>
+                            <div className="icon-dept">
+                                <img src={`${process.env.PUBLIC_URL}/migrate1.svg`} className={"icon-dept"} />
+                            </div>
+                            <h3 className="document-title-fi-home">Migrate RMS Drafts</h3>
+                        </>
+                    </div>
                 </div>
             </div>
             <ToastContainer />

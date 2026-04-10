@@ -6,6 +6,7 @@ import BurgerMenuFI from "../FileInfo/BurgerMenuFI";
 import DownloadPopup from "../FileInfo/DownloadPopup";
 import { jwtDecode } from 'jwt-decode';
 import "./VersionHistory.css";
+import TopBar from "../Notifications/TopBar";
 
 const VersionHistory = () => {
     const [activity, setActivity] = useState([]); // State to hold the file data
@@ -157,44 +158,40 @@ const VersionHistory = () => {
                     {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
 
-                    {/* Container for right-aligned icons */}
-                    <div className="icons-container">
-                        <div className="burger-menu-icon-um">
-                            <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
-                        </div>
-                        <div className="burger-menu-icon-um">
-                            <FontAwesomeIcon icon={faCircleUser} onClick={() => setIsMenuOpen(!isMenuOpen)} title="Menu" />
-                        </div>
-                        {isMenuOpen && (<BurgerMenuFI isOpen={isMenuOpen} setIsOpen={setIsMenuOpen} />)}
-                    </div>
+                    <TopBar />
                 </div>
-                <div className="table-containerversion-history-file-info">
-                    <table className="version-history-file-info-table">
-                        <thead className="version-history-file-info-head">
-                            <tr>
-                                <th className="version-history-file-th">Nr</th>
-                                <th className="version-history-file-th">Name</th>
-                                <th className="version-history-file-th">Version</th>
-                                <th className="version-history-file-th">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {activity.length > 0 ? (
-                                activity.map((act, index) => (
-                                    <tr key={act._id} className={`file-info-row-height version-history-file-info-tr`}>
-                                        <td className="version-history-file-nr">{index + 1}</td>
-                                        <td className="version-history-file-fn">{removeFileExtension(act.fileName)}</td>
-                                        <td className="version-history-file-stat">{act.version}</td>
-                                        <td className="version-history-file-ver"><button className="verion-download-button" onClick={() => openDownloadModal(act._id, act.fileName)}><FontAwesomeIcon icon={faDownload} title="Download" /></button></td>
-                                    </tr>
-                                ))
-                            ) : (
+                <div className="table-flameproof-card">
+                    <div className="flameproof-table-header-label-wrapper">
+                        <label className="risk-control-label">Version History</label>
+                    </div>
+                    <div className="table-containerversion-history-file-info">
+                        <table className="version-history-file-info-table">
+                            <thead className="version-history-file-info-head">
                                 <tr>
-                                    <td colSpan="3">No Version History</td>
+                                    <th className="version-history-file-th">Nr</th>
+                                    <th className="version-history-file-th">Name</th>
+                                    <th className="version-history-file-th">Version</th>
+                                    <th className="version-history-file-th">Action</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {activity.length > 0 ? (
+                                    activity.map((act, index) => (
+                                        <tr key={act._id} className={`file-info-row-height version-history-file-info-tr`}>
+                                            <td className="version-history-file-nr">{index + 1}</td>
+                                            <td className="version-history-file-fn">{removeFileExtension(act.fileName)}</td>
+                                            <td className="version-history-file-stat">{act.version}</td>
+                                            <td className="version-history-file-ver"><button className="verion-download-button" onClick={() => openDownloadModal(act._id, act.fileName)}><FontAwesomeIcon icon={faDownload} title="Download" /></button></td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan="3">No Version History</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

@@ -240,7 +240,7 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                             </div>
                         </div>
 
-                        <div className="create-user-group">
+                        {false && (<div className="create-user-group">
                             <label className="create-user-label" htmlFor="edit-password">Password:</label>
                             <input
                                 type="password"
@@ -254,7 +254,7 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                                     })
                                 }
                             />
-                        </div>
+                        </div>)}
 
                         <div className="create-user-group">
                             <label className="create-user-label" htmlFor="department">Department</label>

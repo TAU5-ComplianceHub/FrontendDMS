@@ -212,7 +212,7 @@ const DeletedRiskDocumentsBLRA = () => {
 
                     <div className="sidebar-logo-dm-fi">
                         <img src={`${process.env.PUBLIC_URL}/blra2.svg`} alt="Control Attributes" className="icon-risk-rm" />
-                        <p className="logo-text-dm-fi">{"Deleted BLRA Documents"}</p>
+                        <p className="logo-text-dm-fi">{"Deleted BLRAs"}</p>
                     </div>
                 </div>
             )}
@@ -235,7 +235,7 @@ const DeletedRiskDocumentsBLRA = () => {
                 </div>
                 <div className="table-flameproof-card">
                     <div className="flameproof-table-header-label-wrapper">
-                        <label className="risk-control-label">{"Deleted BLRA Documents"}</label>
+                        <label className="risk-control-label">{"Deleted BLRAs"}</label>
                         <FontAwesomeIcon
                             icon={faFilter}
                             className={getFilterBtnClass()} // Calculated class (e.g., ibra4, ibra5, ibra6)

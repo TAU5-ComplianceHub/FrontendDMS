@@ -14,6 +14,7 @@ import axios from 'axios';
 import DatePicker from 'react-multi-date-picker';
 import { toast } from "react-toastify";
 import ControlSuggestionPopup from './ControlManagement/ControlSuggestionPopup';
+import ClosePopupConfirmation from './ClosePopupConfirmation';
 
 const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, existingControlNames = [], relevantControls }) => {
     const [initialControlName] = useState(data.control);
@@ -42,6 +43,76 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
     const [helpCER, setHelpCER] = useState(false);
     const [systemControlSet, setSystemControlSet] = useState(new Set());
     const [isSystemControlName, setIsSystemControlName] = useState(false);
+    const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
+    const initialSnapshotRef = useRef("");
+
+    const buildCEASnapshot = () =>
+        JSON.stringify({
+            controlName: controlName || "",
+            criticalControl: criticalControl || "",
+            controlType: controlType || "",
+            controlActivation: controlActivation || "",
+            hierarchy: hierarchy || "",
+            controlAim: controlAim || "",
+            quality: quality || "",
+            category: category || "",
+            notes: notes || "",
+            description: description || "",
+            performance: performance || "",
+            action: action || "",
+            responsible: responsible || "",
+            dueDate: dueDate || ""
+        });
+
+    const buildInitialCEASnapshot = (sourceData) =>
+        JSON.stringify({
+            controlName: sourceData?.control || "",
+            criticalControl: sourceData?.critical || "",
+            controlType: sourceData?.act || "",
+            controlActivation: sourceData?.activation || "",
+            hierarchy: sourceData?.hierarchy || "",
+            controlAim: sourceData?.cons || "",
+            quality: sourceData?.quality || "",
+            category: sourceData?.category || "",
+            notes: sourceData?.notes || "",
+            description: sourceData?.description || "",
+            performance: sourceData?.performance || "",
+            action: sourceData?.action || "",
+            responsible: sourceData?.responsible || "",
+            dueDate: sourceData?.dueDate || ""
+        });
+
+    const hasUnsavedChanges = () => {
+        if (readOnly) return false;
+        return buildCEASnapshot() !== initialSnapshotRef.current;
+    };
+
+    const handleAttemptClose = () => {
+        if (readOnly) {
+            onClose();
+            return;
+        }
+
+        if (hasUnsavedChanges()) {
+            setShowCloseConfirmation(true);
+            return;
+        }
+        onClose();
+    };
+
+    const handleDismissCloseConfirmation = () => {
+        setShowCloseConfirmation(false);
+    };
+
+    const handleCloseMainPopup = () => {
+        setShowCloseConfirmation(false);
+        onClose();
+    };
+
+    const handleSubmitAndCloseFromConfirmation = () => {
+        setShowCloseConfirmation(false);
+        handleSubmit();
+    };
 
     useEffect(() => {
         const fetchSystemControls = async () => {
@@ -354,6 +425,10 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
         }
     }, [data]);
 
+    useEffect(() => {
+        initialSnapshotRef.current = buildInitialCEASnapshot(data);
+    }, [data]);
+
     const norm = (s) =>
         (s ?? "")
             .toString()
@@ -491,7 +566,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                 <div className="ibra-popup-page-popup-right">
                     <div className="ibra-popup-page-popup-header-right">
                         <h2>Control Effectiveness Analysis (CEA)</h2>
-                        <button className="review-date-close" onClick={onClose} title="Close Popup">×</button>
+                        <button className="review-date-close" onClick={handleAttemptClose} title="Close Popup">×</button>
                     </div>
 
                     <div className="ibra-popup-page-form-group-main-container">
@@ -915,6 +990,13 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                 </ul>
             )}
 
+            {showCloseConfirmation && (
+                <ClosePopupConfirmation
+                    onClose={handleCloseMainPopup}
+                    onSubmit={handleSubmitAndCloseFromConfirmation}
+                    closePopup={handleDismissCloseConfirmation}
+                />
+            )}
             {helpCT && (<ControlType setClose={closeHelpCT} />)}
             {helpCA && (<ControlActivation setClose={closeHelpCA} />)}
             {helpHier && (<ControlHierarchy setClose={closeHelpHier} />)}

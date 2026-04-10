@@ -19,6 +19,16 @@
     /* Centers the button */
 }
 
+.user-transfer-icon {
+    display: inline-flex;
+    align-items: center;
+    font-size: 28px;
+}
+
+.transfer-arrow {
+    font-size: 16px;
+}
+
 .top-right-button-ar {
     position: absolute;
     top: 15px;

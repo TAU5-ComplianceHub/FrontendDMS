@@ -589,6 +589,16 @@
     font-size: 14px;
 }
 
+.risk-control-attributes-action-del {
+    width: 70px;
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    border-left: 1px solid white;
+    color: white !important;
+    font-size: 14px;
+}
+
 .risk-control-attributes-action-cell {
     text-align: center;
     padding: 6px 4px;

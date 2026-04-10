@@ -1320,12 +1320,12 @@ const InductionCreationPage = () => {
                 </div>
               </div>
 
-              <AbbreviationTable formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-              <TermTable formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
-              <InductionContent formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <InductionOutline formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <InductionSummary formData={formData} setFormData={setFormData} readOnly={readOnly} />
-              <InductionAssessment formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <AbbreviationTable collapsible={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+              <TermTable collapsible={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setErrors={setErrors} readOnly={readOnly} />
+              <InductionContent collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <InductionOutline collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <InductionSummary collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
+              <InductionAssessment collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
             </>
           )}
         </div>
