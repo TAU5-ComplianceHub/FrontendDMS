@@ -62,6 +62,7 @@ const PublishedOnlineTrainingPreviewPage = ({ draftID, closeModal }) => {
         bumpMediaTick();
     };
 
+    /*
     const fetchMediaById = (fid) => {
         if (!fid) return Promise.resolve();
         if (objectUrlCacheRef.current.has(fid)) {
@@ -91,6 +92,40 @@ const PublishedOnlineTrainingPreviewPage = ({ draftID, closeModal }) => {
             .finally(() => {
                 inFlightRef.current.delete(fid);
             });
+
+        inFlightRef.current.set(fid, p);
+        return p;
+    };
+    */
+
+    const fetchMediaById = (fid) => {
+        if (!fid) return Promise.resolve();
+        if (objectUrlCacheRef.current.has(fid)) {
+            setMediaStatus(fid, "ready");
+            return Promise.resolve();
+        }
+        const existing = inFlightRef.current.get(fid);
+        if (existing) return existing;
+
+        setMediaStatus(fid, "loading");
+
+        const url = `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/loadMediaOptimized/${encodeURIComponent(fid)}`;
+
+        const p = fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+            .then(async (res) => {
+                if (!res.ok) throw new Error(`media ${fid} ${res.status}`);
+                const data = await res.json();
+
+                // Store SAS URL directly instead of object URL
+                objectUrlCacheRef.current.set(fid, data.url);
+                mediaTypeCacheRef.current.set(fid, data.contentType || "");
+                setMediaStatus(fid, "ready");
+            })
+            .catch((e) => {
+                console.warn("Lazy media load failed:", fid, e?.message || e);
+                setMediaStatus(fid, "error");
+            })
+            .finally(() => inFlightRef.current.delete(fid));
 
         inFlightRef.current.set(fid, p);
         return p;
@@ -511,11 +546,20 @@ const PublishedOnlineTrainingPreviewPage = ({ draftID, closeModal }) => {
     const nextQLabel = isLastQ ? "Submit Assessment"
         : (hasNextQ ? `Question ${qIndex + 2}` : "");
 
+    const handlePreviewSubmit = () => {
+        console.log("Preview submit attempted. This is a no-op in preview mode.");
+        toast.dismiss();
+        toast.info("This is a preview. Submissions cannot be made.", {
+            autoClose: 2500
+        });
+    };
+
+
     // actions
     const goPrevQ = () => { if (hasPrevQ) setQIndex(i => i - 1); };
     const goNextQ = () => {
         if (isLastQ) {
-            //onSubmitClick();           // your existing submit flow
+            handlePreviewSubmit();          // your existing submit flow
         } else if (hasNextQ) {
             setQIndex(i => i + 1);
         }
@@ -1512,6 +1556,7 @@ const PublishedOnlineTrainingPreviewPage = ({ draftID, closeModal }) => {
                                                             className={`course-nav-button-submit`}
                                                             disabled={!(isLastQ || hasNextQ)}
                                                             title={isLastQ ? "Submit Assessment" : "Next"}
+                                                            onClick={handlePreviewSubmit}
                                                         >
                                                             {isSubmitting ? "Submitting…" : "Submit Assessment"}
                                                         </button>
@@ -1605,6 +1650,7 @@ const PublishedOnlineTrainingPreviewPage = ({ draftID, closeModal }) => {
                     </div>
                 </div>
             </div>
+            <ToastContainer />
         </div >
     );
 };

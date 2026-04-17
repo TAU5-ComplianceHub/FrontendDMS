@@ -34,18 +34,23 @@ const AddMembersDept = ({ deptID, popupVisible, closePopup }) => {
                     //'Authorization': `Bearer ${token}`
                 }
             });
+
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }
+
             const data = await response.json();
 
-            // Sort users by a specific property, e.g., 'name'
-            const sortedUsers = data.users.sort((a, b) => {
-                // Replace 'name' with the property you want to sort by
+            const filteredUsers = data.users.filter(
+                (user) => !user.department || user.department === ""
+            );
+
+            const sortedUsers = filteredUsers.sort((a, b) => {
                 return a.username.localeCompare(b.username);
             });
 
             setUsers(sortedUsers);
+
         } catch (error) {
             console.error("Error fetching depteviations:", error)
         }

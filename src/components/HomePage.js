@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGraduationCap, faClipboardList, faFileAlt, faFolderOpen, faFileSignature, faCertificate, faCircle, faCircleInfo, faGear, faBell, faCircleUser } from "@fortawesome/free-solid-svg-icons";
+import { faGraduationCap, faClipboardList, faFileAlt, faFolderOpen, faFileSignature, faCertificate, faCircle, faCircleInfo, faGear, faBell, faCircleUser, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import "./HomePage.css";
 import { toast, ToastContainer } from "react-toastify";
 import { jwtDecode } from "jwt-decode";
@@ -20,6 +20,8 @@ const HomePage = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [count, setCount] = useState("");
   const [profilePic, setProfilePic] = useState(null);
+  const [startIndex, setStartIndex] = useState(0);
+  const [animDir, setAnimDir] = useState(null);
 
   useEffect(() => {
     // Load from sessionStorage on mount
@@ -52,11 +54,11 @@ const HomePage = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     sessionStorage.removeItem("token");
-    navigate("/FrontendDMS/");
+    navigate("/");
   };
 
   const handleNavigateAdmin = () => {
-    navigate("/FrontendDMS/admin");
+    navigate("/admin");
   };
 
   const RAW_MENU = [
@@ -75,9 +77,9 @@ const HomePage = () => {
     {
       title: "EPA Management", src: "EPAM.png", icon: faGraduationCap, path: "/FrontendDMS/EPACSHome", category: "EPACS"
     },
-    // {
-    //   title: "Compliance Management", src: "CM.png", icon: faFileAlt, path: "/constructionCM", category: "CMS"
-    // },
+    {
+      title: "Compliance Tracking", src: "CM.png", icon: faFileAlt, path: "/FrontendDMS/ctsHome", category: "CMS"
+    },
   ];
 
   const menuItems = useMemo(() => {
@@ -90,8 +92,22 @@ const HomePage = () => {
       .map(({ category, adminOnly, ...rest }) => rest);
   }, [access]);
 
+  const visibleItems = useMemo(() => {
+    const padded = [...menuItems];
+
+    // Always ensure 5 items minimum
+    while (padded.length < 5) {
+      padded.push({ placeholder: true });
+    }
+
+    return padded.slice(startIndex, startIndex + 5);
+  }, [menuItems, startIndex]);
+
+  const canGoLeft = startIndex > 0;
+  const canGoRight = startIndex + 5 < menuItems.length;
+
   return (
-    <div className="homepage-container">
+    <div className="homepage-container" style={{ userSelect: "none" }}>
       <div className="nl-floating-pill">
         <div className="burger-menu-icon-um notifications-bell-wrapper">
           <FontAwesomeIcon icon={faBell} onClick={() => setShowNotifications(!showNotifications)} title="Notifications" />
@@ -121,14 +137,63 @@ const HomePage = () => {
         <h1>ComplianceHub{"\u2122"}</h1>
       </header>
       <div className="content-grid">
-        {menuItems.map((item, index) => (
-          <div key={index} className="card" onClick={() => navigate(item.path)}>
-            <div className="card-content">
-              <img src={item.src} alt="Logo" className={`${item.src === "TM.png" ? "card-icon-hat" : "card-icon"} ${item.src === "EPAM.png" ? "card-icon-flames" : "card-icon"} ${item.src === "DM.png" ? "card-icon-dm" : "card-icon"} ${item.src === "RM.png" ? "card-icon-rm" : "card-icon"} ${item.src === "DC.png" ? "card-icon-dc" : "card-icon"} ${item.src === "CM.png" ? "card-icon-cm" : "card-icon"}`} />
-            </div>
-            <h3>{item.title}</h3>
+        <div className="carousel-container">
+
+          <button
+            className={`carousel-arrow left ${!canGoLeft ? "disabled" : ""}`}
+            onClick={() => {
+              if (canGoLeft) {
+                setAnimDir("right");
+                setStartIndex(startIndex - 1);
+                setTimeout(() => setAnimDir(null), 250);
+              }
+            }}
+          >
+            <FontAwesomeIcon icon={faChevronLeft} />
+          </button>
+
+          <div className={`content-grid${animDir ? ` animating-${animDir}` : ""}`}>
+            {visibleItems.map((item, index) => (
+              <div
+                key={index}
+                className={`card ${item.placeholder ? "placeholder" : ""}`}
+                onClick={() => !item.placeholder && navigate(item.path)}
+              >
+                {!item.placeholder && (
+                  <>
+                    <div className="card-content">
+                      <img
+                        src={`${process.env.PUBLIC_URL}/${item.src}`}
+                        alt="Logo"
+                        className={`${item.src === "TM.png" ? "card-icon-hat" : "card-icon"}
+                ${item.src === "EPAM.png" ? "card-icon-flames" : ""}
+                ${item.src === "DM.png" ? "card-icon-dm" : ""}
+                ${item.src === "RM.png" ? "card-icon-rm" : ""}
+                ${item.src === "DC.png" ? "card-icon-dc" : ""}
+                ${item.src === "CM.png" ? "card-icon-cm" : ""}`}
+                      />
+                    </div>
+                    <h3>{item.title}</h3>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
+
+          <button
+            className={`carousel-arrow right ${!canGoRight ? "disabled" : ""}`}
+            onClick={() => {
+              if (canGoRight) {
+                setAnimDir("left");
+                setStartIndex(startIndex + 1);
+                setTimeout(() => setAnimDir(null), 250);
+              }
+            }}
+          >
+            <FontAwesomeIcon icon={faChevronRight} />
+          </button>
+
+        </div>
       </div>
       <div className="logo-bottom-container">
         <img className="logo-bottom" src="logo.webp" alt="Bottom Logo" />

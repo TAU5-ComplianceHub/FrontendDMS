@@ -940,7 +940,7 @@ const InductionReviewPage = () => {
 
           <div className="spacer"></div>
 
-          <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} />
+          <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} />
         </div>
 
         <div className={`scrollable-box`}>

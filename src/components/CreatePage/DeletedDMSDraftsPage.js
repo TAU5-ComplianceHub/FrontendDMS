@@ -66,7 +66,7 @@ const DeletedDMSDraftsPage = () => {
                 restoreRoute: (draftId) => `${process.env.REACT_APP_URL}/api/draft/standards/restore/${draftId}`,
             },
 
-            specialInstruction: {
+            special: {
                 icon: `${process.env.PUBLIC_URL}/specialInstInverted.svg`,
                 titleField: `Deleted Special Instruction Drafts`,
                 loadRoute: `${process.env.REACT_APP_URL}/api/draft/special/deletedDrafts/${userID}`,

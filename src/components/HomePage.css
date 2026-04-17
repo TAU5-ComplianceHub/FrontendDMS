@@ -741,3 +741,656 @@
 .nl-pill-icon-btn:hover {
   opacity: 0.75;
 }
+
+.carousel-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+}
+
+.carousel-arrow {
+  background: linear-gradient(180deg,
+      #ffffff 0%,
+      #d9d9d9 30%,
+      #a8a8a8 60%,
+      #707070 100%);
+
+  box-shadow:
+    inset 3px 3px 5px rgba(255, 255, 255, 0.8),
+    inset -3px -3px 5px rgba(0, 0, 0, 0.6),
+    2px 2px 4px rgba(0, 0, 0, 0.4);
+
+  border: none;
+  border-radius: 50%;
+  width: 55px;
+  height: 55px;
+
+  color: #002060;
+  font-size: 22px;
+
+  cursor: pointer;
+
+  /* NEW — move arrows up */
+  position: relative;
+  top: -40px;
+}
+
+.carousel-arrow:hover {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.carousel-arrow.disabled {
+  opacity: 0.25;
+  cursor: default;
+  filter: grayscale(100%);
+}
+
+.placeholder {
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+/*##### NEW MAHHHHHHHH BOY*/
+
+/* Carousel slide animation */
+@keyframes carousel-slide-left {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes carousel-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.content-grid.animating-left {
+  animation: carousel-slide-left 0.75s ease-out;
+}
+
+.content-grid.animating-right {
+  animation: carousel-slide-right 0.75s ease-out;
+}
+
+/* Only the incoming new card animates */
+@keyframes tile-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(60px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes tile-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Going right → new card enters from the right (last child) */
+.content-grid.animating-left .card:last-child {
+  animation: tile-in-left 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Going left → new card enters from the left (first child) */
+.content-grid.animating-right .card:first-child {
+  animation: tile-in-right 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* =========================
+   Large desktops
+   ========================= */
+@media (min-width: 1601px) {
+  .header {
+    margin-top: 30px;
+    margin-bottom: 60px;
+  }
+
+  .header-logo {
+    width: 110px;
+    height: 130px;
+  }
+
+  .header h1 {
+    font-size: 38px;
+  }
+
+  .carousel-container {
+    transform: scale(1);
+    transform-origin: top center;
+  }
+
+  .card {
+    width: 200px;
+    height: 304px;
+    padding: 20px;
+  }
+
+  .card h3 {
+    font-size: 1.6rem;
+    margin-top: 30px;
+  }
+
+  .logout-button {
+    right: 80px;
+    bottom: 45px;
+    width: 150px;
+    padding: 15px 25px;
+  }
+
+  .admin-page-home-button {
+    right: 240px;
+    bottom: 45px;
+    width: 150px;
+    padding: 15px 25px;
+  }
+
+  .coming-soon-button {
+    left: 80px;
+    top: 45px;
+    width: 170px;
+    padding: 15px 25px;
+  }
+
+  .logo-bottom-container {
+    left: 45px;
+    bottom: 35px;
+  }
+}
+
+/* =========================
+   Standard desktops / laptops
+   ========================= */
+@media (max-width: 1600px) and (min-width: 1281px) {
+  .header {
+    margin-top: 26px;
+    margin-bottom: 50px;
+  }
+
+  .header-logo {
+    width: 100px;
+    height: 120px;
+  }
+
+  .header h1 {
+    font-size: 34px;
+  }
+
+  .carousel-container {
+    transform: scale(0.92);
+    transform-origin: top center;
+  }
+
+  .card {
+    width: 185px;
+    height: 285px;
+    padding: 18px;
+  }
+
+  .card h3 {
+    font-size: 1.4rem;
+    margin-top: 24px;
+  }
+
+  .logout-button {
+    right: 50px;
+    bottom: 30px;
+    width: 140px;
+    padding: 13px 20px;
+  }
+
+  .admin-page-home-button {
+    right: 210px;
+    bottom: 30px;
+    width: 140px;
+    padding: 13px 20px;
+  }
+
+  .coming-soon-button {
+    left: 50px;
+    top: 30px;
+    width: 160px;
+    padding: 13px 20px;
+  }
+
+  .logo-bottom-container {
+    left: 30px;
+    bottom: 25px;
+  }
+}
+
+/* =========================
+   Small laptops
+   ========================= */
+@media (max-width: 1280px) and (min-width: 1025px) {
+  .header {
+    margin-top: 24px;
+    margin-bottom: 40px;
+  }
+
+  .header-logo {
+    width: 90px;
+    height: 110px;
+  }
+
+  .header h1 {
+    font-size: 30px;
+  }
+
+  .carousel-container {
+    transform: scale(0.82);
+    transform-origin: top center;
+  }
+
+  .card {
+    width: 170px;
+    height: 260px;
+    padding: 16px;
+  }
+
+  .card h3 {
+    font-size: 1.2rem;
+    margin-top: 20px;
+  }
+
+  .logout-button {
+    right: 30px;
+    bottom: 22px;
+    width: 130px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+  }
+
+  .admin-page-home-button {
+    right: 175px;
+    bottom: 22px;
+    width: 130px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+  }
+
+  .coming-soon-button {
+    left: 30px;
+    top: 22px;
+    width: 150px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+  }
+
+  .logo-bottom-container {
+    left: 22px;
+    bottom: 20px;
+  }
+}
+
+/* =========================
+   Tablets landscape
+   ========================= */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .homepage-container {
+    overflow-x: hidden;
+  }
+
+  .header {
+    margin-top: 22px;
+    margin-bottom: 28px;
+  }
+
+  .header-logo {
+    width: 80px;
+    height: 95px;
+  }
+
+  .header h1 {
+    font-size: 26px;
+  }
+
+  .carousel-container {
+    transform: scale(0.7);
+    transform-origin: top center;
+    margin-top: -20px;
+  }
+
+  .card {
+    width: 155px;
+    height: 235px;
+    padding: 14px;
+  }
+
+  .card h3 {
+    font-size: 1.05rem;
+    margin-top: 16px;
+  }
+
+  .card-icon {
+    width: 70px;
+    height: 85px;
+    margin-top: 24px;
+  }
+
+  .card-icon-flames {
+    width: 95px;
+    height: 85px;
+    margin-top: 26px;
+  }
+
+  .card-icon-hat {
+    width: 115px;
+    height: 78px;
+    margin-top: 24px;
+  }
+
+  .card-icon-dc,
+  .card-icon-dm {
+    width: 78px;
+    height: 85px;
+    margin-top: 24px;
+  }
+
+  .card-icon-rm,
+  .card-icon-cm {
+    width: 60px;
+    height: 85px;
+    margin-top: 24px;
+  }
+
+  .logout-button {
+    right: 20px;
+    bottom: 18px;
+    width: 120px;
+    padding: 11px 14px;
+    font-size: 0.9rem;
+  }
+
+  .admin-page-home-button {
+    right: 150px;
+    bottom: 18px;
+    width: 120px;
+    padding: 11px 14px;
+    font-size: 0.9rem;
+  }
+
+  .coming-soon-button {
+    left: 20px;
+    top: 18px;
+    width: 135px;
+    padding: 11px 14px;
+    font-size: 0.9rem;
+  }
+
+  .logo-bottom-container {
+    left: 15px;
+    bottom: 15px;
+    transform: scale(0.9);
+    transform-origin: bottom left;
+  }
+}
+
+/* =========================
+   Tablets portrait / large phones
+   ========================= */
+@media (max-width: 768px) and (min-width: 601px) {
+  .homepage-container {
+    overflow-x: hidden;
+    padding-bottom: 120px;
+  }
+
+  .header {
+    margin-top: 18px;
+    margin-bottom: 22px;
+  }
+
+  .header-logo {
+    width: 72px;
+    height: 86px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+  }
+
+  .carousel-container {
+    transform: scale(0.56);
+    transform-origin: top center;
+    margin-top: -60px;
+    margin-bottom: -40px;
+  }
+
+  .card {
+    width: 145px;
+    height: 220px;
+    padding: 12px;
+  }
+
+  .card h3 {
+    font-size: 0.95rem;
+    margin-top: 14px;
+  }
+
+  .card-icon {
+    width: 62px;
+    height: 76px;
+    margin-top: 18px;
+  }
+
+  .card-icon-flames {
+    width: 84px;
+    height: 76px;
+    margin-top: 20px;
+  }
+
+  .card-icon-hat {
+    width: 100px;
+    height: 70px;
+    margin-top: 19px;
+  }
+
+  .card-icon-dc,
+  .card-icon-dm {
+    width: 68px;
+    height: 76px;
+    margin-top: 19px;
+  }
+
+  .card-icon-rm,
+  .card-icon-cm {
+    width: 52px;
+    height: 76px;
+    margin-top: 19px;
+  }
+
+  .coming-soon-button {
+    top: 14px;
+    left: 14px;
+    width: 120px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+
+  .logout-button {
+    right: 14px;
+    bottom: 14px;
+    width: 110px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+
+  .admin-page-home-button {
+    right: 132px;
+    bottom: 14px;
+    width: 110px;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+  }
+
+  .logo-bottom-container {
+    left: 12px;
+    bottom: 12px;
+    transform: scale(0.8);
+    transform-origin: bottom left;
+  }
+}
+
+/* =========================
+   Phones
+   ========================= */
+@media (max-width: 600px) {
+  .homepage-container {
+    overflow-x: hidden;
+    padding-bottom: 110px;
+  }
+
+  .header {
+    margin-top: 16px;
+    margin-bottom: 18px;
+  }
+
+  .header-logo {
+    width: 60px;
+    height: 72px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .carousel-container {
+    transform: scale(0.38);
+    transform-origin: top center;
+    margin-top: -115px;
+    margin-bottom: -95px;
+  }
+
+  .card {
+    width: 130px;
+    height: 200px;
+    padding: 10px;
+  }
+
+  .card h3 {
+    font-size: 0.82rem;
+    margin-top: 12px;
+  }
+
+  .card-icon {
+    width: 54px;
+    height: 68px;
+    margin-top: 14px;
+  }
+
+  .card-icon-flames {
+    width: 74px;
+    height: 68px;
+    margin-top: 16px;
+  }
+
+  .card-icon-hat {
+    width: 86px;
+    height: 62px;
+    margin-top: 15px;
+  }
+
+  .card-icon-dc,
+  .card-icon-dm {
+    width: 60px;
+    height: 68px;
+    margin-top: 15px;
+  }
+
+  .card-icon-rm,
+  .card-icon-cm {
+    width: 46px;
+    height: 68px;
+    margin-top: 15px;
+  }
+
+  .coming-soon-button {
+    top: 10px;
+    left: 10px;
+    width: 105px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+
+  .logout-button {
+    right: 10px;
+    bottom: 10px;
+    width: 95px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+
+  .admin-page-home-button {
+    right: 112px;
+    bottom: 10px;
+    width: 95px;
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+
+  .logo-bottom-container {
+    left: 8px;
+    bottom: 8px;
+    transform: scale(0.68);
+    transform-origin: bottom left;
+  }
+}
+
+/* =========================
+   Very small phones
+   ========================= */
+@media (max-width: 400px) {
+  .header h1 {
+    font-size: 16px;
+  }
+
+  .carousel-container {
+    transform: scale(0.32);
+    transform-origin: top center;
+    margin-top: -140px;
+    margin-bottom: -118px;
+  }
+
+  .coming-soon-button,
+  .logout-button,
+  .admin-page-home-button {
+    font-size: 0.68rem;
+  }
+
+  .coming-soon-button {
+    width: 96px;
+  }
+
+  .logout-button,
+  .admin-page-home-button {
+    width: 88px;
+  }
+
+  .admin-page-home-button {
+    right: 102px;
+  }
+}

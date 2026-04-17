@@ -74,12 +74,19 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
         return fileName.replace(/\.[^/.]+$/, "");
     };
 
+    const MAX_FILE_SIZE_MB = 5;
+    const MAX_TOTAL_SIZE_MB = 15;
+    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+    const MAX_TOTAL_SIZE_BYTES = MAX_TOTAL_SIZE_MB * 1024 * 1024;
+
     const handleFileChange = (event) => {
-        const selected = Array.from(event.target.files);
+        const selected = Array.from(event.target.files || []);
         const existingFiles = formData.supportingDocuments || [];
 
         const exactDuplicates = [];
         const sameNameDifferentExtension = [];
+        const invalidTypeFiles = [];
+        const oversizedFiles = [];
         const acceptedFiles = [];
 
         const existingBaseNames = new Set(
@@ -96,7 +103,27 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
         const newBaseNames = new Set();
         const newExactKeys = new Set();
 
+        const existingTotalSize = existingFiles.reduce((total, doc) => {
+            return total + (doc.file?.size ?? doc.size ?? 0);
+        }, 0);
+
+        let runningNewSize = 0;
+
         selected.forEach((file) => {
+            const isPdf =
+                file.type === "application/pdf" ||
+                file.name.toLowerCase().endsWith(".pdf");
+
+            if (!isPdf) {
+                invalidTypeFiles.push(file);
+                return;
+            }
+
+            if (file.size > MAX_FILE_SIZE_BYTES) {
+                oversizedFiles.push(file);
+                return;
+            }
+
             const baseName = removeFileExtension(file.name).trim().toLowerCase();
             const exactKey = `${file.name}__${file.size}`;
 
@@ -116,7 +143,13 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
                 return;
             }
 
+            if (existingTotalSize + runningNewSize + file.size > MAX_TOTAL_SIZE_BYTES) {
+                toast.error("Total uploaded files cannot exceed 15 MB.");
+                return;
+            }
+
             acceptedFiles.push(file);
+            runningNewSize += file.size;
             newBaseNames.add(baseName);
             newExactKeys.add(exactKey);
         });
@@ -129,8 +162,17 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
                 file,
                 note: "",
                 saved: false,
+                size: file.size,
             }))
         ];
+
+        if (invalidTypeFiles.length > 0) {
+            toast.error("Only PDF files may be uploaded.");
+        }
+
+        if (oversizedFiles.length > 0) {
+            toast.error("Each file must be 5 MB or smaller.");
+        }
 
         if (exactDuplicates.length > 0) {
             toast.error("Some files were already added and were skipped.");
@@ -246,6 +288,7 @@ const SupportingDocumentTable = ({ collapsible = false, formData, setFormData, r
                         <input
                             type="file"
                             multiple
+                            accept=".pdf,application/pdf"
                             style={{ display: 'none' }}
                             ref={fileInputRef}
                             onChange={handleFileChange}

@@ -120,14 +120,19 @@ const VisitorsInductionHomePage = () => {
         return `${day}.${month}.${year}`;
     };
 
-    // --- API Calls ---
     const fetchFiles = async () => {
         const route = `/api/visitors/getVisitors`;
         try {
             const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {});
             if (!response.ok) throw new Error('Failed to fetch files');
+
             const data = await response.json();
-            setFiles(data.visitors);
+
+            const sortedVisitors = (data.visitors || []).sort((a, b) =>
+                (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+            );
+
+            setFiles(sortedVisitors);
         } catch (error) { }
     };
 

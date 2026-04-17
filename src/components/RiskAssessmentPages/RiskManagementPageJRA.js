@@ -83,6 +83,73 @@ const RiskManagementPageJRA = () => {
     const [approveState, setApproveState] = useState(false);
     const [isDuplicateName, setIsDuplicateName] = useState(false);
     const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
+    const [isViewer, setIsViewer] = useState(false);
+    const [isPublisher, setIsPublisher] = useState(false);
+
+    const SHARE_ROLES = ["collaborator", "viewer", "publisher"];
+    const ALL_ALLOWED_ROLES = ["owner", ...SHARE_ROLES];
+
+    const normalizeSharedUsers = (value, ownerId) => {
+        const rawItems = Array.isArray(value)
+            ? value
+            : value == null
+                ? []
+                : [value];
+
+        const mapped = rawItems
+            .map((item) => {
+                if (typeof item === "string") {
+                    return {
+                        userId: item,
+                        role: item === ownerId ? "owner" : "collaborator"
+                    };
+                }
+
+                if (item && typeof item === "object") {
+                    const userId =
+                        item.userId ||
+                        item.userID ||
+                        item._id ||
+                        item.id ||
+                        "";
+
+                    if (!userId) return null;
+
+                    let role = String(item.role || "").toLowerCase().trim();
+
+                    if (!ALL_ALLOWED_ROLES.includes(role)) {
+                        role = userId === ownerId ? "owner" : "collaborator";
+                    }
+
+                    if (userId === ownerId) {
+                        role = "owner";
+                    }
+
+                    return { userId, role };
+                }
+
+                return null;
+            })
+            .filter(Boolean);
+
+        const seen = new Set();
+        const deduped = [];
+
+        mapped.forEach((entry) => {
+            if (seen.has(entry.userId)) return;
+            seen.add(entry.userId);
+            deduped.push(entry);
+        });
+
+        if (ownerId && !deduped.some((entry) => entry.userId === ownerId)) {
+            deduped.unshift({ userId: ownerId, role: "owner" });
+        }
+
+        return deduped.map((entry) => ({
+            userId: entry.userId,
+            role: entry.userId === ownerId ? "owner" : entry.role
+        }));
+    };
 
     const openApproval = () => {
         setApproval(true);
@@ -120,21 +187,6 @@ const RiskManagementPageJRA = () => {
         setHelpScope(false);
     };
 
-    const openShare = () => {
-        if (loadedID) {
-            setShare(true);
-        } else {
-            toast.dismiss();
-            toast.clearWaitingQueue();
-            toast.warn("Please save a draft before sharing.", {
-                closeButton: false,
-                autoClose: 800, // 1.5 seconds
-                style: {
-                    textAlign: 'center'
-                }
-            });
-        }
-    };
     const closeShare = () => { setShare(false); };
     const openLoadPopup = () => setLoadPopupOpen(true);
     const closeLoadPopup = () => setLoadPopupOpen(false);
@@ -213,8 +265,9 @@ const RiskManagementPageJRA = () => {
         setFormData(newFormData);
         formDataRef.current = newFormData;
 
-        setUserIDs([me]);
-        userIDsRef.current = [me];
+        const normalizedOwnerOnly = normalizeSharedUsers([], me);
+        setUserIDs(normalizedOwnerOnly);
+        userIDsRef.current = normalizedOwnerOnly;
 
         loadedIDRef.current = '';
         setLoadedID('');
@@ -259,37 +312,78 @@ const RiskManagementPageJRA = () => {
         setIsSaveAsModalOpen(true);
     };
 
-    const confirmSaveAs = (newTitle) => {
+    const confirmSaveAs = async (newTitle) => {
         // apply the new title, clear loadedID, then save
         const me = userIDRef.current;
         const newFormData = {
-            ...formDataRef.current,        // your current formData
-            title: newTitle,             // override title
+            ...formDataRef.current,
+            title: newTitle,
         };
 
         setFormData(newFormData);
         formDataRef.current = newFormData;
 
-        setUserIDs([me]);
-        userIDsRef.current = [me];
+        const normalizedOwnerOnly = normalizeSharedUsers([], me);
+        setUserIDs(normalizedOwnerOnly);
+        userIDsRef.current = normalizedOwnerOnly;
 
         loadedIDRef.current = '';
         setLoadedID('');
 
-        handleSave();
-        loadData(loadedIDRef.current);
+        const result = await saveData(newTitle);
+
+        if (result?.duplicate) {
+            setIsDuplicateName(true);
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.warn("That draft name already exists. Please choose a different name.", {
+                closeButton: true,
+                autoClose: 1500,
+                style: { textAlign: 'center' }
+            });
+            return;
+        }
+
+        if (!result?.ok) {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.error("Failed to save draft online. It was saved offline instead.", {
+                closeButton: true,
+                autoClose: 1500,
+                style: { textAlign: 'center' }
+            });
+            return;
+        }
+
+        if (result?.id) {
+            await loadData(result.id);
+        }
 
         toast.dismiss();
         toast.clearWaitingQueue();
-        toast.success("New Draft Successfully Loaded", {
+        toast.success("New draft successfully saved.", {
             closeButton: false,
-            autoClose: 1500, // 1.5 seconds
-            style: {
-                textAlign: 'center'
-            }
+            autoClose: 1500,
+            style: { textAlign: 'center' }
         });
 
         setIsSaveAsModalOpen(false);
+    };
+
+    const openShare = () => {
+        if (loadedIDRef.current || loadedID) {
+            setShare(true);
+        } else {
+            toast.dismiss();
+            toast.clearWaitingQueue();
+            toast.warn("Please save a draft before sharing.", {
+                closeButton: true,
+                autoClose: 800,
+                style: {
+                    textAlign: 'center'
+                }
+            });
+        }
     };
 
     const closeSaveAs = () => {
@@ -356,6 +450,11 @@ const RiskManagementPageJRA = () => {
     const saveData = async (overrideTitle = null, options = {}) => {
         const { skipFileUpload = false } = options;
 
+        const normalizedSharedUsers = normalizeSharedUsers(
+            userIDsRef.current,
+            userIDRef.current
+        );
+
         const dataToStore = {
             usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
             usedTermCodes: usedTermCodesRef.current,
@@ -368,7 +467,7 @@ const RiskManagementPageJRA = () => {
                 ...formDataRef.current,
                 ...(overrideTitle ? { title: overrideTitle } : {})
             },
-            userIDs: userIDsRef.current,
+            userIDs: normalizedSharedUsers,
             creator: userIDRef.current,
             updater: null,
             dateUpdated: null
@@ -419,6 +518,11 @@ const RiskManagementPageJRA = () => {
     const updateData = async (selectedUserIDs, options = {}) => {
         const { skipFileUpload = false } = options;
 
+        const normalizedSharedUsers = normalizeSharedUsers(
+            selectedUserIDs,
+            userIDRef.current
+        );
+
         const dataToStore = {
             usedAbbrCodes: usedAbbrCodesRef.current,
             usedTermCodes: usedTermCodesRef.current,
@@ -428,7 +532,7 @@ const RiskManagementPageJRA = () => {
             usedMaterials: usedMaterialsRef.current,
             usedMobileMachine: usedMobileMachineRef.current,
             formData: formDataRef.current,
-            userIDs: selectedUserIDs,
+            userIDs: normalizedSharedUsers,
             updater: userIDRef.current,
             dateUpdated: new Date().toISOString(),
             userID
@@ -574,6 +678,18 @@ const RiskManagementPageJRA = () => {
             const storedData = data.draft || {};
             const readOnly = data.readOnly || false;
             const isOwner = data.isOwner || false;
+            const isViewer = data.isViewer || false;
+            const isPublisher = data.isPublisher || false;
+
+            const ownerId =
+                storedData.creator ||
+                storedData.userID ||
+                userIDRef.current;
+
+            const normalizedSharedUsers = normalizeSharedUsers(
+                storedData.userIDs,
+                ownerId
+            );
 
             setUsedAbbrCodes(storedData.usedAbbrCodes || []);
             setUsedTermCodes(storedData.usedTermCodes || []);
@@ -582,8 +698,9 @@ const RiskManagementPageJRA = () => {
             setUsedEquipment(storedData.usedEquipment || []);
             setUsedMobileMachines(storedData.usedMobileMachine || []);
             setUsedMaterials(storedData.usedMaterials || []);
-            setUserIDs(storedData.userIDs || []);
-            setLockUser(storedData.lockOwner?.username);
+            setUserIDs(normalizedSharedUsers);
+            userIDsRef.current = normalizedSharedUsers;
+            setLockUser(isViewer ? null : storedData.lockOwner?.username || null);
             setInApproval(Boolean(data.statusApproval));
             setInReview(Boolean(data.statusReview));
 
@@ -591,9 +708,12 @@ const RiskManagementPageJRA = () => {
             setFormData(prev => ({ ...prev }));
             setTitleSet(true);
             loadedIDRef.current = loadID;
+            setLoadedID(loadID);
 
             setReadOnly(readOnly);
             setOwner(isOwner)
+            setIsViewer(isViewer);
+            setIsPublisher(isPublisher);
 
             requestAnimationFrame(() => {
                 scrollableRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1060,7 +1180,7 @@ const RiskManagementPageJRA = () => {
             const decodedToken = jwtDecode(storedToken);
 
             setUserID(decodedToken.userId);
-            setUserIDs([decodedToken.userId]);
+            setUserIDs(normalizeSharedUsers([], decodedToken.userId));
         }
     }, [navigate]);
 
@@ -1552,6 +1672,10 @@ const RiskManagementPageJRA = () => {
     };
 
     const handleBack = () => {
+        if (readOnly) {
+            navigate(-1);
+            return;
+        }
         if (loadedIDRef.current) {
             setIsSaveConfirmOpen(true);
             return;
@@ -1711,7 +1835,7 @@ const RiskManagementPageJRA = () => {
                             </div>
                         )}
 
-                        {!readOnly && !inReview && !inApproval && owner && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && !inReview && !inApproval && (isPublisher || owner) && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
                         </div>)}
 
@@ -1726,23 +1850,29 @@ const RiskManagementPageJRA = () => {
                     <div className="spacer"></div>
 
                     {/* Container for right-aligned icons */}
-                    <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
+                    <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
                 </div>
 
-                {(!readOnly && (inApproval || inReview)) && (<div className="input-row">
+                {(!isViewer && !readOnly && (inApproval || inReview)) && (<div className="input-row">
                     <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
                         To approve this document, click on the green circle above.
                     </div>
                 </div>)}
 
+                {(isViewer && readOnly) && (<div className="input-row">
+                    <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
+                        View-only access. Please contact the owner to request edit access.
+                    </div>
+                </div>)}
+
                 <div className={`scrollable-box-risk-create`} ref={scrollableRef}>
-                    {(readOnly && !inReview && !inApproval) && (<div className="input-row">
+                    {(!isViewer && readOnly && !inReview && !inApproval) && (<div className="input-row">
                         <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
                             The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
                         </div>
                     </div>)}
 
-                    {(readOnly && (inReview || inApproval)) && (<div className="input-row">
+                    {(!isViewer && readOnly && (inReview || inApproval)) && (<div className="input-row">
                         <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
                             This document is currently in the approval process
                         </div>

@@ -65,6 +65,13 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
         bumpMediaTick();
     };
 
+    const handlePreviewSubmit = () => {
+        toast.dismiss();
+        toast.info("This is a preview. Submissions cannot be made.", {
+            autoClose: 2500
+        });
+    };
+
     /*
     const fetchMediaById = (fid) => {
         if (!fid) return Promise.resolve();
@@ -585,7 +592,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
     const goPrevQ = () => { if (hasPrevQ) setQIndex(i => i - 1); };
     const goNextQ = () => {
         if (isLastQ) {
-            //onSubmitClick();           // your existing submit flow
+            handlePreviewSubmit();
         } else if (hasNextQ) {
             setQIndex(i => i + 1);
         }
@@ -1615,6 +1622,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                                                             className={`course-nav-button-submit`}
                                                             disabled={!(isLastQ || hasNextQ)}
                                                             title={isLastQ ? "Submit Assessment" : "Next"}
+                                                            onClick={handlePreviewSubmit}
                                                         >
                                                             {isSubmitting ? "Submitting…" : "Submit Assessment"}
                                                         </button>
@@ -1708,6 +1716,7 @@ const OnlineTrainingCoursePreviewPage = ({ draftID, closeModal }) => {
                     </div>
                 </div>
             </div>
+            <ToastContainer />
         </div >
     );
 };

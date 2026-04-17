@@ -86,9 +86,76 @@ const CreatePage = () => {
   const [loadingAimIndex, setLoadingAimIndex] = useState(null);
   const [isJRA, setIsJRA] = useState(false);
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
+  const [isViewer, setIsViewer] = useState(false);
+  const [isPublisher, setIsPublisher] = useState(false);
 
   const openImportJRA = () => setIsImportJRAPopupOpen(true);
   const closeImportJRA = () => setIsImportJRAPopupOpen(false);
+
+  const SHARE_ROLES = ["collaborator", "viewer", "publisher"];
+  const ALL_ALLOWED_ROLES = ["owner", ...SHARE_ROLES];
+
+  const normalizeSharedUsers = (value, ownerId) => {
+    const rawItems = Array.isArray(value)
+      ? value
+      : value == null
+        ? []
+        : [value];
+
+    const mapped = rawItems
+      .map((item) => {
+        if (typeof item === "string") {
+          return {
+            userId: item,
+            role: item === ownerId ? "owner" : "collaborator"
+          };
+        }
+
+        if (item && typeof item === "object") {
+          const userId =
+            item.userId ||
+            item.userID ||
+            item._id ||
+            item.id ||
+            "";
+
+          if (!userId) return null;
+
+          let role = String(item.role || "").toLowerCase().trim();
+
+          if (!ALL_ALLOWED_ROLES.includes(role)) {
+            role = userId === ownerId ? "owner" : "collaborator";
+          }
+
+          if (userId === ownerId) {
+            role = "owner";
+          }
+
+          return { userId, role };
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    const deduped = [];
+
+    mapped.forEach((entry) => {
+      if (seen.has(entry.userId)) return;
+      seen.add(entry.userId);
+      deduped.push(entry);
+    });
+
+    if (ownerId && !deduped.some((entry) => entry.userId === ownerId)) {
+      deduped.unshift({ userId: ownerId, role: "owner" });
+    }
+
+    return deduped.map((entry) => ({
+      userId: entry.userId,
+      role: entry.userId === ownerId ? "owner" : entry.role
+    }));
+  };
 
   const toArray = (value) => {
     if (Array.isArray(value)) return value;
@@ -455,48 +522,72 @@ const CreatePage = () => {
     setIsSaveAsModalOpen(false);
   };
 
-  const confirmSaveAs = (newTitle) => {
-    // apply the new title, clear loadedID, then save
+  const confirmSaveAs = async (newTitle) => {
     const me = userIDRef.current;
     const newFormData = {
-      ...formDataRef.current,        // your current formData
-      title: newTitle,             // override title
+      ...formDataRef.current,
+      title: newTitle,
     };
 
     setFormData(newFormData);
     formDataRef.current = newFormData;
 
-    setUserIDs([me]);
-    userIDsRef.current = [me];
+    const normalizedOwnerOnly = normalizeSharedUsers([], me);
+    setUserIDs(normalizedOwnerOnly);
+    userIDsRef.current = normalizedOwnerOnly;
 
     loadedIDRef.current = '';
     setLoadedID('');
 
-    handleSave();
-    loadData(loadedIDRef.current);
+    const result = await saveData(newTitle);
+
+    if (result?.duplicate) {
+      setIsDuplicateName(true);
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.warn("That draft name already exists. Please choose a different name.", {
+        closeButton: true,
+        autoClose: 1500,
+        style: { textAlign: 'center' }
+      });
+      return;
+    }
+
+    if (!result?.ok) {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.error("Failed to save draft online. It was saved offline instead.", {
+        closeButton: true,
+        autoClose: 1500,
+        style: { textAlign: 'center' }
+      });
+      return;
+    }
+
+    if (result?.id) {
+      await loadData(result.id);
+    }
 
     toast.dismiss();
     toast.clearWaitingQueue();
-    toast.success("New Draft Successfully Loaded", {
+    toast.success("New draft successfully saved.", {
       closeButton: false,
-      autoClose: 1500, // 1.5 seconds
-      style: {
-        textAlign: 'center'
-      }
+      autoClose: 1500,
+      style: { textAlign: 'center' }
     });
 
     setIsSaveAsModalOpen(false);
   };
 
   const openShare = () => {
-    if (loadedID) {
+    if (loadedIDRef.current || loadedID) {
       setShare(true);
     } else {
       toast.dismiss();
       toast.clearWaitingQueue();
       toast.warn("Please save a draft before sharing.", {
         closeButton: true,
-        autoClose: 800, // 1.5 seconds
+        autoClose: 800,
         style: {
           textAlign: 'center'
         }
@@ -581,8 +672,9 @@ const CreatePage = () => {
     setFormData(newFormData);
     formDataRef.current = newFormData;
 
-    setUserIDs([me]);
-    userIDsRef.current = [me];
+    const normalizedOwnerOnly = normalizeSharedUsers([], me);
+    setUserIDs(normalizedOwnerOnly);
+    userIDsRef.current = normalizedOwnerOnly;
 
     loadedIDRef.current = '';
     setLoadedID('');
@@ -618,9 +710,12 @@ const CreatePage = () => {
       const storedString = localStorage.getItem("draftData");
       if (!storedString) return;
 
-      const storedData = JSON.parse(storedString); // ✅ Parse the JSON string
+      const storedData = JSON.parse(storedString);
 
-      console.log(storedData);
+      const normalizedSharedUsers = normalizeSharedUsers(
+        storedData.userIDs,
+        storedData.creator || userIDRef.current
+      );
 
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
@@ -629,20 +724,27 @@ const CreatePage = () => {
       setUsedEquipment(storedData.usedEquipment || []);
       setUsedMobileMachines(storedData.usedMobileMachine || []);
       setUsedMaterials(storedData.usedMaterials || []);
-      setUserIDs(storedData.userIDs || []);
+      setUserIDs(normalizedSharedUsers);
+      userIDsRef.current = normalizedSharedUsers;
       setFormData(storedData.formData || {});
       setFormData(prev => ({ ...prev })); // this line may be redundant
       setTitleSet(true);
       setOfflineDraft(true);
-      loadedIDRef.current = storedData.loadedID;
+      loadedIDRef.current = storedData.loadedID || '';
+      setLoadedID(storedData.loadedID || '');
     } catch (error) {
       console.error('Error loading data:', error);
     }
   };
 
   const saveDataOffline = async (id) => {
+    const normalizedSharedUsers = normalizeSharedUsers(
+      userIDsRef.current,
+      userIDRef.current
+    );
+
     const dataToStore = {
-      usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
+      usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
       usedPPEOptions: usedPPEOptionsRef.current,
       usedHandTools: usedHandToolsRef.current,
@@ -650,7 +752,7 @@ const CreatePage = () => {
       usedMobileMachine: usedMobileMachineRef.current,
       usedMaterials: usedMaterialsRef.current,
       formData: formDataRef.current,
-      userIDs: userIDsRef.current,
+      userIDs: normalizedSharedUsers,
       creator: userIDRef.current,
       updater: null,
       dateUpdated: null,
@@ -658,14 +760,7 @@ const CreatePage = () => {
       date: Date.now()
     };
 
-
-    console.log("Attempting to save:", dataToStore);
-
-    try {
-      localStorage.setItem('draftData', JSON.stringify(dataToStore));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
+    localStorage.setItem('draftData', JSON.stringify(dataToStore));
   };
 
   const buildSupportingDocumentPayload = (documents = []) => {
@@ -720,19 +815,23 @@ const CreatePage = () => {
   const saveData = async (overrideTitle = null, options = {}) => {
     const { skipFileUpload = false } = options;
 
+    const normalizedSharedUsers = normalizeSharedUsers(
+      userIDsRef.current,
+      userIDRef.current
+    );
+
     const dataToStore = {
       usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
       usedPPEOptions: usedPPEOptionsRef.current,
       usedHandTools: usedHandToolsRef.current,
       usedEquipment: usedEquipmentRef.current,
-      usedMobileMachine: usedMobileMachineRef.current,
       usedMaterials: usedMaterialsRef.current,
       formData: {
         ...formDataRef.current,
         ...(overrideTitle ? { title: overrideTitle } : {})
       },
-      userIDs: userIDsRef.current,
+      userIDs: normalizedSharedUsers,
       creator: userIDRef.current,
       updater: null,
       dateUpdated: null
@@ -787,8 +886,13 @@ const CreatePage = () => {
   const updateData = async (selectedUserIDs, options = {}) => {
     const { skipFileUpload = false } = options;
 
+    const normalizedSharedUsers = normalizeSharedUsers(
+      selectedUserIDs,
+      userIDRef.current
+    );
+
     const dataToStore = {
-      usedAbbrCodes: usedAbbrCodesRef.current,       // your current state values
+      usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
       usedPPEOptions: usedPPEOptionsRef.current,
       usedHandTools: usedHandToolsRef.current,
@@ -796,7 +900,7 @@ const CreatePage = () => {
       usedMobileMachine: usedMobileMachineRef.current,
       usedMaterials: usedMaterialsRef.current,
       formData: formDataRef.current,
-      userIDs: selectedUserIDs,
+      userIDs: normalizedSharedUsers,
       updater: userIDRef.current,
       dateUpdated: new Date().toISOString(),
       userID
@@ -943,6 +1047,18 @@ const CreatePage = () => {
       const storedData = data.draft || {};
       const readOnly = data.readOnly || false;
       const isOwner = data.isOwner || false;
+      const isViewer = data.isViewer || false;
+      const isPublisher = data.isPublisher || false;
+
+      const ownerId =
+        storedData.creator ||
+        storedData.userID ||
+        userIDRef.current;
+
+      const normalizedSharedUsers = normalizeSharedUsers(
+        storedData.userIDs,
+        ownerId
+      );
 
       setUsedAbbrCodes(storedData.usedAbbrCodes || []);
       setUsedTermCodes(storedData.usedTermCodes || []);
@@ -951,8 +1067,9 @@ const CreatePage = () => {
       setUsedEquipment(storedData.usedEquipment || []);
       setUsedMobileMachines(storedData.usedMobileMachine || []);
       setUsedMaterials(storedData.usedMaterials || []);
-      setUserIDs(storedData.userIDs || []);
-      setLockUser(storedData.lockOwner?.username);
+      setUserIDs(normalizedSharedUsers);
+      userIDsRef.current = normalizedSharedUsers;
+      setLockUser(isViewer ? null : storedData.lockOwner?.username || null);
       setIsJRA(storedData.formData.isJRA ?? false)
 
       const rawForm = storedData.formData || {};
@@ -968,9 +1085,12 @@ const CreatePage = () => {
       setFormData(prev => ({ ...prev }));
       setTitleSet(true);
       loadedIDRef.current = loadID;
+      setLoadedID(loadID);
 
       setReadOnly(readOnly);
       setOwner(isOwner)
+      setIsViewer(isViewer);
+      setIsPublisher(isPublisher);
       setInApproval(Boolean(data.statusApproval));
       setInReview(Boolean(data.statusReview));
 
@@ -1356,7 +1476,7 @@ const CreatePage = () => {
       const decodedToken = jwtDecode(storedToken);
 
       setUserID(decodedToken.userId);
-      setUserIDs([decodedToken.userId]);
+      setUserIDs(normalizeSharedUsers([], decodedToken.userId));
     }
   }, [navigate]);
 
@@ -2530,6 +2650,10 @@ const CreatePage = () => {
   };
 
   const handleBack = () => {
+    if (readOnly) {
+      navigate(-1);
+      return;
+    }
     if (loadedIDRef.current) {
       setIsSaveConfirmOpen(true);
       return;
@@ -2684,7 +2808,7 @@ const CreatePage = () => {
             )}
 
 
-            {!readOnly && !inReview && !inApproval && owner && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+            {!readOnly && !inReview && !inApproval && (isPublisher || owner) && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
               <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
             </div>)}
 
@@ -2707,23 +2831,29 @@ const CreatePage = () => {
           <div className="spacer"></div>
 
           {/* Container for right-aligned icons */}
-          <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} loadOfflineDraft={loadOfflineData} />
+          <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} loadOfflineDraft={loadOfflineData} />
         </div>
 
-        {(!readOnly && (inApproval || inReview)) && (<div className="input-row">
+        {(!isViewer && !readOnly && (inApproval || inReview)) && (<div className="input-row">
           <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#7EAC89", color: "white", fontWeight: "bold" }}>
             To approve this document, click on the green circle above.
           </div>
         </div>)}
 
+        {(isViewer && readOnly) && (<div className="input-row">
+          <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
+            View-only access. Please contact the owner to request edit access.
+          </div>
+        </div>)}
+
         <div className={`scrollable-box`} ref={scrollBoxRef}>
-          {(readOnly && !inApproval && !inReview) && (<div className="input-row">
+          {(!isViewer && readOnly && !inApproval && !inReview) && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white", fontWeight: "bold" }}>
               The draft is in Read Only Mode as the following user is modifying the draft: {lockUser}
             </div>
           </div>)}
 
-          {(readOnly && (inReview || inApproval)) && (<div className="input-row">
+          {(!isViewer && readOnly && (inReview || inApproval)) && (<div className="input-row">
             <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
               This document is currently in the approval process
             </div>
@@ -2866,14 +2996,13 @@ const CreatePage = () => {
             >
               {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : 'Generate Document'}
             </button>
-            {false && (
-              <button
-                className="pdf-button font-fam"
-                disabled
-              >
-                Generate PDF
-              </button>
-            )}
+            {false && (<button
+              onClick={handleClickPDF}
+              className="pdf-button font-fam"
+              style={{ cursor: "pointer" }}
+            >
+              {pdfLoading ? <FontAwesomeIcon icon={faSpinner} spin /> : 'Generate PDF'}
+            </button>)}
           </div>
         </div>
         {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={type} userID={userID} create={true} />)}

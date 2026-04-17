@@ -404,11 +404,20 @@ const PublishedInductionPreviewPage = ({ draftID, closeModal }) => {
     const nextQLabel = isLastQ ? "Submit Assessment"
         : (hasNextQ ? `Question ${qIndex + 2}` : "");
 
+    const handlePreviewSubmit = () => {
+        console.log("Preview submit attempted. This is a no-op in preview mode.");
+        toast.dismiss();
+        toast.info("This is a preview. Submissions cannot be made.", {
+            autoClose: 2500
+        });
+    };
+
+
     // actions
     const goPrevQ = () => { if (hasPrevQ) setQIndex(i => i - 1); };
     const goNextQ = () => {
         if (isLastQ) {
-            //onSubmitClick();           // your existing submit flow
+            handlePreviewSubmit()
         } else if (hasNextQ) {
             setQIndex(i => i + 1);
         }
@@ -1269,6 +1278,7 @@ const PublishedInductionPreviewPage = ({ draftID, closeModal }) => {
                                                             className={`course-nav-button-submit`}
                                                             disabled={!(isLastQ || hasNextQ)}
                                                             title={isLastQ ? "Submit Assessment" : "Next"}
+                                                            onClick={handlePreviewSubmit}
                                                         >
                                                             {isSubmitting ? "Submitting…" : "Submit Assessment"}
                                                         </button>

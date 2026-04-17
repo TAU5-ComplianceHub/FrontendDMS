@@ -55,6 +55,24 @@ const VisitorInductionMainPage = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
+                    <div className="button-container-create">
+                        {true && canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (
+                            <>
+                                <button className="but-um" onClick={() => navigate("/FrontendDMS/visitorView")}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faUser} src={"/dmsAdmin.svg"} size="xs" className={"button-logo-custom"} />
+                                        <span className="button-text">Visitor Profiles</span>
+                                    </div>
+                                </button>
+                                <button className="but-um" onClick={() => navigate("/FrontendDMS/visitorManagementPage")}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faUser} src={"/dmsAdmin.svg"} size="xs" className={"button-logo-custom"} />
+                                        <span className="button-text">Visitor Equipment</span>
+                                    </div>
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -103,7 +121,7 @@ const VisitorInductionMainPage = () => {
                             <h3 className="document-title-fi-home">Published Visitor Induction</h3>
                         </>
                     </div>)}
-                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/visitorView")}>
+                    {false && canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/visitorView")}>
                         <>
                             <div className="icon-dept">
                                 <img src={`${process.env.PUBLIC_URL}/visitorInductionIcon.svg`} className={"icon-dept"} />
@@ -111,14 +129,14 @@ const VisitorInductionMainPage = () => {
                             <h3 className="document-title-fi-home">Visitor Profiles</h3>
                         </>
                     </div>)}
-                    <div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/visitorManagementPage")}>
+                    {false && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/visitorManagementPage")}>
                         <>
                             <div className="icon-dept">
                                 <img src={`${process.env.PUBLIC_URL}/visitorManagement.svg`} className={"icon-dept"} />
                             </div>
                             <h3 className="document-title-fi-home">Visitor Management</h3>
                         </>
-                    </div>
+                    </div>)}
                 </div>
             </div>
             <ToastContainer />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCaretLeft, faCaretRight, faColumns, faDownload, faEdit, faSearch, faTrash, faWrench, faSort, faFilter, faSortUp, faSortDown, faSpinner, faX, faFileCirclePlus, faArrowLeft, faTableList } from '@fortawesome/free-solid-svg-icons';
+import { faCaretLeft, faCaretRight, faColumns, faDownload, faEdit, faSearch, faTrash, faWrench, faSort, faFilter, faSortUp, faSortDown, faSpinner, faX, faFileCirclePlus, faArrowLeft, faTableList, faRotate } from '@fortawesome/free-solid-svg-icons';
 import { jwtDecode } from 'jwt-decode';
 import Select from "react-select";
 import { toast, ToastContainer } from 'react-toastify';
@@ -15,6 +15,7 @@ import SortPopupWarehouse from "./WarehousePopups/SortPopupWarehouse";
 import BatchRegisterComponentsWarehouse from "./WarehousePopups/BatchRegisterComponentsWarehouse";
 import TopBarDigitalWarehouse from "./WarehousePopups/TopBarDigitalWarehouse";
 import UpdateWarehouseComponentPopup from "./WarehousePopups/UpdateWarehouseComponentPopup";
+import RestoreDocumentPopup from "../FileInfo/RestoreDocumentPopup";
 import { saveAs } from 'file-saver';
 
 const FlameProofDigitalWarehouse = () => {
@@ -55,6 +56,9 @@ const FlameProofDigitalWarehouse = () => {
   const [uploadSite, setUploadSite] = useState("");
   const [siteName, setSiteName] = useState("");
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [isSwitchingView, setIsSwitchingView] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
 
   // --- EXCEL FILTER STATE ---
   const excelPopupRef = useRef(null);
@@ -294,17 +298,23 @@ const FlameProofDigitalWarehouse = () => {
     { id: "issue", title: "Certificate Issue Date" },
     { id: "expiry", title: "Certificate Expiry Date" },
   ];
+  if (isTrashView) {
+    allColumns.push({ id: "deletedBy", title: "Deleted By" });
+    allColumns.push({ id: "deletedOn", title: "Deleted On" });
+  }
   if (canIn(access, "FCMS", ["systemAdmin", "contributor"])) allColumns.push({ id: "action", title: "Action" });
 
   const baseColumnIds = (() => {
     const base = site === "digital-warehouse"
       ? ["nr", "site", "assetType", "component", "serial", "certAuth", "status", "invalidReason"]
       : ["nr", "assetType", "component", "serial", "certAuth", "status", "invalidReason"];
+    if (isTrashView) { base.push("deletedBy"); base.push("deletedOn"); }
     if (canIn(access, "FCMS", ["systemAdmin", "contributor"])) base.push("action");
     return base;
   })();
 
   const [showColumns, setShowColumns] = useState(() => baseColumnIds);
+  useEffect(() => { setShowColumns(baseColumnIds); }, [isTrashView]);
   const visibleColumns = allColumns.filter(c => showColumns.includes(c.id));
   const visibleCount = visibleColumns.length;
   const isWide = visibleCount > baseColumnIds.length;
@@ -323,6 +333,8 @@ const FlameProofDigitalWarehouse = () => {
   const closeUpload = () => { setUpload(false); fetchFiles(); };
   const openModal = (fileId, fileName) => { setSelectedFileId(fileId); setSelectedFileName(fileName); setIsModalOpen(true); };
   const closeModal = () => { setSelectedFileId(null); setSelectedFileName(null); setIsModalOpen(false); };
+  const openRestoreModal = (fileId, fileName) => { setSelectedFileId(fileId); setSelectedFileName(fileName); setIsRestoreModalOpen(true); };
+  const closeRestoreModal = () => { setSelectedFileId(null); setSelectedFileName(null); setIsRestoreModalOpen(false); };
   const openSortModal = () => setIsSortModalOpen(true);
   const closeSortModal = () => setIsSortModalOpen(false);
 
@@ -361,7 +373,16 @@ const FlameProofDigitalWarehouse = () => {
 
   const fetchFiles = async () => {
     setIsLoadingTable(true);
-    const route = site === "digital-warehouse" ? `/api/flameWarehouse/getWarehouseDocs` : `/api/flameWarehouse/getWarehouseDocsSite/${site}`;
+    let route;
+    if (isTrashView) {
+      route = site === "digital-warehouse"
+        ? `/api/flameWarehouse/getDeletedWarehouseDocs`
+        : `/api/flameWarehouse/getDeletedWarehouseDocsSite/${site}`;
+    } else {
+      route = site === "digital-warehouse"
+        ? `/api/flameWarehouse/getWarehouseDocs`
+        : `/api/flameWarehouse/getWarehouseDocsSite/${site}`;
+    }
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {});
       if (!response.ok) throw new Error(`Failed to fetch files (${response.status})`);
@@ -381,6 +402,7 @@ const FlameProofDigitalWarehouse = () => {
   };
 
   useEffect(() => { fetchFiles(); }, [token]);
+  useEffect(() => { fetchFiles(); }, [isTrashView]);
   const clearSearch = () => setSearchQuery("");
   const asArray = (v) => Array.isArray(v) ? v : (v == null ? [] : [v]);
   const str = (s) => (s ?? "").toString().toLowerCase();
@@ -464,9 +486,9 @@ const FlameProofDigitalWarehouse = () => {
     if (!selectedFileId) return;
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/flameWarehouse/delete/${selectedFileId}`, {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/flameWarehouse/softDeleteCertificate/${selectedFileId}`, {
         headers: { Authorization: `Bearer ${token}` },
-        method: 'DELETE',
+        method: 'PATCH',
       });
       if (!response.ok) throw new Error('Failed to delete the file');
       setIsModalOpen(false);
@@ -474,6 +496,41 @@ const FlameProofDigitalWarehouse = () => {
       fetchFiles();
     } catch (error) { console.error('Error deleting file:', error); }
     finally { setLoading(false); }
+  };
+
+  const deleteFileFromTrash = async () => {
+    if (!selectedFileId) return;
+    try {
+      setLoading(true);
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/flameWarehouse/delete/${selectedFileId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to permanently delete the file');
+      setIsModalOpen(false);
+      setSelectedFileId(null);
+      fetchFiles();
+    } catch (error) { console.error('Error permanently deleting file:', error); }
+    finally { setLoading(false); }
+  };
+
+  const restoreFile = async () => {
+    if (!selectedFileId) return;
+    try {
+      const response = await fetch(`${process.env.REACT_APP_URL}/api/flameWarehouse/restoreCertificate/${selectedFileId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to restore');
+      setIsRestoreModalOpen(false);
+      setSelectedFileId(null);
+      fetchFiles();
+    } catch (error) { alert('Error restoring the component.'); }
+  };
+
+  const toggleTrashView = () => {
+    setFiles([]);
+    setIsTrashView(prev => !prev);
   };
 
   const openDownloadModal = (fileId, fileName) => { setDownloadFileId(fileId); setDownloadFileName(fileName); setIsDownloadModalOpen(true); };
@@ -601,6 +658,24 @@ const FlameProofDigitalWarehouse = () => {
             <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
             <p className="logo-text-um">EPA Management</p>
           </div>
+          {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
+            <div className="filter-dm-fi-2">
+              <div className="button-container-dm-fi">
+
+                <button
+                  className="but-dm-fi"
+                  onClick={() => {
+                    if (!isTrashView) toggleTrashView();
+                  }}
+                >
+                  <div className="button-content">
+                    <FontAwesomeIcon icon={faTrash} className="button-logo-custom" />
+                    <span className="button-text">Deleted Components</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
           <div className="sidebar-logo-dm-fi">
             <img src={`${process.env.PUBLIC_URL}/flameWarehouse2.svg`} alt="Logo" className="icon-risk-rm" />
             <p className="logo-text-dm-fi">{(`Digital Warehouse`)}</p>
@@ -612,11 +687,11 @@ const FlameProofDigitalWarehouse = () => {
 
       <div className="main-box-file-info">
         <div className="top-section-um">
-          <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" /></div>
+          <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={() => { if (isTrashView) toggleTrashView(); else navigate(-1) }} icon={faArrowLeft} title="Back" /></div>
           {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
             <>
-              <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={openUpload} icon={faFileCirclePlus} title="Register Component" /></div>
-              <div className="burger-menu-icon-um"><FontAwesomeIcon onClick={openBatch} icon={faTableList} title="Batch Register Components" /></div>
+              {!isTrashView && (<div className="burger-menu-icon-um"><FontAwesomeIcon onClick={openUpload} icon={faFileCirclePlus} title="Register Component" /></div>)}
+              {!isTrashView && (<div className="burger-menu-icon-um"><FontAwesomeIcon onClick={openBatch} icon={faTableList} title="Batch Register Components" /></div>)}
             </>
           )}
           <div className="um-input-container">
@@ -624,18 +699,18 @@ const FlameProofDigitalWarehouse = () => {
             {searchQuery !== "" && (<i><FontAwesomeIcon icon={faX} onClick={clearSearch} className="icon-um-search" title="Clear Search" /></i>)}
             {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
           </div>
-          <div className={`info-box-fih`}>{`Valid Components: ${validCount}`}</div>
-          <div className={`info-box-fih trashed`}>{`Invalid Components: ${invalidCount}`}</div>
+          {!isTrashView && (<>          <div className={`info-box-fih`}>{`Valid Components: ${validCount}`}</div>
+            <div className={`info-box-fih trashed`}>{`Invalid Components: ${invalidCount}`}</div></>)}
           <div className="spacer"></div>
           <TopBarDigitalWarehouse openSort={openSortModal} />
         </div>
 
         <div className="table-flameproof-card">
-          <div className="flameproof-table-header-label-wrapper">
-            <label className="risk-control-label">{site === "digital-warehouse" ? "Digital Warehouse" : `Digital Warehouse`}</label>
+          <div className={`flameproof-table-header-label-wrapper`}>
+            <label className="risk-control-label">{isTrashView ? "Deleted Components" : "Digital Warehouse"}</label>
             <FontAwesomeIcon icon={faColumns} title="Select Columns to Display" className="top-right-button-control-att-3" onClick={() => setShowColumnSelector(v => !v)} />
             <FontAwesomeIcon icon={faDownload} title="Export to Excel" className="top-right-button-control-att-2" onClick={exportSID} />
-            <FontAwesomeIcon icon={faWrench} title="View Removed Components" className="top-right-button-control-att" onClick={() => navigate("/flameReplacedComponents")} />
+            <FontAwesomeIcon icon={faWrench} title="View Components Awaiting Repair" className="top-right-button-control-att" onClick={() => navigate("/FrontendDMS/flameReplacedComponents")} />
 
             <FontAwesomeIcon
               icon={faFilter}
@@ -675,7 +750,7 @@ const FlameProofDigitalWarehouse = () => {
             <div className={`limit-table-height-visitor-wrap ${isDraggingX ? 'dragging' : ''} ${isWide ? "wide" : ""}`} ref={scrollerRef} onPointerDown={onPointerDownX} onPointerMove={onPointerMoveX} onPointerUp={endDragX} onPointerLeave={endDragX} onDragStart={(e) => e.preventDefault()} style={{ maxHeight: "calc(100% - 5px)" }}>
               <table className={`limit-table-height-warehouse ${isWide ? "wide" : ""}`}>
                 <thead>
-                  <tr>
+                  <tr className={isTrashView ? "trashed" : ""}>
                     {showColumns.includes("nr") && (<th className="flame-warehouse-num-filter col"><span className="fileinfo-title-filter-1">Nr</span></th>)}
                     {site === "digital-warehouse" && showColumns.includes("site") && renderHeader("site", "Site")}
                     {showColumns.includes("assetType") && renderHeader("assetType", "Asset Type")}
@@ -687,12 +762,14 @@ const FlameProofDigitalWarehouse = () => {
                     {showColumns.includes("invalidReason") && (<th className="flame-warehouse-status-filter col"><div className="fileinfo-container-filter"><span className="fileinfo-title-filter" title="Invalidity Reason">Invalidity Reason</span></div></th>)}
                     {showColumns.includes("issue") && renderHeader("issue", "Certificate Issue Date")}
                     {showColumns.includes("expiry") && renderHeader("expiry", "Certificate Expiry Date")}
-                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && showColumns.includes("action") && (<th className="flame-warehouse-act-filter col"><span className="fileinfo-title-filter-1">Action</span></th>)}
+                    {isTrashView && showColumns.includes("deletedBy") && (<th className="flame-warehouse-status-filter col"><div className="fileinfo-container-filter"><span className="fileinfo-title-filter">Deleted By</span></div></th>)}
+                    {isTrashView && showColumns.includes("deletedOn") && (<th className="flame-warehouse-status-filter col"><div className="fileinfo-container-filter"><span className="fileinfo-title-filter">Deleted On</span></div></th>)}
+                    {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && showColumns.includes("action") && (<th className={`flame-warehouse-act-filter col${isTrashView ? " trashed" : ""}`}><span className="fileinfo-title-filter-1">Action</span></th>)}
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoadingTable && (<tr><td colSpan={visibleCount} style={{ textAlign: "center", padding: 20 }}><FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading Digital Warehouse.</td></tr>)}
-                  {!isLoadingTable && showNoAssets && (<tr><td colSpan={visibleCount} style={{ textAlign: "center", padding: 20 }}>No Components in Digital Warehouse.</td></tr>)}
+                  {isLoadingTable && (<tr><td colSpan={visibleCount} style={{ textAlign: "center", padding: 20 }}><FontAwesomeIcon icon={faSpinner} spin /> &nbsp; {isTrashView ? "Loading Deleted Components." : "Loading Digital Warehouse."}</td></tr>)}
+                  {!isLoadingTable && showNoAssets && (<tr><td colSpan={visibleCount} style={{ textAlign: "center", padding: 20 }}>{isTrashView ? "No Deleted Components." : "No Components in Digital Warehouse."}</td></tr>)}
                   {filteredFiles.map((file, index) => (
                     <tr key={index} className="file-info-row-height">
                       {showColumns.includes("nr") && (<td className="col">{index + 1}</td>)}
@@ -706,11 +783,26 @@ const FlameProofDigitalWarehouse = () => {
                       {showColumns.includes("invalidReason") && (<td className="col">{getReason(file.status, file)}</td>)}
                       {showColumns.includes("issue") && (<td className="col">{formatDate(file.issueDate)}</td>)}
                       {showColumns.includes("expiry") && (<td className="col">{formatDate(file.expiryDate)}</td>)}
+                      {isTrashView && showColumns.includes("deletedBy") && (<td className="col">{file.deletedBy?.username || "-"}</td>)}
+                      {isTrashView && showColumns.includes("deletedOn") && (<td className="col">{formatDate(file.deletedOn)}</td>)}
                       {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && showColumns.includes("action") && (
-                        <td className="col-act">
-                          {file.status.toLowerCase() !== "not uploaded" && (<button className="flame-delete-button-fi-new col-but-res" onClick={(e) => { e.stopPropagation(); openDownloadModal(file._id, file.fileName); }}><FontAwesomeIcon icon={faDownload} title="Download Certificate" /></button>)}
-                          <button className="flame-delete-button-fi-new col-but-res" onClick={(e) => { e.stopPropagation(); openModify(file); }}><FontAwesomeIcon icon={faEdit} title="Modify Component" /></button>
-                          <button className="flame-delete-button-fi-new col-but" onClick={(e) => { e.stopPropagation(); openModal(file._id, file.component); }}><FontAwesomeIcon icon={faTrash} title="Delete Component" /></button>
+                        <td className={"col-act"}>
+                          {!isTrashView && file.status.toLowerCase() !== "not uploaded" && (<button className="flame-delete-button-fi-new col-but-res" onClick={(e) => { e.stopPropagation(); openDownloadModal(file._id, file.fileName); }}><FontAwesomeIcon icon={faDownload} title="Download Certificate" /></button>)}
+                          {!isTrashView && (<button className="flame-delete-button-fi-new col-but-res" onClick={(e) => { e.stopPropagation(); openModify(file); }}><FontAwesomeIcon icon={faEdit} title="Modify Component" /></button>)}
+                          <button
+                            className={"flame-delete-button-fi-new col-but"}
+                            onClick={(e) => { e.stopPropagation(); openModal(file._id, file.component); }}
+                          >
+                            <FontAwesomeIcon icon={faTrash} title={isTrashView ? "Permanently Delete Component" : "Delete Component"} />
+                          </button>
+                          {isTrashView && (
+                            <button
+                              className="flame-delete-button-fi-new col-but-res"
+                              onClick={(e) => { e.stopPropagation(); openRestoreModal(file._id, file.component); }}
+                            >
+                              <FontAwesomeIcon icon={faRotate} title="Restore Component" />
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -867,7 +959,8 @@ const FlameProofDigitalWarehouse = () => {
       {isSortModalOpen && (<SortPopupWarehouse closeSortModal={closeSortModal} handleSort={handleSort} setSortField={setSortField} setSortOrder={setSortOrder} sortField={sortField} sortOrder={sortOrder} assetType={false} />)}
       {isDownloadModalOpen && (<DownloadPopup closeDownloadModal={closeDownloadModal} confirmDownload={confirmDownload} downloadFileName={downloadFileName} loading={loading} />)}
       {modify && (<UpdateWarehouseComponentPopup onClose={closeModify} data={certifierEdit} />)}
-      {isModalOpen && (<DeleteWarehouse closeModal={closeModal} deleteFile={deleteFile} loading={loading} selectedFileName={selectedFileName} />)}
+      {isModalOpen && (<DeleteWarehouse closeModal={closeModal} deleteFile={isTrashView ? deleteFileFromTrash : deleteFile} loading={loading} selectedFileName={selectedFileName} isTrashView={isTrashView} />)}
+      {isRestoreModalOpen && (<RestoreDocumentPopup isFlame={true} closeModal={closeRestoreModal} restoreFile={restoreFile} selectedFileName={selectedFileName} loading={loading} />)}
       {upload && (<UploadWarehouseComponentPopup onClose={closeUpload} uploadSite={uploadSite} />)}
       {batch && (<BatchRegisterComponentsWarehouse onClose={closeBatch} />)}
       <ToastContainer />

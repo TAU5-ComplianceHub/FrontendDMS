@@ -54,7 +54,73 @@ const OnlineCourseCreationPage = () => {
   const [approval, setApproval] = useState(false);
   const [inApproval, setInApproval] = useState(false);
   const [owner, setOwner] = useState(false);
+  const [isViewer, setIsViewer] = useState(false);
+  const [isPublisher, setIsPublisher] = useState(false);
 
+  const SHARE_ROLES = ["collaborator", "viewer", "publisher"];
+  const ALL_ALLOWED_ROLES = ["owner", ...SHARE_ROLES];
+
+  const normalizeSharedUsers = (value, ownerId) => {
+    const rawItems = Array.isArray(value)
+      ? value
+      : value == null
+        ? []
+        : [value];
+
+    const mapped = rawItems
+      .map((item) => {
+        if (typeof item === "string") {
+          return {
+            userId: item,
+            role: item === ownerId ? "owner" : "collaborator"
+          };
+        }
+
+        if (item && typeof item === "object") {
+          const userId =
+            item.userId ||
+            item.userID ||
+            item._id ||
+            item.id ||
+            "";
+
+          if (!userId) return null;
+
+          let role = String(item.role || "").toLowerCase().trim();
+
+          if (!ALL_ALLOWED_ROLES.includes(role)) {
+            role = userId === ownerId ? "owner" : "collaborator";
+          }
+
+          if (userId === ownerId) {
+            role = "owner";
+          }
+
+          return { userId, role };
+        }
+
+        return null;
+      })
+      .filter(Boolean);
+
+    const seen = new Set();
+    const deduped = [];
+
+    mapped.forEach((entry) => {
+      if (seen.has(entry.userId)) return;
+      seen.add(entry.userId);
+      deduped.push(entry);
+    });
+
+    if (ownerId && !deduped.some((entry) => entry.userId === ownerId)) {
+      deduped.unshift({ userId: ownerId, role: "owner" });
+    }
+
+    return deduped.map((entry) => ({
+      userId: entry.userId,
+      role: entry.userId === ownerId ? "owner" : entry.role
+    }));
+  };
   const openApproval = () => {
     setApproval(true);
   }
@@ -350,8 +416,9 @@ const OnlineCourseCreationPage = () => {
     setFormData(newFormData);
     formDataRef.current = newFormData;
 
-    setUserIDs([me]);
-    userIDsRef.current = [me];
+    const normalizedOwnerOnly = normalizeSharedUsers([], me);
+    setUserIDs(normalizedOwnerOnly);
+    userIDsRef.current = normalizedOwnerOnly;
 
     loadedIDRef.current = '';
     setLoadedID('');
@@ -374,7 +441,23 @@ const OnlineCourseCreationPage = () => {
     setIsSaveAsModalOpen(false);
   };
 
-  function buildDraftFormData(currentForm) {
+  const openShare = () => {
+    if (loadedIDRef.current || loadedID) {
+      setShare(true);
+    } else {
+      toast.dismiss();
+      toast.clearWaitingQueue();
+      toast.warn("Please save a draft before sharing.", {
+        closeButton: true,
+        autoClose: 800,
+        style: {
+          textAlign: 'center'
+        }
+      });
+    }
+  };
+
+  function buildDraftFormData(currentForm, normalizedSharedUsers) {
     // deep clone so we can mutate a wire copy
     const wire = structuredClone(currentForm);
     const fd = new FormData();
@@ -423,8 +506,8 @@ const OnlineCourseCreationPage = () => {
     const payload = {
       usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
-      formData: wire,                       // the cleaned form
-      userIDs: userIDsRef.current,
+      formData: wire,
+      userIDs: normalizedSharedUsers,
       creator: userIDRef.current,
       updater: null,
       dateUpdated: null
@@ -433,22 +516,6 @@ const OnlineCourseCreationPage = () => {
     fd.append("draft", JSON.stringify(payload)); // <- string, not Blob
     return fd;
   }
-
-  const openShare = () => {
-    if (loadedID) {
-      setShare(true);
-    } else {
-      toast.dismiss();
-      toast.clearWaitingQueue();
-      toast.warn("Please save a draft before sharing.", {
-        closeButton: true,
-        autoClose: 800, // 1.5 seconds
-        style: {
-          textAlign: 'center'
-        }
-      });
-    }
-  };
 
   const closeShare = () => { setShare(false); };
 
@@ -496,7 +563,13 @@ const OnlineCourseCreationPage = () => {
 
   async function saveData() {
     if (readOnly) return;
-    const fd = buildDraftFormData(formDataRef.current);
+
+    const normalizedSharedUsers = normalizeSharedUsers(
+      userIDsRef.current,
+      userIDRef.current
+    );
+
+    const fd = buildDraftFormData(formDataRef.current, normalizedSharedUsers);
 
     const res = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/safe`, {
       method: "POST",
@@ -514,11 +587,16 @@ const OnlineCourseCreationPage = () => {
     const wire = structuredClone(formDataRef.current);
     const fd = new FormData();
 
+    const normalizedSharedUsers = normalizeSharedUsers(
+      selectedUserIDs,
+      userIDRef.current
+    );
+
     const payload = {
       usedAbbrCodes: usedAbbrCodesRef.current,
       usedTermCodes: usedTermCodesRef.current,
       formData: wire,
-      userIDs: selectedUserIDs,
+      userIDs: normalizedSharedUsers,
       updater: userIDRef.current,
       dateUpdated: new Date().toISOString(),
       userID
@@ -673,9 +751,16 @@ const OnlineCourseCreationPage = () => {
   const loadData = async (loadID) => {
     try {
       setLoadingDraft(true);
-      const response = await fetch(`${process.env.REACT_APP_URL}/api/onlineTrainingCourses/load/${loadID}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` } // if your load route is protected
-      });
+
+      const response = await fetch(
+        `${process.env.REACT_APP_URL}/api/onlineTrainingCourses/load/${loadID}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`
+          }
+        }
+      );
+
       const storedData = await response.json();
 
       if (!response.ok) {
@@ -683,35 +768,61 @@ const OnlineCourseCreationPage = () => {
         return;
       }
 
-      setUsedAbbrCodes(storedData.usedAbbrCodes || []);
-      setUsedTermCodes(storedData.usedTermCodes || []);
-      setUserIDs(storedData.userIDs || []);
-      console.log(storedData)
+      const draftData = storedData.draft || {};
+
+      console.log("Loaded draft data:", draftData);
+
+      const ownerId =
+        draftData.creator ||
+        draftData.userID ||
+        userIDRef.current;
+
+      const normalizedSharedUsers = normalizeSharedUsers(
+        draftData.userIDs,
+        ownerId
+      );
+
+      setUsedAbbrCodes(draftData.usedAbbrCodes || []);
+      setUsedTermCodes(draftData.usedTermCodes || []);
+      setUserIDs(normalizedSharedUsers);
+      userIDsRef.current = normalizedSharedUsers;
+
       setPublishable(storedData.publishable);
 
-      const rawForm = storedData.formData || {};
+      const rawForm = draftData.formData || {};
       const normalizedForm = {
         ...rawForm,
-        supportingDocuments: Array.isArray(rawForm.supportingDocuments) ? rawForm.supportingDocuments : [],
-        resources: Array.isArray(rawForm.resources) ? rawForm.resources : [] // ✅ ADD
+        supportingDocuments: Array.isArray(rawForm.supportingDocuments)
+          ? rawForm.supportingDocuments
+          : [],
+        resources: Array.isArray(rawForm.resources)
+          ? rawForm.resources
+          : []
       };
-      const isOwner = storedData.isOwner || false;
 
-      // IMPORTANT: hydrate media previews for any saved files
-      revokeAllObjectUrls(); // clear any previous draft's object URLs
+      const isOwner = storedData.isOwner || false;
+      const isViewer = storedData.isViewer || false;
+      const isPublisher = storedData.isPublisher || false;
+
+      revokeAllObjectUrls();
       const hydrated = await hydrateDraftMediaPreviews(normalizedForm);
 
       setFormData(hydrated);
       setTitleSet(true);
       loadedIDRef.current = loadID;
       setLoadedID(loadID);
+
       setReadOnly(storedData.readOnly);
-      setInApproval(storedData.statusApproval);
-      setOwner(isOwner)
+      setInApproval(Boolean(storedData.statusApproval));
+
+      setOwner(isOwner);
+      setIsViewer(isViewer);
+      setIsPublisher(isPublisher);
 
       setTimeout(() => {
         setLoadingDraft(false);
       }, 2000);
+
     } catch (error) {
       console.error('Error loading data:', error);
       setLoadingDraft(false);
@@ -932,7 +1043,7 @@ const OnlineCourseCreationPage = () => {
       const decodedToken = jwtDecode(storedToken);
 
       setUserID(decodedToken.userId);
-      setUserIDs([decodedToken.userId]);
+      setUserIDs(normalizeSharedUsers([], decodedToken.userId));
     }
   }, [navigate]);
 
@@ -1139,7 +1250,7 @@ const OnlineCourseCreationPage = () => {
                   <FontAwesomeIcon icon={faShareNodes} className={`${!loadedID ? "disabled-share" : ""}`} title="Share" onClick={openShare} />
                 </div>)}
 
-                {!inApproval && owner && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                {!isViewer && !inApproval && owner && canIn(access, "TMS", ["systemAdmin"]) && (<div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
                 </div>)}
 
@@ -1152,7 +1263,7 @@ const OnlineCourseCreationPage = () => {
 
           <div className="spacer"></div>
 
-          <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} />
+          <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} />
         </div>
 
         <div className={`scrollable-box`}>
@@ -1163,9 +1274,15 @@ const OnlineCourseCreationPage = () => {
             </div>
           )}
 
+          {(isViewer && readOnly) && (<div className="input-row">
+            <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#FFFF89", color: "black", fontWeight: "bold" }}>
+              View-only access. Please contact the owner to request edit access.
+            </div>
+          </div>)}
+
           {!loadingDraft && (
             <>
-              {readOnly && (<div className="input-row">
+              {!isViewer && readOnly && (<div className="input-row">
                 <div className={`input-box-aim-cp`} style={{ marginBottom: "10px", background: "#CB6F6F", color: "white" }}>
                   <strong>Read-only mode:</strong> This document is currently in its publishing phase and cannot be edited at this time.
                 </div>

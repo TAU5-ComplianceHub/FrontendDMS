@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 
-const DeleteWarehouse = ({ closeModal, deleteFile, selectedFileName, loading }) => {
+const DeleteWarehouse = ({ isTrashView, closeModal, deleteFile, selectedFileName, loading }) => {
     return (
         <div className="delete-popup-overlay">
             <div className="delete-popup-content">
@@ -12,7 +12,7 @@ const DeleteWarehouse = ({ closeModal, deleteFile, selectedFileName, loading }) 
                 </div>
 
                 <div className="delete-file-group">
-                    <div className="delete-file-text">{"Are you sure you want to delete this component from the warehouse?"}</div>
+                    <div className="delete-file-text">{isTrashView ? "Are you sure you want to permanently delete this component?" : "Are you sure you want to delete this component from the warehouse?"}</div>
                     <div>{selectedFileName}</div>
                 </div>
 

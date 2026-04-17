@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faArrowLeft, faBell, faCircleUser, faHome } from "@fortawesome/free-solid-svg-icons";
+import { faArrowCircleRight, faArrowLeft, faArrowRight, faArrowRotateLeft, faArrowRotateRight, faArrowsRotate, faBell, faCircleUser, faGroupArrowsRotate, faHome } from "@fortawesome/free-solid-svg-icons";
 import BurgerMenuFI from "../FileInfo/BurgerMenuFI";
 import Notifications from "./Notifications";
 
-const TopBar = ({ menu, setReset, isProfile = false, visitor = false, student = false }) => {
+const TopBar = ({ refreshable = true, menu, setReset, isProfile = false, visitor = false, student = false }) => {
     const navigate = useNavigate();
     const [showNotifications, setShowNotifications] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -42,8 +42,16 @@ const TopBar = ({ menu, setReset, isProfile = false, visitor = false, student = 
 
     return (
         <div className="icons-container">
+            {refreshable && (<div className="burger-menu-icon-create-page-2">
+                <FontAwesomeIcon
+                    icon={faArrowsRotate}
+                    title="Refresh Page"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => window.location.reload()}
+                />
+            </div>)}
             <div className="burger-menu-icon-um-home">
-                <FontAwesomeIcon onClick={() => navigate(!visitor ? !student ? "/FrontendDMS/home" : "/studentHomePage" : "/visitorHomePage")} icon={faHome} title="Home" />
+                <FontAwesomeIcon onClick={() => navigate(!visitor ? !student ? "/FrontendDMS/home" : "/FrontendDMS/studentHomePage" : "/FrontendDMS/visitorHomePage")} icon={faHome} title="Home" />
             </div>
             {(!visitor && !student) && (<div className="burger-menu-icon-um notifications-bell-wrapper">
                 <FontAwesomeIcon icon={faBell} onClick={() => setShowNotifications(!showNotifications)} title="Notifications" />

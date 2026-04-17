@@ -536,7 +536,7 @@ const VisitorManagementPage = () => {
 
                 <div className="table-container-risk-control-attributes">
                     <div className="risk-control-label-wrapper">
-                        <label className="risk-control-label">Equipped Visitors</label>
+                        <label className="risk-control-label">Visitor Equipment</label>
                         <FontAwesomeIcon
                             icon={faColumns}
                             title="Select Columns to Display"
@@ -660,7 +660,7 @@ const VisitorManagementPage = () => {
                                     </tr>
                                 ) : (
                                     processedFiles.map((file, index) => (
-                                        <tr key={file._id ?? index} className="file-info-row-height vihr-expandable-row" style={{ cursor: "pointer" }} onClick={() => navigate(`/FrontendDMS/visitorDevices/${file._id}`)}>
+                                        <tr key={file._id ?? index} className="file-info-row-height vihr-expandable-row" style={{ cursor: "pointer" }} onClick={() => navigate(`/visitorDevices/${file._id}`)}>
                                             {visibleColumns.map(col => {
                                                 if (col.id === "validity") {
                                                     return (

@@ -3,7 +3,7 @@ import "./DeletePopup.css";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 
-const RestoreDocumentPopup = ({ closeModal, restoreFile, selectedFileName, loading }) => {
+const RestoreDocumentPopup = ({ isFlame = false, closeModal, restoreFile, selectedFileName, loading }) => {
     return (
         <div className="delete-popup-overlay">
             <div className="delete-popup-content">
@@ -13,7 +13,7 @@ const RestoreDocumentPopup = ({ closeModal, restoreFile, selectedFileName, loadi
                 </div>
 
                 <div className="delete-file-group">
-                    <div className="delete-file-text">{"Are you sure you want to restore this file from trash?"}</div>
+                    <div className="delete-file-text">{`Are you sure you want to restore this ${isFlame ? "component" : "file"} from trash?`}</div>
                     <div>{selectedFileName}</div>
                 </div>
 

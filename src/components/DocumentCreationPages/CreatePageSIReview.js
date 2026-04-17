@@ -1452,7 +1452,7 @@ const CreatePageSIReview = () => {
           <div className="spacer"></div>
 
           {/* Container for right-aligned icons */}
-          <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} />
+          <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} />
         </div>
 
         <div className={`scrollable-box`}>

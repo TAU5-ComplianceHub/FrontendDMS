@@ -165,9 +165,33 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                 .sort((a, b) => a.username.localeCompare(b.username));
 
             const currentId = userToEdit?._id ? String(userToEdit._id) : "";
-            const filtered = currentId
-                ? sorted.filter(u => String(u?._id) !== currentId) // filter out self
-                : sorted;
+
+            if (!currentId) {
+                setUsers(sorted);
+                return;
+            }
+
+            const reportingMap = {};
+            sorted.forEach((u) => {
+                reportingMap[String(u._id)] = String(u?.reportingTo?._id || "");
+            });
+
+            const wouldCreateCycle = (candidateId) => {
+                const visited = new Set();
+                let cursor = candidateId;
+                while (cursor && cursor !== "") {
+                    if (cursor === currentId) return true;
+                    if (visited.has(cursor)) break;
+                    visited.add(cursor);
+                    cursor = reportingMap[cursor] || "";
+                }
+                return false;
+            };
+
+            const filtered = sorted.filter((u) => {
+                const uid = String(u._id);
+                return uid !== currentId && !wouldCreateCycle(uid);
+            });
 
             setUsers(filtered);
         } catch (error) {
@@ -283,7 +307,7 @@ const EditUserModal = ({ isEditModalOpen, setIsEditModalOpen, updateUser, formEr
                                 <select
                                     id="reportingTo"
                                     className={userToEdit.reportingTo === null ? `create-user-select def-colour` : `create-user-select`}
-                                    value={userToEdit?.reportingTo || ""}
+                                    value={userToEdit?.reportingTo?._id || userToEdit?.reportingTo || ""}
                                     onChange={(e) => setUserToEdit({ ...userToEdit, reportingTo: e.target.value })}
                                 >
                                     <option value="" className="def-colour">Select Reporting To</option>

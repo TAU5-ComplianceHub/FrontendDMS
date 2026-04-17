@@ -656,7 +656,7 @@ const DigitalWarehouseRemoved = () => {
 
           <div className="sidebar-logo-dm-fi">
             <img src={`${process.env.PUBLIC_URL}/flameWarehouse2.svg`} alt="Logo" className="icon-risk-rm" />
-            <p className="logo-text-dm-fi">{(`Removed Components`)}</p>
+            <p className="logo-text-dm-fi">{(`Components Await Repair`)}</p>
           </div>
         </div>
       )}
@@ -695,7 +695,7 @@ const DigitalWarehouseRemoved = () => {
 
         <div className="table-flameproof-card">
           <div className="flameproof-table-header-label-wrapper">
-            <label className="risk-control-label">{"Removed Components"}</label>
+            <label className="risk-control-label">{"Components Await Repair"}</label>
             <FontAwesomeIcon
               icon={faDownload}
               title="Export to Excel"
@@ -720,7 +720,7 @@ const DigitalWarehouseRemoved = () => {
           <div className="table-container-file-flameproof-all-assets">
             <table>
               <thead>
-                <tr className="trashed">
+                <tr className="">
                   <th className="flame-num-filter col" style={{ width: "5%" }}>Nr</th>
                   {renderHeader("component", "Component Name")}
                   {renderHeader("serial", "Serial Number")}
@@ -736,7 +736,7 @@ const DigitalWarehouseRemoved = () => {
                     <td colSpan={
                       7
                     } style={{ textAlign: "center", padding: 20 }}>
-                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading removed components.
+                      <FontAwesomeIcon icon={faSpinner} spin /> &nbsp; Loading components.
                     </td>
                   </tr>
                 )}

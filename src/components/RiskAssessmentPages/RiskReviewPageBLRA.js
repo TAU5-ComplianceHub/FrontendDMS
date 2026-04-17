@@ -2897,7 +2897,7 @@ const RiskReviewPageBLRA = () => {
                     <div className="spacer"></div>
 
                     {/* Container for right-aligned icons */}
-                    <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
+                    <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} risk={true} />
                 </div>
 
                 {(!readOnly && (inApproval || inReview)) && (<div className="input-row">

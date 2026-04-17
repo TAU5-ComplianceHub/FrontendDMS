@@ -48,7 +48,7 @@ const PopupMenu = ({ isOpen, setHoveredFileId, handlePreview, openDownloadModal,
                     {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (<li onClick={() => openUpdate(file._id)}>Update</li>)}
                     {canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
                         <ul>
-                            <li onClick={() => navigate(`/FrontendDMS/versionHistory/${file.docID}`)}>Version History</li>
+                            <li onClick={() => navigate(`/FrontendDMS/versionHistory/${file._id}`)}>Version History</li>
                         </ul>
                     )}
                 </div>

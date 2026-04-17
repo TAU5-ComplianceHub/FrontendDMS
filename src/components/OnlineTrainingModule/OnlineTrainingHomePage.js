@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { jwtDecode } from 'jwt-decode';
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faFolderOpen, faFileCirclePlus, faFolder, faCloudUploadAlt, faUsersCog, faSitemap, faCaretLeft, faCaretRight, faPersonChalkboard, faBookOpen, faBullhorn, faChalkboardTeacher, faDownload, faLaptop, faCircle } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faPeopleGroup, faX, faSort, faCircleUser, faBell, faArrowLeft, faSearch, faFolderOpen, faFileCirclePlus, faFolder, faCloudUploadAlt, faUsersCog, faSitemap, faCaretLeft, faCaretRight, faPersonChalkboard, faBookOpen, faBullhorn, faChalkboardTeacher, faDownload, faLaptop, faCircle, faMessage } from '@fortawesome/free-solid-svg-icons';
 import TopBar from "../Notifications/TopBar";
 import { getCurrentUser, canIn } from "../../utils/auth";
 
@@ -54,6 +54,24 @@ const OnlineTrainingHomePage = () => {
                         <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} alt="Logo" className="logo-img-um" onClick={() => navigate('/FrontendDMS/home')} title="Home" />
                         <p className="logo-text-um">Training Management</p>
                     </div>
+                    <div className="button-container-create">
+                        {true && canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (
+                            <>
+                                <button className="but-um" onClick={() => navigate("/FrontendDMS/onlineProfiles")}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faUser} src={"/dmsAdmin.svg"} size="xs" className={"button-logo-custom"} />
+                                        <span className="button-text">Student Profiles</span>
+                                    </div>
+                                </button>
+                                <button className="but-um" onClick={() => navigate("/FrontendDMS/chatBoxCourses")}>
+                                    <div className="button-content">
+                                        <FontAwesomeIcon icon={faMessage} src={"/dmsAdmin.svg"} size="xs" className={"button-logo-custom"} />
+                                        <span className="button-text">Chat Box</span>
+                                    </div>
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -102,7 +120,7 @@ const OnlineTrainingHomePage = () => {
                             <h3 className="document-title-fi-home">Published Courses</h3>
                         </>
                     </div>)}
-                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/onlineProfiles")}>
+                    {false && canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/onlineProfiles")}>
                         <>
                             <div className="icon-dept">
                                 <img src={`${process.env.PUBLIC_URL}/visitorInductionIcon.svg`} className={"icon-dept"} />
@@ -110,7 +128,7 @@ const OnlineTrainingHomePage = () => {
                             <h3 className="document-title-fi-home">Student Profiles</h3>
                         </>
                     </div>)}
-                    {canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/chatBoxCourses")}>
+                    {false && canIn(access, "TMS", ["systemAdmin", "profileManager"]) && (<div className={`document-card-fi-home`} onClick={() => navigate("/FrontendDMS/chatBoxCourses")}>
                         <>
                             <div className="icon-dept">
                                 <img src={`${process.env.PUBLIC_URL}/chatBox2.svg`} className={"icon-dept"} />

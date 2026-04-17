@@ -60,7 +60,7 @@ const DraftsPage = () => {
                 rowClickRoute: (draftId) => `/FrontendDMS/documentCreateStand/Standard/${draftId}`,
             },
 
-            specialInstruction: {
+            special: {
                 icon: `${process.env.PUBLIC_URL}/specialInstInverted.svg`,
                 loadRoute: `${process.env.REACT_APP_URL}/api/draft/special/drafts/${userID}`,
                 deleteRoute: (draftId) => `${process.env.REACT_APP_URL}/api/draft/special/delete/${draftId}`,
