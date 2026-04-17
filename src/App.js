@@ -459,11 +459,11 @@ function App() {
         <Route path="FrontendDMS/jraHome" element={<JRAHomePage />} />
         <Route path="FrontendDMS/ibraHome" element={<IBRAHomePage />} />
         <Route path="FrontendDMS/blraHome" element={<BLRAHomePage />} />
-        <Route path="/ctsHome" element={<CTSHome />} />
-        <Route path="/taskingHome" element={<TaskingHomePage />} />
-        <Route path="/manualTasking" element={<ManualTaskingHomePage />} />
-        <Route path="/manualTaskingAllocate" element={<ManualTaskingAllocationPage />} />
-        <Route path="/manualTaskingTasks" element={<ManualTaskingViewPage />} />
+        <Route path="FrontendDMS/ctsHome" element={<CTSHome />} />
+        <Route path="FrontendDMS/taskingHome" element={<TaskingHomePage />} />
+        <Route path="FrontendDMS/manualTasking" element={<ManualTaskingHomePage />} />
+        <Route path="FrontendDMS/manualTaskingAllocate" element={<ManualTaskingAllocationPage />} />
+        <Route path="FrontendDMS/manualTaskingTasks" element={<ManualTaskingViewPage />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />
