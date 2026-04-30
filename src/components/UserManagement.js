@@ -148,6 +148,7 @@ const UserManagement = () => {
     const roleMapping = {
         standarduser: 'Standard User',
         admin: 'Admin',
+        superadmin: 'Super Admin',
     };
 
     const formatRole = (role) => roleMapping[role] || role;
@@ -405,28 +406,15 @@ const UserManagement = () => {
                         <p className="logo-text-um">Admin Page</p>
                     </div>
 
-                    <div className="filter-um">
-                        <p className="filter-text-um" style={{ marginBottom: "5px" }}>Filter</p>
-                        <div className="um-info-popup-page-select-container">
-                            <select className="select-filter-um remove-default-styling" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
-                                <option value="">Role</option>
-                                {roles
-                                    .map((role, index) => (
-                                        <option key={index} value={role}>
-                                            {formatRole(role)}
-                                        </option>
-                                    ))}
-                            </select>
+                    {!isDeletedView && (<div className="filter-fih">
+                        <div className="button-container-dept">
+                            <button className="but-um" onClick={openDeletedUsersView}>
+                                <div className="button-content">
+                                    <FontAwesomeIcon icon={faTrashCan} className="button-icon" />
+                                    <span className="button-text">Deleted Users</span>
+                                </div>
+                            </button>
                         </div>
-                    </div>
-
-                    {!isDeletedView && (<div className="button-container-um">
-                        <button className="but-um" onClick={openDeletedUsersView}>
-                            <div className="button-content">
-                                <FontAwesomeIcon icon={faTrashCan} className="button-icon" />
-                                <span className="button-text">Deleted Users</span>
-                            </div>
-                        </button>
                     </div>)}
 
                     <div className="sidebar-logo-dm-fi">

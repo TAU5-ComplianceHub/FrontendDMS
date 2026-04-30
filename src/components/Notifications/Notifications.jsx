@@ -311,9 +311,19 @@ const Notifications = ({ setClose, getCount }) => {
         return `${day}/${month}/${year} ${hours}:${minutes}`;
     };
 
-    const filteredNotifications = selectedPill === "All"
-        ? notifications
-        : notifications.filter(n => n.type?.toLowerCase() === selectedPill.toLowerCase());
+    const filteredNotifications =
+        selectedPill === "All"
+            ? notifications
+            : notifications.filter(n => {
+                const type = n.type?.toLowerCase();
+
+                if (selectedPill === "Updates") {
+                    return type === "tasks" || type === "updates";
+                }
+
+                return type === selectedPill.toLowerCase();
+            });
+
 
     return (
         <div className="notifications-modal-container">

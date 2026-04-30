@@ -31,8 +31,8 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
     const unwantedEventRefs = useRef({});
     const responsibleInputRefs = useRef({});
     const controlsInputRefs = useRef({});
-    const [loadingWEDKey, setLoadingWEDKey] = useState(false);
-    const [loadingControlKey, setLoadingControlKey] = useState(false);
+    const [loadingWEDKeys, setLoadingWEDKeys] = useState(new Set());
+    const [loadingControlKeys, setLoadingControlKeys] = useState(new Set());
     const [collapsedControls, setCollapsedControls] = useState({});
     const controlsScrollRefs = useRef([]);
     const [wedHistory, setWedHistory] = useState({});
@@ -168,7 +168,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
             [key]: [...(prev[key] || []), curVal]
         }));
         const responsible = jraData.jraBody[stepIndex].taskExecution[subIndex].R;
-        setLoadingWEDKey(true);
+        setLoadingWEDKeys(prev => new Set(prev).add(key));
 
         try {
             const newText = await aiRewriteWED(control, responsible, "chatWED/jra");
@@ -189,7 +189,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
         } catch (err) {
             console.error(err);
         } finally {
-            setLoadingWEDKey(false);
+            setLoadingWEDKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
         }
     };
 
@@ -200,7 +200,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
             ...prev,
             [key]: [...(prev[key] || []), control]
         }));
-        setLoadingControlKey(key);
+        setLoadingControlKeys(prev => new Set(prev).add(key));
 
         try {
             const newText = await aiRewrite(control, "chatControl/jra");
@@ -221,7 +221,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
         } catch (err) {
             console.error(err);
         } finally {
-            setLoadingControlKey(null);
+            setLoadingControlKeys(prev => { const next = new Set(prev); next.delete(key); return next; });
         }
     };
 
@@ -1346,10 +1346,10 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                                                     />
 
                                                                                     {!readOnly && (<>
-                                                                                        {loadingControlKey && (<FontAwesomeIcon icon={faSpinner} spin className="jra-popup-page-control-icon-spin spin-animation" />)}
+                                                                                        {loadingControlKeys.has(`${si}-${idx}`) && (<FontAwesomeIcon icon={faSpinner} spin className="jra-popup-page-control-icon-spin spin-animation" />)}
 
                                                                                         {controlHistory[`${si}-${idx}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon-2" onClick={() => handleUndoControl(si, idx)} />)}
-                                                                                        {!loadingControlKey && !allSubStepOptions.includes(subItem.task) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon" onClick={() => handleAiRewrite(si, idx)} />)}
+                                                                                        {!loadingControlKeys.has(`${si}-${idx}`) && !allSubStepOptions.includes(subItem.task) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon" onClick={() => handleAiRewrite(si, idx)} />)}
                                                                                     </>)}
                                                                                 </div>
                                                                                 {!readOnly && (<>
@@ -1418,9 +1418,9 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                                                     onChange={(e) => handleControlChange(si, idx, e.target.value)}
                                                                                 />
                                                                                 {!readOnly && (<>
-                                                                                    {loadingWEDKey && (<FontAwesomeIcon icon={faSpinner} spin className="jra-popup-page-control-icon-spin spin-animation" />)}
+                                                                                    {loadingWEDKeys.has(`${si}-${idx}`) && (<FontAwesomeIcon icon={faSpinner} spin className="jra-popup-page-control-icon-spin spin-animation" />)}
                                                                                     {wedHistory[`${si}-${idx}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon-2" onClick={() => handleUndoWED(si, idx)} />)}
-                                                                                    {!loadingWEDKey && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon" onClick={() => handleAiWEDCreate(si, idx)} />)}
+                                                                                    {!loadingWEDKeys.has(`${si}-${idx}`) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon" onClick={() => handleAiWEDCreate(si, idx)} />)}
                                                                                 </>)}
                                                                             </div>
                                                                         </div>

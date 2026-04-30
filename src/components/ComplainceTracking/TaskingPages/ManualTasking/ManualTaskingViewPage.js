@@ -8,6 +8,7 @@ import TopBar from "../../../Notifications/TopBar";
 import { canIn, getCurrentUser } from "../../../../utils/auth";
 import { ToastContainer, toast } from "react-toastify";
 import ModifyMyTask from "./ModifyMyTask";
+import axios from "axios";
 
 const ManualTaskingViewPage = () => {
     const [tasks, setTasks] = useState([]);
@@ -36,8 +37,16 @@ const ManualTaskingViewPage = () => {
     const [activeControlMenuId, setActiveControlMenuId] = useState(null);
     const [showModifyPopup, setShowModifyPopup] = useState(false);
     const [selectedTask, setSelectedTask] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     const handleOpenModifyPopup = (task) => {
+        if (task.closeStatus) {
+            toast.info("This task has been closed out and can no longer be modified.", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+            return;
+        }
         setSelectedTask(task);
         setShowModifyPopup(true);
     };
@@ -45,6 +54,13 @@ const ManualTaskingViewPage = () => {
     const handleCloseModifyPopup = () => {
         setShowModifyPopup(false);
         setSelectedTask(null);
+    };
+
+    // Called by ModifyMyTask after a successful save so the table stays in sync
+    const handleTaskSaved = (updatedTask) => {
+        setTasks(prev =>
+            prev.map(t => (t._id === updatedTask._id ? normaliseTask(updatedTask) : t))
+        );
     };
 
     const clearSearch = () => {
@@ -97,8 +113,8 @@ const ManualTaskingViewPage = () => {
     };
 
     const getStatusTextColor = (status) => {
-        if (status === "Completed") return "#FFFFFF"; // white
-        return "#000000"; // black for 25%–75%
+        if (status === "Completed") return "#FFFFFF";
+        return "#000000";
     };
 
     const onRowPointerMove = (e) => {
@@ -109,10 +125,8 @@ const ManualTaskingViewPage = () => {
 
         const dx = e.clientX - drag.current.startX;
 
-        // Don't treat it as a drag until user moves enough
         if (!drag.current.moved) {
             if (Math.abs(dx) < DRAG_THRESHOLD_PX) return;
-
             drag.current.moved = true;
             scroller.classList.add("dragging");
         }
@@ -123,10 +137,8 @@ const ManualTaskingViewPage = () => {
 
     const endRowDrag = (e) => {
         if (!drag.current.active) return;
-
         drag.current.active = false;
         scrollerRef.current?.classList.remove("dragging");
-
         const tr = e.target.closest("tr");
         tr?.releasePointerCapture?.(e.pointerId);
     };
@@ -135,7 +147,7 @@ const ManualTaskingViewPage = () => {
         const storedToken = localStorage.getItem('token');
         if (storedToken) {
             setToken(storedToken);
-            const decodedToken = jwtDecode(storedToken);
+            jwtDecode(storedToken); // keep existing pattern
         }
     }, [navigate]);
 
@@ -143,77 +155,85 @@ const ManualTaskingViewPage = () => {
         fetchTasks();
     }, []);
 
-    const fetchTasks = async () => {
-        try {
-            // 🔹 Fake data instead of API call
-            const fakeData = {
-                tasks: [
-                    {
-                        _id: "1",
-                        taskDescription: "Review monthly compliance report",
-                        responsible: "John Smith",
-                        allocatedDate: "2026-04-01",
-                        dueDate: "2026-04-08",
-                        completionDate: "",
-                        status: "25% Completed",
-                        comments: "Focus on section A",
-                        attachments: ["Report.pdf"],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: false,
-                    },
-                    {
-                        _id: "2",
-                        taskDescription: "Submit training attendance",
-                        responsible: "Sarah Williams",
-                        allocatedDate: "2026-04-02",
-                        dueDate: "2026-04-10",
-                        completionDate: "2026-04-09",
-                        status: "50% Completed",
-                        comments: "Include signed sheet",
-                        attachments: ["Attendance.xlsx"],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: true,
-                    },
-                    {
-                        _id: "3",
-                        taskDescription: "Prepare incident summary",
-                        responsible: "Michael Brown",
-                        allocatedDate: "2026-04-03",
-                        dueDate: "2026-04-12",
-                        completionDate: "",
-                        status: "75% Completed",
-                        comments: "Add all incidents",
-                        attachments: [],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: false,
-                    },
-                    {
-                        _id: "4",
-                        taskDescription: "Verify emergency contacts",
-                        responsible: "Lisa Johnson",
-                        allocatedDate: "2026-04-04",
-                        dueDate: "2026-04-15",
-                        completionDate: "",
-                        status: "Completed",
-                        comments: "Cross-check numbers",
-                        attachments: ["Contacts.csv"],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: false,
-                    },
-                ],
-            };
+    const normaliseTask = (task) => ({
+        ...task,
+        allocatedDate: task.allocatedDate
+            ? new Date(task.allocatedDate).toISOString().slice(0, 10)
+            : "",
+        dueDate: task.dueDate ? (() => {
+            const d = new Date(task.dueDate);
+            if (isNaN(d.getTime())) return String(task.dueDate).slice(0, 10);
+            const gmt2 = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+            const datePart = gmt2.toISOString().slice(0, 10);
+            const timePart = gmt2.toISOString().slice(11, 16);
+            return `${datePart} ${timePart}`;
+        })() : "",
+        completionDate: task.completionDate
+            ? new Date(task.completionDate).toISOString().slice(0, 10)
+            : "",
+        _rawAttachments: task.attachments || [],
+        _rawUserAttachments: task.userAttachments || [],
+        attachments: (task.attachments || []).map(a =>
+            typeof a === "string" ? a : a.fileName || ""
+        ),
+        userAttachments: (task.userAttachments || []).map(a =>
+            typeof a === "string" ? a : a.fileName || ""
+        ),
+        responsible: task.responsible?.username ?? task.responsible ?? "",
+        userComments: task?.userComments || "",
+    });
 
-            // 🔹 Keep your sorting pattern (but updated to taskDescription)
-            const sortedTasks = fakeData.tasks.sort((a, b) =>
-                a.taskDescription.localeCompare(b.taskDescription, undefined, {
-                    sensitivity: "base",
-                })
+    const handleDownloadAttachment = async (taskId, attachmentId, fileName, attachmentType = "attachments") => {
+        const storedToken = localStorage.getItem("token");
+        if (!storedToken || !taskId || !attachmentId) return;
+
+        try {
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${taskId}/${attachmentType}/${attachmentId}/download`,
+                {
+                    headers: { Authorization: `Bearer ${storedToken}` },
+                }
             );
 
-            // 🔹 IMPORTANT: use your correct setter
-            setTasks(sortedTasks);
+            if (!response.ok) {
+                throw new Error("Failed to download attachment");
+            }
 
+            const blob = await response.blob();
+            saveAs(blob, fileName || "attachment");
         } catch (error) {
+            toast.error("Failed to download file. Please try again.", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+        }
+    };
+
+    const fetchTasks = async () => {
+        setLoading(true);
+        try {
+            const storedToken = localStorage.getItem("token");
+            const response = await axios.get(`${process.env.REACT_APP_URL}/api/complainceTasks/my`, {
+                headers: { Authorization: `Bearer ${storedToken}` },
+            });
+
+            const raw = response.data?.tasks ?? [];
+            const normalised = raw.map(normaliseTask);
+
+            // Default sort: due date ascending then task description
+            normalised.sort((a, b) =>
+                (a.dueDate || "").localeCompare(b.dueDate || "") ||
+                (a.taskDescription || "").localeCompare(b.taskDescription || "", undefined, { sensitivity: "base" })
+            );
+
+            setTasks(normalised);
+        } catch (error) {
+            toast.error("Failed to load tasks. Please try again.", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -307,7 +327,6 @@ const ManualTaskingViewPage = () => {
     const processedTasks = useMemo(() => {
         let current = [...tasks];
 
-        // 1. Global Search
         if (searchQuery) {
             const lowerQ = searchQuery.toLowerCase();
             current = current.filter(c =>
@@ -318,7 +337,6 @@ const ManualTaskingViewPage = () => {
         current = current.filter((row, originalIndex) => {
             for (const [colId, selectedValues] of Object.entries(activeExcelFilters)) {
                 if (!selectedValues || !Array.isArray(selectedValues)) continue;
-
                 const cellValues = getFilterValuesForCell(row, colId, originalIndex);
                 const match = cellValues.some(v => selectedValues.includes(v));
                 if (!match) return false;
@@ -355,7 +373,6 @@ const ManualTaskingViewPage = () => {
                 return Number.isNaN(d.getTime()) ? null : d.getTime();
             };
 
-            // Default sort: Due Date ascending
             if (!sortConfig?.colId) {
                 const dueA = parseDateValue(a?.dueDate);
                 const dueB = parseDateValue(b?.dueDate);
@@ -383,7 +400,6 @@ const ManualTaskingViewPage = () => {
             let valA;
             let valB;
 
-            // Date columns should sort as real dates, not text
             if (["allocatedDate", "dueDate", "completionDate"].includes(colId)) {
                 valA = parseDateValue(a?.[colId]);
                 valB = parseDateValue(b?.[colId]);
@@ -406,7 +422,6 @@ const ManualTaskingViewPage = () => {
                 if (mainResult !== 0) return mainResult;
             }
 
-            // Tie-breaker: always fall back to due date first
             const dueA = parseDateValue(a?.dueDate);
             const dueB = parseDateValue(b?.dueDate);
 
@@ -418,7 +433,6 @@ const ManualTaskingViewPage = () => {
                 if (dueResult !== 0) return dueResult;
             }
 
-            // Final tie-breaker
             const taskA = normalize(a?.taskDescription);
             const taskB = normalize(b?.taskDescription);
 
@@ -438,9 +452,11 @@ const ManualTaskingViewPage = () => {
         { id: "dueDate", title: "Due Date" },
         { id: "completionDate", title: "Completion Date" },
         { id: "status", title: "Status" },
-        { id: "comments", title: "Comments / Notes" },
-        { id: "attachments", title: "Attachments" },
-        { id: "userAttachments", title: "User Attachments" },
+        { id: "comments", title: "Task Allocator Comments / Notes" },
+        { id: "userComments", title: "Responsible Person Comments / Notes" },
+        { id: "attachments", title: "Task Allocator Attachments" },
+        { id: "userAttachments", title: "Responsible Person Attachments" },
+        { id: "action", title: "Action" },
     ];
 
     const [showColumns, setShowColumns] = useState([
@@ -451,8 +467,10 @@ const ManualTaskingViewPage = () => {
         "completionDate",
         "status",
         "comments",
+        "userComments",
         "attachments",
         "userAttachments",
+        "action",
     ]);
 
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -461,6 +479,7 @@ const ManualTaskingViewPage = () => {
 
     const toggleColumn = (columnId) => {
         if (columnId === "nr") return;
+        if (columnId === "action") return;
 
         setShowColumns(prev => {
             if (prev.includes(columnId)) {
@@ -474,7 +493,7 @@ const ManualTaskingViewPage = () => {
         if (selectAll) {
             setShowColumns(allColumnIds);
         } else {
-            setShowColumns(["nr"]);
+            setShowColumns(["nr", "action"]);
         }
     };
 
@@ -506,37 +525,42 @@ const ManualTaskingViewPage = () => {
     const [columnWidths, setColumnWidths] = useState({
         nr: 60,
         taskDescription: 320,
-        allocatedDate: 150,
-        dueDate: 150,
-        completionDate: 170,
+        allocatedDate: 100,
+        dueDate: 130,
+        completionDate: 130,
         status: 140,
         comments: 300,
+        userComments: 300,
         attachments: 220,
         userAttachments: 220,
+        action: 80,
     });
 
     const [initialColumnWidths] = useState({
         nr: 60,
         taskDescription: 320,
-        allocatedDate: 150,
-        dueDate: 150,
-        completionDate: 170,
+        allocatedDate: 100,
+        dueDate: 130,
+        completionDate: 130,
         status: 140,
         comments: 300,
+        userComments: 300,
         attachments: 220,
         userAttachments: 220,
+        action: 80,
     });
 
     const columnSizeLimits = {
         nr: { min: 60, max: 60 },
         taskDescription: { min: 220, max: 800 },
-        allocatedDate: { min: 130, max: 260 },
-        dueDate: { min: 130, max: 260 },
-        completionDate: { min: 140, max: 260 },
+        allocatedDate: { min: 100, max: 260 },
+        dueDate: { min: 100, max: 260 },
+        completionDate: { min: 100, max: 260 },
         status: { min: 120, max: 240 },
         comments: { min: 200, max: 700 },
         attachments: { min: 180, max: 420 },
         userAttachments: { min: 180, max: 420 },
+        action: { min: 80, max: 80 },
     };
 
     const [tableWidth, setTableWidth] = useState(null);
@@ -703,8 +727,10 @@ const ManualTaskingViewPage = () => {
             "completionDate",
             "status",
             "comments",
+            "userComments",
             "attachments",
             "userAttachments",
+            "action",
         ];
 
         setShowColumns(defaultColumns);
@@ -914,10 +940,8 @@ const ManualTaskingViewPage = () => {
                         {searchQuery === "" && (<i><FontAwesomeIcon icon={faSearch} className="icon-um-search" /></i>)}
                     </div>
 
-                    {/* This div creates the space in the middle */}
                     <div className="spacer"></div>
 
-                    {/* Container for right-aligned icons */}
                     <TopBar />
                 </div>
                 <div className="table-container-risk-control-attributes">
@@ -947,13 +971,36 @@ const ManualTaskingViewPage = () => {
                             onDoubleClick={handleClearFilters}
                         />
 
-                        {showResetButton && (
-                            <FontAwesomeIcon
-                                icon={faArrowsRotate}
-                                title="Reset column widths"
-                                className={showFitButton ? "top-right-button-control-att-2-new" : "top-right-button-control-att-2-new"}
-                                onClick={resetColumnWidths}
-                            />
+                        {filterMenu.isOpen && filterMenu.anchorRect && (
+                            <div
+                                className="control-popup-menu"
+                                style={{
+                                    position: "fixed",
+                                    top: filterMenu.anchorRect.bottom + 6,
+                                    left: filterMenu.anchorRect.left,
+                                    zIndex: 9999,
+                                    background: "#fff",
+                                    border: "1px solid #ccc",
+                                    borderRadius: "6px",
+                                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                                    padding: "8px 0",
+                                    minWidth: "160px"
+                                }}
+                                onMouseEnter={() => {
+                                    if (filterMenuTimerRef.current) clearTimeout(filterMenuTimerRef.current);
+                                }}
+                                onMouseLeave={closeFilterMenuWithDelay}
+                            >
+                                <div style={{ padding: "6px 14px", fontSize: "13px", color: "#555", borderBottom: "1px solid #eee", marginBottom: "4px" }}>
+                                    Active filters
+                                </div>
+                                <div
+                                    style={{ padding: "6px 14px", fontSize: "13px", cursor: "pointer", color: "#c0392b" }}
+                                    onClick={handleClearFilters}
+                                >
+                                    Clear all filters &amp; sort
+                                </div>
+                            </div>
                         )}
 
                         {showColumnSelector && (
@@ -992,7 +1039,7 @@ const ManualTaskingViewPage = () => {
                                                     <input
                                                         type="checkbox"
                                                         checked={showColumns.includes(column.id)}
-                                                        disabled={column.id === 'nr'}
+                                                        disabled={column.id === 'nr' || column.id === 'action'}
                                                         onChange={() => toggleColumn(column.id)}
                                                     />
                                                     <span>{column.title}</span>
@@ -1020,6 +1067,7 @@ const ManualTaskingViewPage = () => {
                             <thead className="risk-control-attributes-head">
                                 <tr>
                                     {availableColumns.map(col => {
+                                        if (col.id === "action") return null;
                                         if (!showColumns.includes(col.id)) return null;
 
                                         const isActiveFilter = activeExcelFilters[col.id];
@@ -1057,6 +1105,25 @@ const ManualTaskingViewPage = () => {
                                             </th>
                                         );
                                     })}
+
+                                    {showColumns.includes("action") && (
+                                        <th
+                                            className="risk-control-attributes-action"
+                                            style={{
+                                                position: "relative",
+                                                width: columnWidths.action ? `${columnWidths.action}px` : undefined,
+                                                minWidth: columnSizeLimits.action?.min,
+                                                maxWidth: columnSizeLimits.action?.max,
+                                                cursor: "default",
+                                            }}
+                                        >
+                                            <span>Action</span>
+                                            <div
+                                                className="rca-col-resizer"
+                                                onMouseDown={(e) => startColumnResize(e, "action")}
+                                            />
+                                        </th>
+                                    )}
                                 </tr>
                             </thead>
                             <tbody
@@ -1067,99 +1134,187 @@ const ManualTaskingViewPage = () => {
                                 onPointerCancel={endRowDrag}
                                 onDragStart={onNativeDragStart}
                             >
-                                {processedTasks.map((row, index) => {
-                                    return (
-                                        <tr
-                                            key={row._id ?? index}
-                                            className="table-scroll-wrapper-attributes-controls"
-                                            onClick={() => {
-                                                if (drag.current.moved) return;
-                                                handleOpenModifyPopup(row);
-                                            }}
-                                            style={{ cursor: "pointer" }}
-                                        >
-                                            {showColumns.includes("nr") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {index + 1}
-                                                </td>
-                                            )}
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={showColumns.length} style={{ textAlign: "center", padding: "20px", fontSize: "14px", color: "#666" }}>
+                                            Loading tasks...
+                                        </td>
+                                    </tr>
+                                ) : processedTasks.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={showColumns.length} style={{ textAlign: "center", padding: "20px", fontSize: "14px", color: "#666" }}>
+                                            No tasks available
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    processedTasks.map((row, index) => {
+                                        return (
+                                            <tr
+                                                key={row._id ?? index}
+                                                className="table-scroll-wrapper-attributes-controls"
+                                                style={{ whiteSpace: "pre-wrap" }}
+                                            >
+                                                {showColumns.includes("nr") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {index + 1}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("taskDescription") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {row.taskDescription}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("taskDescription") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.taskDescription || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("allocatedDate") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.allocatedDate || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("allocatedDate") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.allocatedDate || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("dueDate") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.dueDate || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("dueDate") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.dueDate || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("completionDate") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.completionDate || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("completionDate") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.completionDate || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("status") && (
-                                                <td
-                                                    className="procCent"
-                                                    style={{
-                                                        fontSize: "14px",
-                                                        backgroundColor: getStatusColor(row.status),
-                                                        color: getStatusTextColor(row.status),
-                                                        fontWeight: "500",
-                                                    }}
-                                                >
-                                                    {row.status}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("status") && (
+                                                    <td
+                                                        className="procCent"
+                                                        style={{
+                                                            fontSize: "14px",
+                                                            backgroundColor: getStatusColor(row.status),
+                                                            color: getStatusTextColor(row.status),
+                                                            fontWeight: "500",
+                                                        }}
+                                                    >
+                                                        {row.status || "Not Started"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("comments") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {row.comments || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("comments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.comments || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("attachments") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {Array.isArray(row.attachments) && row.attachments.length > 0 ? (
-                                                        <>
-                                                            {row.attachments.map((file, fileIndex) => (
-                                                                <div key={`${row._id || index}-attachment-${fileIndex}`}>
-                                                                    {file}
-                                                                </div>
-                                                            ))}
-                                                        </>
-                                                    ) : (
-                                                        <span>No attachments</span>
-                                                    )}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("userComments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.userComments || ""}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("userAttachments") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {Array.isArray(row.userAttachments) && row.userAttachments.length > 0 ? (
-                                                        row.userAttachments.map((file, fileIndex) => (
-                                                            <div key={`${row._id || index}-user-attachment-${fileIndex}`}>
-                                                                {file}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <span>No files</span>
-                                                    )}
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                                })}
+                                                {showColumns.includes("attachments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {Array.isArray(row._rawAttachments) && row._rawAttachments.length > 0 ? (
+                                                            <>
+                                                                {row._rawAttachments.map((file, fileIndex) => {
+                                                                    const fileName = file?.fileName || file?.name || row.attachments?.[fileIndex] || "Attachment";
+                                                                    const attachmentId = file?._id;
+
+                                                                    return (
+                                                                        <div key={`${row._id || index}-attachment-${fileIndex}`}>
+                                                                            <button
+                                                                                type="button"
+                                                                                title="Click on file to download the file"
+                                                                                onClick={() => handleDownloadAttachment(row._id, attachmentId, fileName, "attachments")}
+                                                                                disabled={!attachmentId}
+                                                                                style={{
+                                                                                    padding: 0,
+                                                                                    border: "none",
+                                                                                    background: "transparent",
+                                                                                    color: "#0B5ED7",
+                                                                                    textDecoration: "underline",
+                                                                                    cursor: attachmentId ? "pointer" : "not-allowed",
+                                                                                    fontSize: "14px",
+                                                                                    textAlign: "left",
+                                                                                }}
+                                                                            >
+                                                                                {fileName}
+                                                                            </button>
+                                                                            {fileIndex < row._rawAttachments.length - 1 && (
+                                                                                <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e0e0e0" }} />
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </>
+                                                        ) : (
+                                                            <span>No attachments</span>
+                                                        )}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("userAttachments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {Array.isArray(row._rawUserAttachments) && row._rawUserAttachments.length > 0 ? (
+                                                            <>
+                                                                {row._rawUserAttachments.map((file, fileIndex) => {
+                                                                    const fileName = file?.fileName || file?.name || row.userAttachments?.[fileIndex] || "Attachment";
+                                                                    const attachmentId = file?._id;
+
+                                                                    return (
+                                                                        <div key={`${row._id || index}-user-attachment-${fileIndex}`}>
+                                                                            <button
+                                                                                type="button"
+                                                                                title="Click on file to download the file"
+                                                                                onClick={() => handleDownloadAttachment(row._id, attachmentId, fileName, "user-attachments")}
+                                                                                disabled={!attachmentId}
+                                                                                style={{
+                                                                                    padding: 0,
+                                                                                    border: "none",
+                                                                                    background: "transparent",
+                                                                                    color: "#0B5ED7",
+                                                                                    textDecoration: "underline",
+                                                                                    cursor: attachmentId ? "pointer" : "not-allowed",
+                                                                                    fontSize: "14px",
+                                                                                    textAlign: "left",
+                                                                                }}
+                                                                            >
+                                                                                {fileName}
+                                                                            </button>
+                                                                            {fileIndex < row._rawUserAttachments.length - 1 && (
+                                                                                <hr style={{ margin: "12px 0 4px 0", border: "none", borderTop: "1px solid #e0e0e0" }} />
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </>
+                                                        ) : (
+                                                            <span>No files</span>
+                                                        )}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("action") && (
+                                                    <td className="risk-control-attributes-action-cell">
+                                                        <button
+                                                            type="button"
+                                                            className="rca-action-btn"
+                                                            title="Modify Task Progress"
+                                                            onClick={() => {
+                                                                if (drag.current.moved) return;
+                                                                handleOpenModifyPopup({
+                                                                    ...row,
+                                                                    attachments: row._rawAttachments,
+                                                                    userAttachments: row._rawUserAttachments,
+                                                                });
+                                                            }}
+                                                        >
+                                                            <FontAwesomeIcon icon={faEdit} />
+                                                        </button>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -1328,6 +1483,7 @@ const ManualTaskingViewPage = () => {
                 <ModifyMyTask
                     onClose={handleCloseModifyPopup}
                     data={selectedTask}
+                    onSaved={handleTaskSaved}
                 />
             )}
         </div >

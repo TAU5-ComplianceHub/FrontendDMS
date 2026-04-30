@@ -4,30 +4,52 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faCalendarDays, faTrash } from '@fortawesome/free-solid-svg-icons';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from 'axios';
-import DatePicker from 'react-multi-date-picker';
 import { toast } from 'react-toastify';
 
-const ModifyMyTask = ({ onClose, data }) => {
+/**
+ * ModifyMyTask
+ *
+ * Props:
+ *   onClose   – closes the popup
+ *   data      – the full task object from the table row (raw attachment objects)
+ *   onSaved   – callback(updatedTask) called after a successful PUT so the
+ *               parent table row updates without a full page reload
+ */
+const ModifyMyTask = ({ onClose, data, onSaved }) => {
     const [completionStatus, setCompletionStatus] = useState("");
     const [comments, setComments] = useState("");
     const [loading, setLoading] = useState(false);
-    const [attachements, setAttachements] = useState([]);
+    const [attachments, setAttachments] = useState([]);
+
+    // Track which existing server-side IDs were removed so we can tell the API
+    const removedServerIdsRef = useRef([]);
+
     const attachmentInputRef = useRef(null);
     const [pendingInsertAfterId, setPendingInsertAfterId] = useState(null);
 
+    // ── Seed state from the task prop ──────────────────────────────────────────
     useEffect(() => {
-        if (data) {
-            setCompletionStatus(data.status || "");
-            setComments(data.comments || "");
-            setAttachements((data.userAttachments || []));
-        }
+        if (!data) return;
+
+        setCompletionStatus(data.status || "");
+        setComments(data.userComments || "");
+        removedServerIdsRef.current = [];
+        const existing = (data.userAttachments || []).map((a) => ({
+            id: a._id ?? a.id ?? String(Math.random()),
+            name: a.fileName ?? a.name ?? "",
+            displayName: getDisplayFileName(a.fileName ?? a.name ?? ""),
+            isExisting: true,
+            _serverId: a._id ?? a.id,
+        }));
+
+        setAttachments(existing);
     }, [data]);
 
+    // ── Helpers ────────────────────────────────────────────────────────────────
     const generateAttachmentId = () => {
         if (typeof crypto !== "undefined" && crypto.randomUUID) {
             return crypto.randomUUID();
         }
-
         return `att_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     };
 
@@ -37,6 +59,7 @@ const ModifyMyTask = ({ onClose, data }) => {
         return fileName.slice(0, lastDotIndex);
     };
 
+    // ── File picker ────────────────────────────────────────────────────────────
     const handleOpenAttachmentPicker = (afterId = null) => {
         setPendingInsertAfterId(afterId);
         attachmentInputRef.current?.click();
@@ -48,7 +71,7 @@ const ModifyMyTask = ({ onClose, data }) => {
         const selectedFiles = Array.from(e.target.files || []);
         if (!selectedFiles.length) return;
 
-        setAttachements((prev) => {
+        setAttachments((prev) => {
             const existingNames = new Set(
                 prev.map((item) => String(item.name || "").toLowerCase().trim())
             );
@@ -66,18 +89,18 @@ const ModifyMyTask = ({ onClose, data }) => {
                     );
 
                 if (alreadyExists) {
-                    toast.warn(`"${getDisplayFileName(file.name)}" was not added because a file with the same name already exists.`, {
-                        autoClose: 2000,
-                        closeButton: false,
-                    });
+                    toast.warn(
+                        `"${getDisplayFileName(file.name)}" was not added because a file with the same name already exists.`,
+                        { autoClose: 2000, closeButton: false }
+                    );
                     return;
                 }
 
                 if (file.size > MAX_FILE_SIZE_BYTES) {
-                    toast.warn(`"${getDisplayFileName(file.name)}" was not added because it is larger than 5 MB.`, {
-                        autoClose: 2000,
-                        closeButton: false,
-                    });
+                    toast.warn(
+                        `"${getDisplayFileName(file.name)}" was not added because it is larger than 5 MB.`,
+                        { autoClose: 2000, closeButton: false }
+                    );
                     return;
                 }
 
@@ -86,17 +109,13 @@ const ModifyMyTask = ({ onClose, data }) => {
                     file,
                     name: file.name,
                     displayName: getDisplayFileName(file.name),
-                    size: file.size,
-                    type: file.type,
-                    lastModified: file.lastModified,
+                    isExisting: false,
                 });
 
                 existingNames.add(normalizedName);
             });
 
-            if (!validFiles.length) {
-                return prev;
-            }
+            if (!validFiles.length) return prev;
 
             if (!pendingInsertAfterId || prev.length === 0) {
                 return [...prev, ...validFiles];
@@ -104,9 +123,7 @@ const ModifyMyTask = ({ onClose, data }) => {
 
             const insertIndex = prev.findIndex((item) => item.id === pendingInsertAfterId);
 
-            if (insertIndex === -1) {
-                return [...prev, ...validFiles];
-            }
+            if (insertIndex === -1) return [...prev, ...validFiles];
 
             const updated = [...prev];
             updated.splice(insertIndex + 1, 0, ...validFiles);
@@ -118,13 +135,93 @@ const ModifyMyTask = ({ onClose, data }) => {
     };
 
     const handleRemoveAttachment = (attachmentId) => {
-        setAttachements((prev) => prev.filter((item) => item.id !== attachmentId));
+        setAttachments((prev) => {
+            const target = prev.find((item) => item.id === attachmentId);
+
+            // If it was already on the server, mark it for deletion in the API call
+            if (target?.isExisting && target._serverId) {
+                removedServerIdsRef.current = [
+                    ...removedServerIdsRef.current,
+                    target._serverId,
+                ];
+            }
+
+            return prev.filter((item) => item.id !== attachmentId);
+        });
     };
 
+    // ── Submit ─────────────────────────────────────────────────────────────────
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!completionStatus) {
+            toast.warn("Please select a completion status.", {
+                autoClose: 2000,
+                closeButton: false,
+            });
+            return;
+        }
+
+        if (!data?._id) {
+            toast.error("Task ID is missing. Please close and reopen the task.", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const storedToken = localStorage.getItem("token");
+
+            const formData = new FormData();
+            formData.append("status", completionStatus);
+            formData.append("comments", comments);
+
+            const removedIds = removedServerIdsRef.current;
+            if (removedIds.length > 0) {
+                formData.append("removeUserAttachmentIds", JSON.stringify(removedIds));
+            }
+
+            const newFiles = attachments.filter((a) => !a.isExisting && a.file);
+            newFiles.forEach((a) => {
+                formData.append("userAttachments", a.file, a.name);
+            });
+
+            const response = await axios.put(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${data._id}/update-my-task`,
+                formData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${storedToken}`,
+                    },
+                }
+            );
+
+            toast.success("Task updated successfully.", {
+                autoClose: 2000,
+                closeButton: false,
+            });
+
+            // Notify the parent so it can update the table row in place
+            if (typeof onSaved === "function") {
+                onSaved(response.data.task);
+            }
+
+            onClose();
+        } catch (error) {
+            const message =
+                error?.response?.data?.error ||
+                "An error occurred while updating the task. Please try again.";
+
+            toast.error(message, { autoClose: 3000, closeButton: false });
+        } finally {
+            setLoading(false);
+        }
     };
 
+    // ── Render ─────────────────────────────────────────────────────────────────
     return (
         <div className="ibra-popup-page-container">
             <div className="ibra-popup-page-overlay">
@@ -136,43 +233,37 @@ const ModifyMyTask = ({ onClose, data }) => {
 
                     <div className="ibra-popup-page-form-group-main-container">
                         <div className="ibra-popup-page-form-group-main-container-2 scrollable-container-controlea">
-                            <div className="cea-popup-page-component-wrapper">
-                                <div className="ibra-popup-page-form-group">
-                                    <label>
-                                        Completion Status <span className="required-field">*</span>
-                                    </label>
-                                    <div className="ibra-popup-page-select-container">
-                                        <select
-                                            className="ibra-popup-page-select"
-                                            value={completionStatus}
-                                            onChange={(e) => setCompletionStatus(e.target.value)}
-                                        >
-                                            <option value="">Select Option</option>
-                                            <option value="25% Completed">25% Completed</option>
-                                            <option value="50% Completed">50% Completed</option>
-                                            <option value="75% Completed">75% Completed</option>
-                                            <option value="Completed">Completed</option>
-                                        </select>
+
+                            {/* Task description – read only so the user knows what they're updating */}
+                            {data?.taskDescription && (
+                                <div className="cea-popup-page-component-wrapper">
+                                    <div className="ibra-popup-page-form-group">
+                                        <label style={{ fontSize: "15px" }}>Title</label>
+                                        <p style={{ margin: 0, fontSize: "14px", color: "black", textAlign: "center" }}>
+                                            {data.taskTitle}
+                                        </p>
                                     </div>
                                 </div>
-                            </div>
+                            )}
 
+                            {/* Comments */}
                             <div className="ibra-popup-page-component-wrapper">
                                 <div className="ibra-popup-page-form-group">
-                                    <label style={{ fontSize: "15px" }}>Comments/ Notes</label>
+                                    <label style={{ fontSize: "15px" }}>Comments / Notes</label>
                                     <textarea
                                         value={comments}
                                         onChange={(e) => setComments(e.target.value)}
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Additional Comments or Notes"
                                         style={{ resize: "none" }}
-                                    ></textarea>
+                                    />
                                 </div>
                             </div>
 
+                            {/* User Attachments */}
                             <div className="cea-popup-page-component-wrapper">
                                 <div className="ibra-popup-page-form-group">
-                                    <label style={{ fontSize: "15px" }}>Attachments</label>
+                                    <label style={{ fontSize: "15px" }}>Supporting Information</label>
 
                                     <input
                                         ref={attachmentInputRef}
@@ -182,7 +273,7 @@ const ModifyMyTask = ({ onClose, data }) => {
                                         onChange={handleAttachmentChange}
                                     />
 
-                                    {attachements.length === 0 ? (
+                                    {attachments.length === 0 ? (
                                         <div
                                             style={{
                                                 display: "flex",
@@ -204,14 +295,11 @@ const ModifyMyTask = ({ onClose, data }) => {
                                         </div>
                                     ) : (
                                         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                            {attachements.map((attachment) => (
+                                            {attachments.map((attachment) => (
                                                 <div
                                                     key={attachment.id}
                                                     className="cea-popup-page-component-wrapper"
-                                                    style={{
-                                                        marginBottom: "0px",
-                                                        padding: "10px 12px"
-                                                    }}
+                                                    style={{ marginBottom: "0px", padding: "10px 12px" }}
                                                 >
                                                     <div
                                                         style={{
@@ -226,20 +314,20 @@ const ModifyMyTask = ({ onClose, data }) => {
                                                                 minWidth: 0,
                                                                 flex: 1,
                                                                 fontSize: "14px",
-                                                                color: "#333",
-                                                                wordBreak: "break-word"
+                                                                color: attachment.isExisting ? "#333" : "#1a5276",
+                                                                wordBreak: "break-word",
                                                             }}
+                                                            title={attachment.isExisting ? "Existing attachment" : "New – not yet uploaded"}
                                                         >
                                                             {attachment.displayName}
+                                                            {!attachment.isExisting && (
+                                                                <span style={{ fontSize: "11px", color: "#888", marginLeft: "6px" }}>
+                                                                    (new)
+                                                                </span>
+                                                            )}
                                                         </div>
 
-                                                        <div
-                                                            style={{
-                                                                display: "flex",
-                                                                alignItems: "center",
-                                                                gap: "6px"
-                                                            }}
-                                                        >
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                                             <button
                                                                 type="button"
                                                                 className="ibra-popup-page-action-button"
@@ -265,17 +353,18 @@ const ModifyMyTask = ({ onClose, data }) => {
                                     )}
                                 </div>
                             </div>
+
                         </div>
                     </div>
-
 
                     <div className="ibra-popup-page-form-footer">
                         <div className="create-user-buttons">
                             <button
                                 className="ibra-popup-page-upload-button"
                                 onClick={handleSubmit}
+                                disabled={loading}
                             >
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Submit`)}
+                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : "Submit"}
                             </button>
                         </div>
                     </div>

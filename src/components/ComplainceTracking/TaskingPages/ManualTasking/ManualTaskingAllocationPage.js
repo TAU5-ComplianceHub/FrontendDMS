@@ -8,6 +8,10 @@ import TopBar from "../../../Notifications/TopBar";
 import { canIn, getCurrentUser } from "../../../../utils/auth";
 import { ToastContainer, toast } from "react-toastify";
 import AddTaskPopup from "./AddTaskPopup";
+import DeleteAllocatedTask from "./DeleteAllocatedTask";
+import CloseAllocatedTask from "./CloseAllocatedTask";
+import ReopenAllocatedTask from "./ReopenAllocatedTask";
+import ModifyAllocatedTaskPopup from "./ModifyAllocatedTaskPopup";
 
 const ManualTaskingAllocationPage = () => {
     const [tasks, setTasks] = useState([]);
@@ -24,6 +28,7 @@ const ManualTaskingAllocationPage = () => {
     const DEFAULT_SORT = { colId: null, direction: "asc" };
     const [sortConfig, setSortConfig] = useState(DEFAULT_SORT);
     const [activeExcelFilters, setActiveExcelFilters] = useState({});
+    const [loading, setLoading] = useState(true);
     const [excelFilter, setExcelFilter] = useState({
         open: false,
         colId: null,
@@ -35,6 +40,70 @@ const ManualTaskingAllocationPage = () => {
     const excelPopupRef = useRef(null);
     const [activeControlMenuId, setActiveControlMenuId] = useState(null);
     const [showAddTaskPopup, setShowAddTaskPopup] = useState(false);
+    const [deleteTaskPopup, setDeleteTaskPopup] = useState({ open: false, task: null, taskName: "" });
+    const [closeTaskPopup, setCloseTaskPopup] = useState({ open: false, task: null, taskName: "" });
+    const [reopenTaskPopup, setReopenTaskPopup] = useState({ open: false, task: null, taskName: "" });
+    const [showModifyAllocatedTaskPopup, setShowModifyAllocatedTaskPopup] = useState(false);
+    const [selectedAllocatedTask, setSelectedAllocatedTask] = useState(null);
+
+    const handleOpenModifyAllocatedTaskPopup = (task) => {
+        if (task?.closeStatus) {
+            toast.info("You cannot edit this task because it is closed out.", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+            return;
+        }
+
+        setSelectedAllocatedTask({
+            ...task,
+            responsible: task?._rawResponsible || task?.responsible || "",
+            allocatedBy: task?._rawAllocatedBy || task?.allocatedBy || "",
+            attachments: task?._rawAttachments || task?.attachments || [],
+            userAttachments: task?._rawUserAttachments || task?.userAttachments || [],
+        });
+
+        setShowModifyAllocatedTaskPopup(true);
+    };
+
+    const handleCloseModifyAllocatedTaskPopup = () => {
+        setShowModifyAllocatedTaskPopup(false);
+        setSelectedAllocatedTask(null);
+    };
+
+    const handleAllocatedTaskUpdated = () => {
+        fetchTasks();
+    };
+
+    const openDeleteTaskPopup = (task) => {
+        setDeleteTaskPopup({
+            open: true,
+            task,
+            taskName: task?.taskDescription || "",
+        });
+    };
+
+    const closeDeleteTaskPopup = () => {
+        setDeleteTaskPopup({ open: false, task: null, taskName: "" });
+    };
+
+    const openCloseTaskPopup = (task) => {
+        setCloseTaskPopup({ open: true, task, taskName: task?.taskDescription || "" });
+    };
+
+    const closeCloseTaskPopup = () => {
+        setCloseTaskPopup({ open: false, task: null, taskName: "" });
+    };
+
+    const openReopenTaskPopup = (task) => {
+        setReopenTaskPopup({ open: true, task, taskName: task?.taskDescription || "" });
+    };
+
+    const closeReopenTaskPopup = () => {
+        setReopenTaskPopup({ open: false, task: null, taskName: "" });
+    };
+    const [closingTaskIds, setClosingTaskIds] = useState(new Set());
+    const [reopeningTaskIds, setReopeningTaskIds] = useState(new Set());
 
     const handleOpenAddTaskPopup = () => {
         setShowAddTaskPopup(true);
@@ -140,77 +209,249 @@ const ManualTaskingAllocationPage = () => {
         fetchTasks();
     }, []);
 
-    const fetchTasks = async () => {
-        try {
-            // 🔹 Fake data instead of API call
-            const fakeData = {
-                tasks: [
-                    {
-                        _id: "1",
-                        taskDescription: "Review monthly compliance report",
-                        responsible: "John Smith",
-                        allocatedDate: "2026-04-01",
-                        dueDate: "2026-04-08",
-                        completionDate: "",
-                        status: "25% Completed",
-                        comments: "Focus on section A",
-                        attachments: ["Report.pdf"],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: false,
-                    },
-                    {
-                        _id: "2",
-                        taskDescription: "Submit training attendance",
-                        responsible: "Sarah Williams",
-                        allocatedDate: "2026-04-02",
-                        dueDate: "2026-04-10",
-                        completionDate: "2026-04-09",
-                        status: "50% Completed",
-                        comments: "Include signed sheet",
-                        attachments: ["Attendance.xlsx"],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: true,
-                    },
-                    {
-                        _id: "3",
-                        taskDescription: "Prepare incident summary",
-                        responsible: "Michael Brown",
-                        allocatedDate: "2026-04-03",
-                        dueDate: "2026-04-12",
-                        completionDate: "",
-                        status: "75% Completed",
-                        comments: "Add all incidents",
-                        attachments: [],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: false,
-                    },
-                    {
-                        _id: "4",
-                        taskDescription: "Verify emergency contacts",
-                        responsible: "Lisa Johnson",
-                        allocatedDate: "2026-04-04",
-                        dueDate: "2026-04-15",
-                        completionDate: "",
-                        status: "Completed",
-                        comments: "Cross-check numbers",
-                        attachments: ["Contacts.csv"],
-                        userAttachments: ["User Report.pdf"],
-                        closeStatus: false,
-                    },
-                ],
-            };
+    const normalizeTask = (task) => ({
+        ...task,
+        _rawResponsible: task?.responsible || "",
+        _rawAllocatedBy: task?.allocatedBy || "",
+        responsible: task?.responsible?.username || task?.responsible || '',
+        allocatedBy: task?.allocatedBy?.username || task?.allocatedBy || '',
+        allocatedDate: task?.allocatedDate ? String(task.allocatedDate).slice(0, 10) : '',
+        dueDate: task?.dueDate ? (() => {
+            const d = new Date(task.dueDate);
+            if (isNaN(d.getTime())) return String(task.dueDate).slice(0, 10);
+            // Format as YYYY-MM-DD HH:mm in GMT+2
+            const gmt2 = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+            const datePart = gmt2.toISOString().slice(0, 10);
+            const timePart = gmt2.toISOString().slice(11, 16);
+            return `${datePart} ${timePart}`;
+        })() : '',
+        completionDate: task?.completionDate ? String(task.completionDate).slice(0, 10) : '',
+        _rawAttachments: Array.isArray(task?.attachments) ? task.attachments : [],
+        _rawUserAttachments: Array.isArray(task?.userAttachments) ? task.userAttachments : [],
+        attachments: Array.isArray(task?.attachments)
+            ? task.attachments.map((file) => file?.fileName || file?.name || file)
+            : [],
+        userAttachments: Array.isArray(task?.userAttachments)
+            ? task.userAttachments.map((file) => file?.fileName || file?.name || file)
+            : [],
+        userComments: task?.userComments || "",
+        closeOutComments: task?.closeOutComments || "",
+    });
 
-            // 🔹 Keep your sorting pattern (but updated to taskDescription)
-            const sortedTasks = fakeData.tasks.sort((a, b) =>
-                a.taskDescription.localeCompare(b.taskDescription, undefined, {
-                    sensitivity: "base",
-                })
+    const handleDownloadAttachment = async (taskId, attachmentId, fileName, attachmentType = "attachments") => {
+        const storedToken = localStorage.getItem("token");
+        if (!storedToken || !taskId || !attachmentId) return;
+
+        try {
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${taskId}/${attachmentType}/${attachmentId}/download`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${storedToken}`,
+                    },
+                }
             );
 
-            // 🔹 IMPORTANT: use your correct setter
-            setTasks(sortedTasks);
+            if (!response.ok) {
+                throw new Error("Failed to download attachment");
+            }
+
+            const blob = await response.blob();
+            saveAs(blob, fileName || "attachment");
+        } catch (error) {
+            toast.error("Failed to download file. Please try again.", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+        }
+    };
+
+    const handleDeleteTask = async () => {
+        const storedToken = localStorage.getItem("token");
+        const taskId = deleteTaskPopup?.task?._id;
+
+        if (!storedToken || !taskId) return;
+
+        try {
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${taskId}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${storedToken}`,
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error("Failed to delete task");
+            }
+
+            toast.success("Task deleted successfully", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+
+            closeDeleteTaskPopup();
+
+            fetchTasks();
 
         } catch (error) {
+            toast.error("Failed to delete task", {
+                autoClose: 3000,
+                closeButton: false,
+            });
+        }
+    };
+
+    const fetchTasks = async () => {
+        setLoading(true);
+        const storedToken = localStorage.getItem('token');
+        if (!storedToken) {
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/complainceTasks/all`, {
+                headers: {
+                    Authorization: `Bearer ${storedToken}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load tasks');
+            }
+
+            const data = await response.json();
+
+            const sortedTasks = (data?.tasks || [])
+                .map(normalizeTask)
+                .sort((a, b) =>
+                    (a.taskDescription || '').localeCompare(b.taskDescription || '', undefined, {
+                        sensitivity: 'base',
+                    })
+                );
+
+            setTasks(sortedTasks);
+        } catch (error) {
+            toast.error(error.message || 'Failed to load tasks.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCloseTask = async (taskId, closeOutComments = "") => {
+        // Prevent double-clicks
+        if (closingTaskIds.has(taskId)) return;
+
+        setClosingTaskIds(prev => new Set(prev).add(taskId));
+
+        try {
+            const storedToken = localStorage.getItem('token');
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${taskId}/close`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${storedToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ closeOutComments }),
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.error || 'Failed to close task');
+            }
+
+            // Update the row in local state — no full reload needed
+            setTasks(prev =>
+                prev.map(t =>
+                    t._id === taskId
+                        ? {
+                            ...t,
+                            closeStatus: true,
+                            closeOutComments: data.task?.closeOutComments ?? closeOutComments,
+                            completionDate: data.task?.completionDate
+                                ? String(data.task.completionDate).slice(0, 10)
+                                : t.completionDate,
+                        }
+                        : t
+                )
+            );
+
+            toast.success('Task closed out successfully.', {
+                autoClose: 2000,
+                closeButton: false,
+            });
+        } catch (error) {
+            toast.error(error.message || 'Failed to close task. Please try again.', {
+                autoClose: 3000,
+                closeButton: false,
+            });
+        } finally {
+            setClosingTaskIds(prev => {
+                const next = new Set(prev);
+                next.delete(taskId);
+                return next;
+            });
+        }
+    };
+
+    const handleReopenTask = async (taskId) => {
+        if (reopeningTaskIds.has(taskId)) return;
+
+        setReopeningTaskIds(prev => new Set(prev).add(taskId));
+
+        try {
+            const storedToken = localStorage.getItem('token');
+
+            const response = await fetch(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${taskId}/reopen`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${storedToken}`,
+                        'Content-Type': 'application/json',
+                    },
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data?.error || 'Failed to reopen task');
+            }
+
+            setTasks(prev =>
+                prev.map(t =>
+                    t._id === taskId
+                        ? { ...t, closeStatus: false, completionDate: '' }
+                        : t
+                )
+            );
+
+            fetchTasks();
+
+            toast.success('Task reopened successfully.', {
+                autoClose: 2000,
+                closeButton: false,
+            });
+        } catch (error) {
+            toast.error(error.message || 'Failed to reopen task. Please try again.', {
+                autoClose: 3000,
+                closeButton: false,
+            });
+        } finally {
+            setReopeningTaskIds(prev => {
+                const next = new Set(prev);
+                next.delete(taskId);
+                return next;
+            });
         }
     };
 
@@ -437,10 +678,12 @@ const ManualTaskingAllocationPage = () => {
         { id: "dueDate", title: "Due Date" },
         { id: "completionDate", title: "Completion Date" },
         { id: "status", title: "Status" },
-        { id: "comments", title: "Comments / Notes" },
-        { id: "attachments", title: "Attachments" },
-        { id: "userAttachments", title: "User Attachments" },
+        { id: "comments", title: "Task Allocator Comments / Notes" },
+        { id: "userComments", title: "Responsible Person Comments / Notes" },
+        { id: "attachments", title: "Task Allocator Attachments" },
+        { id: "userAttachments", title: "Responsible Person Attachments" },
         { id: "closeStatus", title: "Task Closeout Status" },
+        { id: "closeOutComments", title: "Close Out Comments" },
         { id: "action", title: "Action" },
     ];
 
@@ -453,9 +696,11 @@ const ManualTaskingAllocationPage = () => {
         "completionDate",
         "status",
         "comments",
+        "userComments",
         "attachments",
         "userAttachments",
         "closeStatus",
+        "closeOutComments",
         "action",
     ]);
 
@@ -512,14 +757,16 @@ const ManualTaskingAllocationPage = () => {
         nr: 60,
         taskDescription: 320,
         responsible: 220,
-        allocatedDate: 150,
+        allocatedDate: 100,
         dueDate: 150,
-        completionDate: 170,
+        completionDate: 140,
         status: 140,
         comments: 300,
+        userComments: 300,
         attachments: 220,
         userAttachments: 220,
         closeStatus: 180,
+        closeOutComments: 300,
         action: 80,
     });
 
@@ -527,14 +774,16 @@ const ManualTaskingAllocationPage = () => {
         nr: 60,
         taskDescription: 320,
         responsible: 220,
-        allocatedDate: 150,
+        allocatedDate: 100,
         dueDate: 150,
-        completionDate: 170,
+        completionDate: 140,
         status: 140,
         comments: 300,
+        userComments: 300,
         attachments: 220,
         userAttachments: 220,
         closeStatus: 180,
+        closeOutComments: 300,
         action: 80,
     });
 
@@ -542,14 +791,16 @@ const ManualTaskingAllocationPage = () => {
         nr: { min: 60, max: 60 },
         taskDescription: { min: 220, max: 800 },
         responsible: { min: 180, max: 400 },
-        allocatedDate: { min: 130, max: 260 },
-        dueDate: { min: 130, max: 260 },
-        completionDate: { min: 140, max: 260 },
+        allocatedDate: { min: 100, max: 260 },
+        dueDate: { min: 100, max: 260 },
+        completionDate: { min: 100, max: 260 },
         status: { min: 120, max: 240 },
         comments: { min: 200, max: 700 },
+        userComments: { min: 200, max: 700 },
         attachments: { min: 180, max: 420 },
         userAttachments: { min: 180, max: 420 },
         closeStatus: { min: 160, max: 260 },
+        closeOutComments: { min: 200, max: 700 },
         action: { min: 80, max: 80 },
     };
 
@@ -718,9 +969,11 @@ const ManualTaskingAllocationPage = () => {
             "completionDate",
             "status",
             "comments",
+            "userComments",
             "attachments",
             "userAttachments",
             "closeStatus",
+            "closeOutComments",
             "action",
         ];
 
@@ -1076,6 +1329,8 @@ const ManualTaskingAllocationPage = () => {
                                             attachments: "risk-control-attributes-cons",
                                             closeStatus: "risk-control-attributes-critcal",
                                             userAttachments: "risk-control-attributes-cons",
+                                            userComments: "risk-control-attributes-perf",
+                                            closeOutComments: "risk-control-attributes-perf",
                                         };
 
                                         const isActiveFilter = activeExcelFilters[col.id];
@@ -1144,139 +1399,238 @@ const ManualTaskingAllocationPage = () => {
                                 onPointerCancel={endRowDrag}
                                 onDragStart={onNativeDragStart}
                             >
-                                {processedTasks.map((row, index) => {
-                                    return (
-                                        <tr
-                                            className={`table-scroll-wrapper-attributes-controls`}
-                                            key={row._id ?? index}
-                                        >
-                                            {showColumns.includes("nr") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {index + 1}
-                                                </td>
-                                            )}
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={showColumns.length} style={{ textAlign: "center", padding: "20px", fontSize: "14px", color: "#666" }}>
+                                            Loading tasks...
+                                        </td>
+                                    </tr>
+                                ) : processedTasks.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={showColumns.length} style={{ textAlign: "center", padding: "20px", fontSize: "14px", color: "#666" }}>
+                                            No tasks available
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    processedTasks.map((row, index) => {
+                                        const isCompleted = row.status === "Completed";
+                                        const isAlreadyClosed = !!row.closeStatus;
+                                        const isClosing = closingTaskIds.has(row._id);
+                                        const isReopening = reopeningTaskIds.has(row._id);
+                                        const checkboxDisabled = (!isCompleted && !isAlreadyClosed) || isClosing || isReopening;
 
-                                            {showColumns.includes("taskDescription") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {row.taskDescription}
-                                                </td>
-                                            )}
+                                        return (
+                                            <tr
+                                                className={`table-scroll-wrapper-attributes-controls`}
+                                                key={row._id ?? index}
+                                                style={{ whiteSpace: "pre-wrap" }}
+                                            >
+                                                {showColumns.includes("nr") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {index + 1}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("responsible") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.responsible}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("taskDescription") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.taskDescription}
+                                                    </td>
+                                                )}
 
+                                                {showColumns.includes("responsible") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.responsible}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("allocatedDate") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.allocatedDate || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("allocatedDate") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.allocatedDate || ""}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("dueDate") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.dueDate || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("dueDate") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.dueDate || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("completionDate") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    {row.completionDate || ""}
-                                                </td>
-                                            )}
+                                                {showColumns.includes("completionDate") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        {row.completionDate || "-"}
+                                                    </td>
+                                                )}
 
-                                            {showColumns.includes("status") && (
-                                                <td
-                                                    className="procCent"
-                                                    style={{
-                                                        fontSize: "14px",
-                                                        backgroundColor: getStatusColor(row.status),
-                                                        color: getStatusTextColor(row.status),
-                                                        fontWeight: "500",
-                                                    }}
-                                                >
-                                                    {row.status}
-                                                </td>
-                                            )}
-
-                                            {showColumns.includes("comments") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {row.comments}
-                                                </td>
-                                            )}
-
-                                            {showColumns.includes("attachments") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {Array.isArray(row.attachments) && row.attachments.length > 0 ? (
-                                                        row.attachments.map((file, fileIndex) => (
-                                                            <div key={`${row._id || index}-attachment-${fileIndex}`}>
-                                                                {file}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <span>No files</span>
-                                                    )}
-                                                </td>
-                                            )}
-
-                                            {showColumns.includes("userAttachments") && (
-                                                <td style={{ fontSize: "14px" }}>
-                                                    {Array.isArray(row.userAttachments) && row.userAttachments.length > 0 ? (
-                                                        row.userAttachments.map((file, fileIndex) => (
-                                                            <div key={`${row._id || index}-user-attachment-${fileIndex}`}>
-                                                                {file}
-                                                            </div>
-                                                        ))
-                                                    ) : (
-                                                        <span>No files</span>
-                                                    )}
-                                                </td>
-                                            )}
-
-                                            {showColumns.includes("closeStatus") && (
-                                                <td className="procCent" style={{ fontSize: "14px" }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        className="checkbox-inp-abbr"
-                                                        checked={!!row.closeStatus}
-                                                        onChange={() => {
-                                                            setTasks(prev =>
-                                                                prev.map(task =>
-                                                                    task._id === row._id
-                                                                        ? { ...task, closeStatus: !task.closeStatus }
-                                                                        : task
-                                                                )
-                                                            );
+                                                {showColumns.includes("status") && (
+                                                    <td
+                                                        className="procCent"
+                                                        style={{
+                                                            fontSize: "14px",
+                                                            backgroundColor: getStatusColor(row.status),
+                                                            color: getStatusTextColor(row.status),
+                                                            fontWeight: "500",
                                                         }}
-                                                    />
-                                                </td>
-                                            )}
-
-                                            {showColumns.includes("action") && (
-                                                <td className="risk-control-attributes-action-cell">
-                                                    <button
-                                                        type="button"
-                                                        className="rca-action-btn"
-                                                        title="Edit Task"
                                                     >
-                                                        <FontAwesomeIcon icon={faEdit} />
-                                                    </button>
+                                                        {row.status || "-"}
+                                                    </td>
+                                                )}
 
-                                                    <button
-                                                        type="button"
-                                                        className="rca-action-btn"
-                                                        title="Delete Task"
-                                                        style={{ marginLeft: "5px" }}
-                                                    >
-                                                        <FontAwesomeIcon icon={faTrash} />
-                                                    </button>
-                                                </td>
-                                            )}
-                                        </tr>
-                                    )
-                                })}
+                                                {showColumns.includes("comments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.comments || "-"}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("userComments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.userComments || "-"}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("attachments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {Array.isArray(row._rawAttachments) && row._rawAttachments.length > 0 ? (
+                                                            <>
+                                                                {row._rawAttachments.map((file, fileIndex) => {
+                                                                    const fileName = file?.fileName || file?.name || row.attachments?.[fileIndex] || "Attachment";
+                                                                    const attachmentId = file?._id;
+
+                                                                    return (
+                                                                        <div key={`${row._id || index}-attachment-${fileIndex}`}>
+                                                                            <button
+                                                                                type="button"
+                                                                                title="Click on file to download the file"
+                                                                                onClick={() => handleDownloadAttachment(row._id, attachmentId, fileName, "attachments")}
+                                                                                disabled={!attachmentId}
+                                                                                style={{
+                                                                                    padding: 0,
+                                                                                    border: "none",
+                                                                                    background: "transparent",
+                                                                                    color: "#0B5ED7",
+                                                                                    textDecoration: "underline",
+                                                                                    cursor: attachmentId ? "pointer" : "not-allowed",
+                                                                                    fontSize: "14px",
+                                                                                    textAlign: "left",
+                                                                                }}
+                                                                            >
+                                                                                {fileName}
+                                                                            </button>
+                                                                            {fileIndex < row._rawAttachments.length - 1 && (
+                                                                                <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e0e0e0" }} />
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </>
+                                                        ) : (
+                                                            <span>No files</span>
+                                                        )}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("userAttachments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {Array.isArray(row._rawUserAttachments) && row._rawUserAttachments.length > 0 ? (
+                                                            <>
+                                                                {row._rawUserAttachments.map((file, fileIndex) => {
+                                                                    const fileName = file?.fileName || file?.name || row.userAttachments?.[fileIndex] || "Attachment";
+                                                                    const attachmentId = file?._id;
+
+                                                                    return (
+                                                                        <div key={`${row._id || index}-user-attachment-${fileIndex}`}>
+                                                                            <button
+                                                                                type="button"
+                                                                                title="Click on file to download the file"
+                                                                                onClick={() => handleDownloadAttachment(row._id, attachmentId, fileName, "user-attachments")}
+                                                                                disabled={!attachmentId}
+                                                                                style={{
+                                                                                    padding: 0,
+                                                                                    border: "none",
+                                                                                    background: "transparent",
+                                                                                    color: "#0B5ED7",
+                                                                                    textDecoration: "underline",
+                                                                                    cursor: attachmentId ? "pointer" : "not-allowed",
+                                                                                    fontSize: "14px",
+                                                                                    textAlign: "left",
+                                                                                }}
+                                                                            >
+                                                                                {fileName}
+                                                                            </button>
+                                                                            {fileIndex < row._rawUserAttachments.length - 1 && (
+                                                                                <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e0e0e0" }} />
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </>
+                                                        ) : (
+                                                            <span>No files</span>
+                                                        )}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("closeStatus") && (
+                                                    <td className="procCent" style={{ fontSize: "14px" }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            className="checkbox-inp-abbr"
+                                                            checked={isAlreadyClosed}
+                                                            disabled={checkboxDisabled && !isAlreadyClosed}
+                                                            title={
+                                                                isAlreadyClosed
+                                                                    ? "Click to reopen this task"
+                                                                    : !isCompleted
+                                                                        ? "Task must be marked as 'Completed' before it can be closed out"
+                                                                        : "Close out this task"
+                                                            }
+                                                            style={{
+                                                                cursor: (checkboxDisabled && !isAlreadyClosed) ? "not-allowed" : "pointer",
+                                                                opacity: (checkboxDisabled && !isAlreadyClosed) ? 0.4 : 1,
+                                                            }}
+                                                            onChange={() => {
+                                                                if (isAlreadyClosed) {
+                                                                    openReopenTaskPopup(row);
+                                                                } else {
+                                                                    if (!isCompleted || isClosing || isReopening) return;
+                                                                    openCloseTaskPopup(row);
+                                                                }
+                                                            }}
+                                                        />
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("closeOutComments") && (
+                                                    <td style={{ fontSize: "14px" }}>
+                                                        {row.closeOutComments || "-"}
+                                                    </td>
+                                                )}
+
+                                                {showColumns.includes("action") && (
+                                                    <td className="risk-control-attributes-action-cell">
+                                                        <button
+                                                            type="button"
+                                                            className="rca-action-btn"
+                                                            title="Modify Allocated Task"
+                                                            onClick={() => handleOpenModifyAllocatedTaskPopup(row)}
+                                                        >
+                                                            <FontAwesomeIcon icon={faEdit} />
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            className="rca-action-btn"
+                                                            title="Delete Task"
+                                                            style={{ marginLeft: "5px" }}
+                                                            onClick={() => openDeleteTaskPopup(row)}
+                                                        >
+                                                            <FontAwesomeIcon icon={faTrash} />
+                                                        </button>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        )
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
@@ -1441,7 +1795,49 @@ const ManualTaskingAllocationPage = () => {
 
             {showAddTaskPopup && (
                 <AddTaskPopup
+                    onTaskAdded={fetchTasks}
                     onClose={handleCloseAddTaskPopup}
+                />
+            )}
+
+            {deleteTaskPopup.open && (
+                <DeleteAllocatedTask
+                    open={deleteTaskPopup.open}
+                    task={deleteTaskPopup.task}
+                    taskName={deleteTaskPopup.taskName}
+                    onClose={closeDeleteTaskPopup}
+                    handleDeleteTask={handleDeleteTask}
+                />
+            )}
+
+            {closeTaskPopup.open && (
+                <CloseAllocatedTask
+                    open={closeTaskPopup.open}
+                    taskName={closeTaskPopup.taskName}
+                    onClose={closeCloseTaskPopup}
+                    onConfirm={(closeOutComments) => {
+                        handleCloseTask(closeTaskPopup.task._id, closeOutComments);
+                        closeCloseTaskPopup();
+                    }}
+                />
+            )}
+
+            {reopenTaskPopup.open && (
+                <ReopenAllocatedTask
+                    open={reopenTaskPopup.open}
+                    taskName={reopenTaskPopup.taskName}
+                    onClose={closeReopenTaskPopup}
+                    onConfirm={() => {
+                        handleReopenTask(reopenTaskPopup.task._id);
+                        closeReopenTaskPopup();
+                    }}
+                />
+            )}
+            {showModifyAllocatedTaskPopup && (
+                <ModifyAllocatedTaskPopup
+                    task={selectedAllocatedTask}
+                    onClose={handleCloseModifyAllocatedTaskPopup}
+                    onTaskUpdated={handleAllocatedTaskUpdated}
                 />
             )}
             <ToastContainer />

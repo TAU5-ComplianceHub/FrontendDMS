@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { jwtDecode } from "jwt-decode";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faCalendarDays, faTrash, faClock } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faCirclePlus, faCalendarDays, faTrash, faClock } from '@fortawesome/free-solid-svg-icons';
 import 'react-toastify/dist/ReactToastify.css';
 import axios from 'axios';
 import DatePicker, { DateObject } from 'react-multi-date-picker';
 import TimePicker from "react-multi-date-picker/plugins/time_picker";
 import { toast } from 'react-toastify';
-import './AddTaskPopup.css';
 
-const AddTaskPopup = ({ onClose, onTaskAdded }) => {
+const ModifyAllocatedTaskPopup = ({ onClose, onTaskUpdated, task }) => {
     const [taskTitle, setTaskTitle] = useState("");
     const [taskPriority, setTaskPriority] = useState("");
     const [taskType, setTaskType] = useState("");
@@ -19,9 +17,12 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
     const [dueTime, setDueTime] = useState(null);
     const [comments, setComments] = useState("");
     const [loading, setLoading] = useState(false);
+
     const [attachements, setAttachements] = useState([]);
+    const [attachmentsToDelete, setAttachmentsToDelete] = useState([]);
     const attachmentInputRef = useRef(null);
     const [pendingInsertAfterId, setPendingInsertAfterId] = useState(null);
+
     const [users, setUsers] = useState([]);
 
     const generateAttachmentId = () => {
@@ -90,6 +91,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                     size: file.size,
                     type: file.type,
                     lastModified: file.lastModified,
+                    isNew: true,
                 });
 
                 existingNames.add(normalizedName);
@@ -119,8 +121,93 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
     };
 
     const handleRemoveAttachment = (attachmentId) => {
-        setAttachements((prev) => prev.filter((item) => item.id !== attachmentId));
+        setAttachements((prev) => {
+            const attachmentToRemove = prev.find((item) => item.id === attachmentId);
+
+            if (attachmentToRemove && !attachmentToRemove.isNew && attachmentToRemove.attachmentId) {
+                setAttachmentsToDelete((current) => {
+                    if (current.includes(attachmentToRemove.attachmentId)) return current;
+                    return [...current, attachmentToRemove.attachmentId];
+                });
+            }
+
+            return prev.filter((item) => item.id !== attachmentId);
+        });
     };
+
+    const fetchUsers = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/complainceTasks/getUsers/assignable-users`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch users');
+            }
+            const data = await response.json();
+
+            const sortedUsers = data.users.sort((a, b) => {
+                return a.username.localeCompare(b.username);
+            });
+
+            setUsers(sortedUsers);
+        } catch (error) {
+            toast.error('Failed to fetch users.', {
+                autoClose: 2000,
+                closeButton: false,
+            });
+        }
+    };
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    useEffect(() => {
+        if (!task) return;
+        console.log("Initializing ModifyAllocatedTaskPopup with task:", task);
+        setTaskDescription(task.taskDescription || "");
+        setResponsiblePerson(
+            typeof task?.responsible === "object"
+                ? task?.responsible?._id || ""
+                : task?.responsible || ""
+        );
+        setTaskTitle(task.taskTitle || "");
+        setTaskPriority(task.priority || "");
+        setTaskType(task.taskType || "");
+        setDueDate(
+            task?.dueDate
+                ? (() => {
+                    const d = new Date(task.dueDate);
+                    if (isNaN(d.getTime())) return String(task.dueDate).slice(0, 10);
+                    const gmt2 = new Date(d.getTime() + 2 * 60 * 60 * 1000);
+                    return gmt2.toISOString().slice(0, 10);
+                })()
+                : ""
+        );
+        setDueTime(null); // time picker hidden
+        setComments(task.comments || "");
+
+        const existingAttachments = (task.attachments || []).map((attachment, index) => {
+            const fileName =
+                typeof attachment === "string"
+                    ? attachment
+                    : attachment?.fileName || attachment?.name || `Attachment ${index + 1}`;
+
+            return {
+                id: attachment?._id || `existing_${index}`,
+                attachmentId: typeof attachment === "string" ? null : attachment?._id || null,
+                name: fileName,
+                displayName: getDisplayFileName(fileName),
+                isNew: false,
+            };
+        });
+
+        setAttachements(existingAttachments);
+        setAttachmentsToDelete([]);
+    }, [task]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -162,13 +249,19 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
             return;
         }
 
+        if (!task?._id) {
+            toast.error('Task ID is missing.', { autoClose: 2000, closeButton: false });
+            return;
+        }
+
         try {
             setLoading(true);
 
             const formData = new FormData();
             formData.append('taskDescription', taskDescription.trim());
             formData.append('responsible', responsiblePerson);
-            formData.append('responsibleName', responsiblePerson);
+
+            formData.append('responsibleName', responsiblePerson?.username || "");
             formData.append('taskType', taskType);
             formData.append('taskTitle', taskTitle);
             formData.append('taskPriority', taskPriority);
@@ -176,30 +269,41 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
             // Date-only — store as start of day in GMT+2 (Africa/Johannesburg)
             const dueDateOnly = `${dueDate}T00:00:00+02:00`;
             formData.append('dueDate', dueDateOnly);
-
             formData.append('comments', comments.trim());
 
             attachements.forEach((attachment) => {
-                if (attachment.file) {
+                if (attachment.isNew && attachment.file) {
                     formData.append('attachments', attachment.file);
                 }
             });
 
-            await axios.post(`${process.env.REACT_APP_URL}/api/complainceTasks/create`, formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data',
-                },
+            attachmentsToDelete.forEach((attachmentId) => {
+                formData.append('attachmentsToDelete', attachmentId);
             });
 
-            toast.success('Task created successfully.', { autoClose: 2000, closeButton: false });
-            onTaskAdded?.();
+            const response = await axios.put(
+                `${process.env.REACT_APP_URL}/api/complainceTasks/${task._id}/update-allocated-task`,
+                formData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+
+            toast.success('Allocated task updated successfully.', {
+                autoClose: 2000,
+                closeButton: false,
+            });
+
+            onTaskUpdated?.(response.data?.task);
             onClose?.();
         } catch (error) {
             toast.error(
                 error?.response?.data?.error ||
                 error?.response?.data?.details ||
-                'Failed to create task.',
+                'Failed to update task.',
                 { autoClose: 2500, closeButton: false }
             );
         } finally {
@@ -207,38 +311,12 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
         }
     };
 
-    const fetchUsers = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/complainceTasks/getUsers/assignable-users`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            if (!response.ok) {
-                throw new Error('Failed to fetch users');
-            }
-            const data = await response.json();
-
-            const sortedUsers = data.users.sort((a, b) => {
-                return a.username.localeCompare(b.username);
-            });
-
-            setUsers(sortedUsers);
-        } catch (error) {
-        }
-    };
-
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
     return (
         <div className="ibra-popup-page-container">
             <div className="ibra-popup-page-overlay">
                 <div className="ibra-popup-page-popup-right">
                     <div className="ibra-popup-page-popup-header-right">
-                        <h2>Allocate Task</h2>
+                        <h2>Modify Allocated Task</h2>
                         <button className="review-date-close" onClick={onClose} title="Close Popup">×</button>
                     </div>
 
@@ -258,7 +336,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                             </div>
 
                             <div className="cea-popup-page-component-wrapper">
-                                <div className={`ibra-popup-page-form-group`}>
+                                <div className="ibra-popup-page-form-group">
                                     <label>Description <span className="required-field">*</span></label>
                                     <textarea
                                         value={taskDescription}
@@ -266,7 +344,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Description of task"
                                         style={{ resize: "none" }}
-                                    ></textarea>
+                                    />
                                 </div>
                             </div>
 
@@ -315,8 +393,10 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                             <div className="ibra-popup-page-additional-row">
                                 <div className="ibra-popup-page-column-half">
                                     <div className="cea-popup-page-component-wrapper">
-                                        <div className={`ibra-popup-page-form-group`}>
-                                            <label>Responsible Person <span className="required-field">*</span></label>
+                                        <div className="ibra-popup-page-form-group">
+                                            <label>
+                                                Responsible Person <span className="required-field">*</span>
+                                            </label>
                                             <div className="ibra-popup-page-select-container">
                                                 <select
                                                     className="ibra-popup-page-select"
@@ -334,10 +414,12 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                                         </div>
                                     </div>
                                 </div>
+
                                 <div className="ibra-popup-page-column-half">
-                                    <div className="ibra-popup-page-component-wrapper">
+                                    <div className="cea-popup-page-component-wrapper">
                                         <div className="ibra-popup-page-form-group ibra-popup-page-form-group-test">
-                                            <label style={{ fontSize: "15px", marginBottom: "10px" }}>Due Date <span className="required-field">*</span>
+                                            <label style={{ fontSize: "15px", marginBottom: "10px" }}>
+                                                Due Date <span className="required-field">*</span>
                                             </label>
                                             <div style={{ display: "flex", gap: "10px", width: "calc(100% - 0px)" }}>
                                                 <div style={{ position: "relative", width: "100%" }}>
@@ -356,8 +438,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                                                         style={{
                                                             width: "calc(100% - 0px)",
                                                             height: "23px",
-                                                            marginBottom: "0px",
-                                                            textAlign: "center",
+                                                            marginBottom: "0px"
                                                         }}
                                                         portal
                                                         portalTarget={document.body}
@@ -371,7 +452,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                                                     />
                                                 </div>
                                                 {false && (
-                                                    <div style={{ position: "relative", width: "50%" }}>
+                                                    <div style={{ position: "relative", width: "25%" }}>
                                                         <DatePicker
                                                             disableDayPicker
                                                             format="HH:mm"
@@ -382,8 +463,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                                                             style={{
                                                                 width: "calc(100% - 0px)",
                                                                 height: "23px",
-                                                                marginBottom: "0px",
-                                                                textAlign: "center",
+                                                                marginBottom: "0px"
                                                             }}
                                                             zIndex={999999}
                                                             portal
@@ -413,7 +493,7 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                                         className="cea-popup-page-textarea-full"
                                         placeholder="Add Comments or Notes"
                                         style={{ resize: "none" }}
-                                    ></textarea>
+                                    />
                                 </div>
                             </div>
 
@@ -515,21 +595,21 @@ const AddTaskPopup = ({ onClose, onTaskAdded }) => {
                         </div>
                     </div>
 
-
                     <div className="ibra-popup-page-form-footer">
                         <div className="create-user-buttons">
                             <button
                                 className="ibra-popup-page-upload-button"
                                 onClick={handleSubmit}
+                                disabled={loading}
                             >
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Submit`)}
+                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : "Submit"}
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     );
 };
 
-export default AddTaskPopup;
+export default ModifyAllocatedTaskPopup;

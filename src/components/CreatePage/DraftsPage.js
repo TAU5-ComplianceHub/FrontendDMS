@@ -108,6 +108,14 @@ const DraftsPage = () => {
         }
     };
 
+    const getRawDate = (item, colId) => {
+        switch (colId) {
+            case "creationDate": return item.dateCreated ? new Date(item.dateCreated).getTime() : 0;
+            case "lastModifiedDate": return item.dateUpdated ? new Date(item.dateUpdated).getTime() : 0;
+            default: return 0;
+        }
+    };
+
     const toggleExcelSort = (field, dir) => {
         if (sortBy === field && sortDir === dir) {
             setSortBy(null);
@@ -143,21 +151,27 @@ const DraftsPage = () => {
         const list = [...filteredDrafts];
 
         return list.sort((a, b) => {
-            // 1) Publishable first
-            if (a.publishable && !b.publishable) return -1;
-            if (!a.publishable && b.publishable) return 1;
+            // 1) Active (lockActive) always first
+            if (a.lockActive && !b.lockActive) return -1;
+            if (!a.lockActive && b.lockActive) return 1;
 
-            if (!sortBy || !sortDir) return 0;
-
-            const valA = getRawValue(a, sortBy);
-            const valB = getRawValue(b, sortBy);
-
-            // Special handling for dates if needed, otherwise string compare
-            if (sortBy === 'creationDate' || sortBy === 'lastModifiedDate') {
-                // Simple string compare works for formatted ISO-like dates, but formatDateTime output is YYYY-MM-DD
-                // Ideally use raw dates, but for excel filter consistency we sort the display values
+            // 2) Default sort: no active sort → newest dateUpdated first
+            if (!sortBy || !sortDir) {
+                const dateA = a.dateUpdated ? new Date(a.dateUpdated).getTime() : 0;
+                const dateB = b.dateUpdated ? new Date(b.dateUpdated).getTime() : 0;
+                return dateB - dateA;
             }
 
+            // 3) Date columns: compare raw timestamps
+            if (sortBy === 'creationDate' || sortBy === 'lastModifiedDate') {
+                const dateA = getRawDate(a, sortBy);
+                const dateB = getRawDate(b, sortBy);
+                return sortDir === 'asc' ? dateA - dateB : dateB - dateA;
+            }
+
+            // 4) All other columns: string compare
+            const valA = getRawValue(a, sortBy);
+            const valB = getRawValue(b, sortBy);
             const dir = sortDir === 'asc' ? 1 : -1;
             return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * dir;
         });
@@ -492,8 +506,8 @@ const DraftsPage = () => {
             {excelFilter.open && (
                 <div className="excel-filter-popup" ref={excelPopupRef} style={{ position: "fixed", top: excelFilter.pos.top, left: excelFilter.pos.left, width: excelFilter.pos.width, zIndex: 9999 }} onWheel={handleInnerScrollWheel}>
                     <div className="excel-filter-sortbar">
-                        <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "asc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "asc")}>Sort A to Z</button>
-                        <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "desc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "desc")}>Sort Z to A</button>
+                        <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "asc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "asc")}>Sort Ascending</button>
+                        <button type="button" className={`excel-sort-btn ${sortBy === excelFilter.colId && sortDir === "desc" ? "active" : ""}`} onClick={() => toggleExcelSort(excelFilter.colId, "desc")}>Sort Descending</button>
                     </div>
                     <input type="text" className="excel-filter-search" placeholder="Search" value={excelSearch} onChange={(e) => setExcelSearch(e.target.value)} />
                     {(() => {

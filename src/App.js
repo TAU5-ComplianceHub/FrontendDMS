@@ -199,6 +199,8 @@ import TaskingHomePage from './components/ComplainceTracking/TaskingHomePage';
 import ManualTaskingHomePage from './components/ComplainceTracking/TaskingPages/ManualTasking/ManualTaskingHomePage';
 import ManualTaskingAllocationPage from './components/ComplainceTracking/TaskingPages/ManualTasking/ManualTaskingAllocationPage';
 import ManualTaskingViewPage from './components/ComplainceTracking/TaskingPages/ManualTasking/ManualTaskingViewPage';
+import ManualTaskingPage from './components/ComplainceTracking/TaskingPages/ManualTasking/ManualTaskingPage';
+import TaskVersionHistoryPage from './components/ComplainceTracking/TaskingPages/ManualTasking/TaskVersionHistoryPage';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -464,6 +466,8 @@ function App() {
         <Route path="FrontendDMS/manualTasking" element={<ManualTaskingHomePage />} />
         <Route path="FrontendDMS/manualTaskingAllocate" element={<ManualTaskingAllocationPage />} />
         <Route path="FrontendDMS/manualTaskingTasks" element={<ManualTaskingViewPage />} />
+        <Route path="FrontendDMS/manualTaskingPage" element={<ManualTaskingPage />} />
+        <Route path="FrontendDMS/manual-tasks-history/:taskId" element={<TaskVersionHistoryPage />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

@@ -22,8 +22,8 @@ const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow,
     const inputRefs = useRef([]);
     const [mainHistory, setMainHistory] = useState({});
     const [subHistory, setSubHistory] = useState({});
-    const [loadingMainKey, setLoadingMainKey] = useState(false);
-    const [loadingSubKey, setLoadingSubKey] = useState(false);
+    const [loadingMainKey, setLoadingMainKey] = useState(null);
+    const [loadingSubKey, setLoadingSubKey] = useState(null);
     const mainInputRefs = useRef({});
     const subInputRefs = useRef({});
 
@@ -833,9 +833,9 @@ const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow,
                                                                 onChange={(e) => handleInputChange(index, "mainStep", e.target.value)}
                                                                 placeholder="Insert the main step of the procedure here..."
                                                             />
-                                                            {loadingMainKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin-main spin-animation-proc" />)}
+                                                            {loadingMainKey === `${index}` && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin-main spin-animation-proc" />)}
                                                             {mainHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoMain(index)} />)}
-                                                            {(!loadingMainKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Main Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteMain(index)} />)}
+                                                            {(loadingMainKey !== `${index}` && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Main Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteMain(index)} />)}
 
                                                         </div>
                                                     </td>
@@ -858,9 +858,9 @@ const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow,
                                                                 style={{ fontSize: "14px" }}
                                                                 placeholder="Insert the sub steps of the procedure here..."
                                                             />
-                                                            {loadingSubKey && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin spin-animation-proc" />)}
+                                                            {loadingSubKey === `${index}` && (<FontAwesomeIcon icon={faSpinner} spin className="textarea-icon-proc-spin spin-animation-proc" />)}
                                                             {subHistory[`${index}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite"} className="textarea-icon-proc-2" onClick={() => handleUndoSub(index)} />)}
-                                                            {(!loadingSubKey && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Sub Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteSub(index)} />)}
+                                                            {(loadingSubKey !== `${index}` && !readOnly) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite Sub Step"} className="textarea-icon-proc" onClick={() => handleAiRewriteSub(index)} />)}
 
                                                         </div>
                                                     </td>

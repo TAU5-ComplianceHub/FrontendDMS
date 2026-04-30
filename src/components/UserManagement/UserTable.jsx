@@ -296,13 +296,8 @@ const UserTable = ({
                                 <td className="col-um">
                                     <div className='inline-actions-um'>
                                         <button
-                                            className={
-                                                user._id !== loggedInUserId
-                                                    ? "action-button-user edit-button-user"
-                                                    : "action-button-user edit-button-user-hidden"
-                                            }
+                                            className={"action-button-user edit-button-user"}
                                             onClick={() => openPasswordModal(user)}
-                                            disabled={!(user._id !== loggedInUserId)}
                                         >
                                             <FontAwesomeIcon
                                                 icon={faKey}
@@ -310,22 +305,22 @@ const UserTable = ({
                                             />
                                         </button>
                                         <button
-                                            className={user._id !== loggedInUserId ? `action-button-user edit-button-user` : "action-button-user edit-button-user-hidden"}
+                                            className={`action-button-user edit-button-user`}
                                             onClick={() => openEditModal(user)}
-                                            disabled={!(user._id !== loggedInUserId)}
                                         >
                                             <FontAwesomeIcon icon={faPenToSquare} title="Edit User" />
                                         </button>
-                                        <button
-                                            className={user._id !== loggedInUserId ? "action-button-user delete-button-user" : "action-button-user edit-button-user-hidden"}
-                                            onClick={() => {
-                                                setUserToDelete(user);
-                                                setIsDeleteModalOpen(true);
-                                            }}
-                                            disabled={!(user._id !== loggedInUserId)}
-                                        >
-                                            <FontAwesomeIcon icon={faTrash} title="Delete User" />
-                                        </button>
+                                        {user._id !== loggedInUserId && (
+                                            <button
+                                                className="action-button-user delete-button-user"
+                                                onClick={() => {
+                                                    setUserToDelete(user);
+                                                    setIsDeleteModalOpen(true);
+                                                }}
+                                                disabled={!(user._id !== loggedInUserId)}
+                                            >
+                                                <FontAwesomeIcon icon={faTrash} title="Delete User" />
+                                            </button>)}
                                     </div>
                                 </td>
                             </tr>

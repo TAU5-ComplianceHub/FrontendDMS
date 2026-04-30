@@ -54,10 +54,10 @@ const CTSHome = () => {
                 </div>
 
                 <div className="scrollable-box-dc-home">
-                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/manualTasking")}>
+                    <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/manualTaskingPage")}>
                         <>
                             <div className="icon-dc">
-                                <FontAwesomeIcon icon={faCircle} style={{ color: "#002060" }} src={`${process.env.PUBLIC_URL}/standardsDMS.svg`} className={"icon-dc"} />
+                                <img src={`${process.env.PUBLIC_URL}/taskManagement1.svg`} className={"icon-dc"} />
                             </div>
                             <h3 className="document-title-dc-home">Task Management</h3>
                         </>
