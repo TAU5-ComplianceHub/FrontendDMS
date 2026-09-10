@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import "./ManageRiskAbbreviations.css";
 
-const ManageRiskAbbreviations = ({ closePopup, onClose, onUpdate, setAbbrData, onAdd, userID, abbreviation }) => {
+const ManageRiskAbbreviations = ({ closePopup, onClose, onUpdate, setAbbrData, userID, abbreviation }) => {
     const [abbreviations, setAbbreviations] = useState([]);
     const [approver, setApprover] = useState("");
     const [abbrInp, setAbbrInp] = useState("");
@@ -100,11 +100,15 @@ const ManageRiskAbbreviations = ({ closePopup, onClose, onUpdate, setAbbrData, o
             };
             setAbbrData((prevData) => [...prevData, newAbbrObj]);
 
-            if (onAdd) onAdd(newAbbrObj);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newAbbrObj, abbreviation);
 
             setTimeout(() => {
                 handleClose();
-            }, 1000);
+                closePopup();
+            }, 1500);
         } catch (err) {
             setError("Failed to update abbreviation.");
         }
@@ -163,8 +167,8 @@ const ManageRiskAbbreviations = ({ closePopup, onClose, onUpdate, setAbbrData, o
                     </div>
                 </div>
 
-                {message && <div className="manAbbr-message-manage">{message}</div>}
-                {error && <div className="manAbbr-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manAbbr-buttons">
                     <button className="manAbbr-update-button" onClick={handleUpdate}>

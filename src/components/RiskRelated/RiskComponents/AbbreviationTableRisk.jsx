@@ -151,12 +151,10 @@ const AbbreviationTableRisk = ({ collapsible = false, risk, formData, setFormDat
       ...prev,
       abbrRows: prev.abbrRows.map(row =>
         row.abbr === oldAbbr
-          ? { abbr: updatedAbbr.abbr + " *", meaning: updatedAbbr.meaning }
+          ? { abbr: updatedAbbr.abbr, meaning: updatedAbbr.meaning }
           : row
       ),
     }));
-
-    closeManagePopup();
   };
 
   const handleCheckboxChange = (abbr) => {

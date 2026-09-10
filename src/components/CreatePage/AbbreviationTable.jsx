@@ -154,7 +154,7 @@ const AbbreviationTable = ({ collapsible = false, risk, formData, setFormData, u
       ...prev,
       abbrRows: prev.abbrRows.map(row =>
         row.abbr === oldAbbr
-          ? { abbr: updatedAbbr.abbr + " *", meaning: updatedAbbr.meaning }
+          ? { abbr: updatedAbbr.abbr, meaning: updatedAbbr.meaning }
           : row
       ),
     }));

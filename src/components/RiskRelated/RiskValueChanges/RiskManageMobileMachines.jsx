@@ -94,17 +94,17 @@ const RiskManageMobileMachines = ({ closePopup, onClose, onUpdate, setMachineDat
                 machine: macInp.trim() + " *"
             };
 
-            const newMacAdd = {
-                mac: macInp.trim() + " *"
-            };
-
             setMachineData((prevData) => [...prevData, newMac]);
 
-            if (onAdd) onAdd(newMac, newMacAdd);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newMac, mac);
 
             setTimeout(() => {
                 handleClose();
-            }, 1000);
+                closePopup();
+            }, 1500);
         } catch (err) {
             setError("Failed to update machine.");
         }
@@ -167,8 +167,8 @@ const RiskManageMobileMachines = ({ closePopup, onClose, onUpdate, setMachineDat
                     </div>
                 </div>
 
-                {message && <div className="manMac-message-manage">{message}</div>}
-                {error && <div className="manMac-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manMac-buttons">
                     <button className="manMac-update-button" onClick={handleUpdate}>

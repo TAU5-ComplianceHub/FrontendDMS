@@ -89,12 +89,10 @@ const PPETableRisk = ({ collapsible = false, formData, setFormData, usedPPEOptio
             ...prev,
             PPEItems: prev.PPEItems.map(row =>
                 row.ppe === oldPPE
-                    ? { ppe: updatedPPE.ppe + " *" }
+                    ? { ppe: updatedPPE.ppe }
                     : row
             ),
         }));
-
-        closeManagePopup();
     };
 
 

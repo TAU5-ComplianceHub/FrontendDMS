@@ -391,12 +391,21 @@ const FileInfo = () => {
         );
       }
 
-      // Initial sort by review date (ascending; rows with no review date sink to the bottom)
-      const sortedFiles = fetchedFiles.sort((a, b) => {
-        const da = a.reviewDate ? new Date(a.reviewDate).getTime() : Infinity;
-        const db = b.reviewDate ? new Date(b.reviewDate).getTime() : Infinity;
+      // Initial sort: trash view sorts by dateDeleted (oldest to newest),
+      // otherwise sort by review date (ascending). Null/missing dates always
+      // sink to the bottom, never appearing before a real date value.
+      const nullsLast = (getVal) => (a, b) => {
+        const da = getVal(a) ? new Date(getVal(a)).getTime() : null;
+        const db = getVal(b) ? new Date(getVal(b)).getTime() : null;
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
         return da - db;
-      });
+      };
+
+      const sortedFiles = isTrashView
+        ? fetchedFiles.sort(nullsLast(f => f.dateDeleted))
+        : fetchedFiles.sort(nullsLast(f => f.reviewDate));
 
       setFiles(sortedFiles);
 
@@ -736,7 +745,7 @@ const FileInfo = () => {
     }
 
     // 5. Sorting
-    const colId = sortConfig?.colId || "reviewDate";
+    const colId = sortConfig?.colId || (isTrashView ? "dateDeleted" : "reviewDate");
     const dir = sortConfig?.direction === "desc" ? -1 : 1;
 
     current.sort((a, b) => {
@@ -757,13 +766,14 @@ const FileInfo = () => {
       }
 
       // Handle Date objects if sorting by date columns
-      if (colId === "reviewDate" || colId === "uploadDate") {
-        // Treat missing dates as "infinitely far out" so ascending sorts push
-        // them to the bottom and descending sorts push them to the top —
-        // i.e. direction actually affects where they land, same as any other value.
-        const da = av ? new Date(av).getTime() : Infinity;
-        const db = bv ? new Date(bv).getTime() : Infinity;
-        if (da === Infinity && db === Infinity) return 0;
+      if (colId === "reviewDate" || colId === "uploadDate" || colId === "dateDeleted") {
+        // Null/missing dates always sink to the bottom, regardless of sort
+        // direction — they should never appear before a real date value.
+        const da = av ? new Date(av).getTime() : null;
+        const db = bv ? new Date(bv).getTime() : null;
+        if (da === null && db === null) return 0;
+        if (da === null) return 1;
+        if (db === null) return -1;
         return (da - db) * dir;
       }
 
@@ -1227,7 +1237,8 @@ const FileInfo = () => {
                             : file.userID.username)
                           : ""}
                       </td>
-                      <td className="col-fi">{formatDate(file.uploadDate)}</td>
+                      {!isTrashView && (<td className="col-fi">{formatDate(file.uploadDate)}</td>)}
+                      {isTrashView && (<td className="col-fi">{formatDate(file.dateDeleted)}</td>)}
                       {!isSelectMode && canIn(access, "DMS", ["systemAdmin"]) && (
                         <td className={isTrashView ? "col-act trashed" : "col-act"}>
 

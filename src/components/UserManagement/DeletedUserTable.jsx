@@ -186,15 +186,36 @@ const DeletedUserTable = ({
             return true;
         });
 
-        const colId = sortConfig?.colId ?? "username";
+        // Default to sorting by deletion date, oldest to newest.
+        const colId = sortConfig?.colId ?? "deletedAt";
         const dir = sortConfig?.direction === "desc" ? -1 : 1;
 
+        const DATE_COLUMNS = ["deletedAt", "permanentDeleteAt"];
+
         current.sort((a, b) => {
+            // Sort actual date columns by their real timestamp, not the
+            // formatted display string, so chronological order is correct
+            // (e.g. "05.01.2024" must sort before "10.06.2024").
+            if (DATE_COLUMNS.includes(colId)) {
+                const aRaw = colId === "deletedAt" ? a.deletedAt : a.permanentDeleteAt;
+                const bRaw = colId === "deletedAt" ? b.deletedAt : b.permanentDeleteAt;
+                const aBlank = !aRaw;
+                const bBlank = !bRaw;
+
+                // Blanks always sink to the bottom, regardless of sort direction.
+                if (aBlank && !bBlank) return 1;
+                if (!aBlank && bBlank) return -1;
+                if (aBlank && bBlank) return 0;
+
+                return (new Date(bRaw).getTime() - new Date(aRaw).getTime()) * dir;
+            }
+
             const av = normalizeValue(getCellValue(a, colId));
             const bv = normalizeValue(getCellValue(b, colId));
 
             const aBlank = av === BLANK;
             const bBlank = bv === BLANK;
+            // Blanks always sink to the bottom, regardless of sort direction.
             if (aBlank && !bBlank) return 1;
             if (!aBlank && bBlank) return -1;
 

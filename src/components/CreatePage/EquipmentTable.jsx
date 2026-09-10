@@ -67,7 +67,7 @@ const EquipmentTable = ({ collapsible = false, formData, setFormData, usedEquipm
             ...prev,
             Equipment: prev.Equipment.map(row =>
                 row.eqp === oldEqp
-                    ? { eqp: updatedEqp.eqp + " *" }
+                    ? { eqp: updatedEqp.eqp }
                     : row
             ),
         }));

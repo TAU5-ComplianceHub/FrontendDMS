@@ -95,10 +95,14 @@ const ManageMaterial = ({ closePopup, onClose, onUpdate, setMatData, onAdd, user
             };
             setMatData((prevData) => [...prevData, newMat]);
 
-            if (onAdd) onAdd(newMat);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newMat, mat);
 
             setTimeout(() => {
                 handleClose();
+                closePopup();
             }, 1000);
         } catch (err) {
             setError("Failed to update material.");
@@ -162,8 +166,8 @@ const ManageMaterial = ({ closePopup, onClose, onUpdate, setMatData, onAdd, user
                     </div>
                 </div>
 
-                {message && <div className="manMat-message-manage">{message}</div>}
-                {error && <div className="manMat-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manMat-buttons">
                     <button className="manMat-update-button" onClick={handleUpdate}>

@@ -62,7 +62,7 @@ const FilterFileName = ({
                 onClick={(e) => onHeaderClick("discipline", e)}
             >
                 <div className="fileinfo-container-filter-1">
-                    <span className="fileinfo-title-filter-1 cursor-pointer">Discipline {getIcon("discipline")}</span>
+                    <span className="fileinfo-title-filter-1 cursor-pointer">Department {getIcon("discipline")}</span>
                 </div>
             </th>
 
@@ -158,7 +158,7 @@ const FilterFileName = ({
             </th>
 
             {/* Upload Date */}
-            <th className={`col-date-filter col cursor-pointer`}
+            {!trashed && (<th className={`col-date-filter col cursor-pointer`}
                 onClick={(e) => onHeaderClick("uploadDate", e)}
             >
                 <div className="fileinfo-container-filter">
@@ -166,7 +166,17 @@ const FilterFileName = ({
                         Upload Date {getIcon("uploadDate")}
                     </span>
                 </div>
-            </th>
+            </th>)}
+
+            {trashed && (<th className={`col-date-filter col cursor-pointer`}
+                onClick={(e) => onHeaderClick("dateDeleted", e)}
+            >
+                <div className="fileinfo-container-filter">
+                    <span className="fileinfo-title-filter">
+                        Date Deleted {getIcon("dateDeleted")}
+                    </span>
+                </div>
+            </th>)}
 
             {canIn(access, "DMS", ["systemAdmin", "contributor"]) && !isSelectMode && (
                 <th className="col-act-filter col">Action</th>

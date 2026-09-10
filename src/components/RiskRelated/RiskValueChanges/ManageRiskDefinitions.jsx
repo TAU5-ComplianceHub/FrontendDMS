@@ -100,11 +100,15 @@ const ManageRiskDefinitions = ({ closePopup, onClose, onUpdate, userID, setTermD
             };
             setTermData((prevData) => [...prevData, newTermArr]);
 
-            if (onAdd) onAdd(newTermArr);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newTermArr, term);
 
             setTimeout(() => {
                 handleClose();
-            }, 1000);
+                closePopup();
+            }, 1500);
         } catch (err) {
             setError("Failed to update term.");
         }
@@ -164,8 +168,8 @@ const ManageRiskDefinitions = ({ closePopup, onClose, onUpdate, userID, setTermD
                         </div>
                     </div>
 
-                    {message && <div className="manDefs-message-manage">{message}</div>}
-                    {error && <div className="manDefs-error-message-manage">{error}</div>}
+                    {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                    {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
                 </div>
                 <div className="manDefs-buttons">
                     <button className="manDefs-update-button" onClick={handleUpdate}>

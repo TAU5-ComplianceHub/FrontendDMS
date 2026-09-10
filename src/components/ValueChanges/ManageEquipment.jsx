@@ -95,10 +95,14 @@ const ManageEquipment = ({ closePopup, onClose, onUpdate, setEqpData, onAdd, use
             };
             setEqpData((prevData) => [...prevData, newEqp]);
 
-            if (onAdd) onAdd(newEqp);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newEqp, eqp);
 
             setTimeout(() => {
                 handleClose();
+                closePopup();
             }, 1000);
         } catch (err) {
             setError("Failed to update equipment.");
@@ -163,8 +167,8 @@ const ManageEquipment = ({ closePopup, onClose, onUpdate, setEqpData, onAdd, use
                     </div>
                 </div>
 
-                {message && <div className="manEqp-message-manage">{message}</div>}
-                {error && <div className="manEqp-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manEqp-buttons">
                     <button className="manEqp-update-button" onClick={handleUpdate}>

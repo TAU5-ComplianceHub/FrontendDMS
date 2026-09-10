@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import './JRATable.css';
 import { v4 as uuidv4 } from 'uuid';
+import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faPlus, faArrowsUpDown, faCopy, faTableColumns, faTimes, faInfoCircle, faPlusCircle, faArrowUpRightFromSquare, faFilter, faArrowsLeftRight, faArrowsRotate, faFlag } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlus, faArrowsUpDown, faCopy, faTableColumns, faTimes, faInfoCircle, faPlusCircle, faArrowUpRightFromSquare, faFilter, faArrowsLeftRight, faArrowsRotate, faFlag, faDownload, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import HazardJRA from "./RiskInfo/HazardJRA";
 import UnwantedEvent from "./RiskInfo/UnwantedEvent";
 import TaskExecution from "./RiskInfo/TaskExecution";
@@ -28,6 +29,7 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
     const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
     const [rowPendingDelete, setRowPendingDelete] = useState(null);
+    const [isDownloadingTable, setIsDownloadingTable] = useState(false);
 
     // Help Popups
     const [helpHazards, setHelpHazards] = useState(false);
@@ -138,6 +140,69 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
 
     const closeRemoveRowPopup = () => {
         setRowPendingDelete(null);
+    };
+
+    // Generates and downloads just the JRA table (no sign-off sheet, attendance
+    // register, etc.) — self-contained so any page that imports JRATable gets
+    // the download button for free, with nothing to wire up.
+    const handleDownloadJRATable = async () => {
+        if (isDownloadingTable) return;
+
+        if (!formData?.jra || formData.jra.length === 0) {
+            toast.error("There is no JRA data to download yet.", {
+                closeButton: true,
+                autoClose: 1500,
+                style: { textAlign: 'center' }
+            });
+            return;
+        }
+
+        const dataToStore = {
+            formData: {
+                jra: formData.jra,
+                title: formData.title,
+            },
+        };
+
+        const baseName = [formData.title, formData.documentType]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+
+        // Avoid "... JRA JRA Table" when the title/documentType already ends in "JRA"
+        const alreadyEndsWithJRA = /\bjra$/i.test(baseName);
+        const documentName = (
+            alreadyEndsWithJRA
+                ? `${baseName} Table`
+                : `${baseName ? `${baseName} ` : ""}JRA Table`
+        ).trim() || "JRA Table";
+
+        setIsDownloadingTable(true);
+
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/t/generate-jra-table`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem("token")}`
+                },
+                body: JSON.stringify(dataToStore),
+            });
+
+            if (!response.ok) throw new Error("Failed to generate JRA table");
+
+            const blob = await response.blob();
+            saveAs(blob, `${documentName}.xlsx`);
+        } catch (error) {
+            console.error("Error generating JRA table:", error);
+            toast.error("Failed to generate the JRA table. Please try again.", {
+                closeButton: true,
+                autoClose: 1500,
+                style: { textAlign: 'center' }
+            });
+        } finally {
+            setIsDownloadingTable(false);
+        }
     };
 
     const confirmRemoveRow = () => {
@@ -1223,6 +1288,7 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
         : null;
 
     const columnBtnClass = getTopRightButtonClass(rightButtonSlot++);
+    const downloadBtnClass = getTopRightButtonClass(rightButtonSlot++);
 
     const fitBtnClass = showFitButton
         ? getTopRightButtonClass(rightButtonSlot++)
@@ -1245,6 +1311,19 @@ const JRATable = ({ collapsible = false, formData, setFormData, isSidebarVisible
                     onClick={() => setShowColumnSelector(!showColumnSelector)}
                 >
                     <FontAwesomeIcon icon={faTableColumns} className="icon-um-search" />
+                </button>
+
+                <button
+                    className={downloadBtnClass}
+                    title="Download JRA Table"
+                    onClick={handleDownloadJRATable}
+                    disabled={isDownloadingTable}
+                >
+                    <FontAwesomeIcon
+                        icon={isDownloadingTable ? faSpinner : faDownload}
+                        spin={isDownloadingTable}
+                        className="icon-um-search"
+                    />
                 </button>
 
                 {showFitButton && (<button

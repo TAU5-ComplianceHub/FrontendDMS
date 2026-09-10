@@ -149,7 +149,7 @@ const TermTable = ({ collapsible = false, risk, formData, setFormData, usedTermC
       ...prev,
       termRows: prev.termRows.map(row =>
         row.term === oldTerm
-          ? { term: updatedTerm.term + " *", definition: updatedTerm.definition }
+          ? { term: updatedTerm.term, definition: updatedTerm.definition }
           : row
       ),
     }));

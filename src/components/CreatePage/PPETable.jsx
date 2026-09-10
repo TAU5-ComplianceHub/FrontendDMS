@@ -87,7 +87,7 @@ const PPETable = ({ collapsible = false, formData, setFormData, usedPPEOptions, 
             ...prev,
             PPEItems: prev.PPEItems.map(row =>
                 row.ppe === oldPPE
-                    ? { ppe: updatedPPE.ppe + " *" }
+                    ? { ppe: updatedPPE.ppe }
                     : row
             ),
         }));

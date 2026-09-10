@@ -3,7 +3,7 @@ import './ProcedureTable.css';
 import { saveAs } from "file-saver";
 import { toast } from "react-toastify";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faArrowsUpDown, faCopy, faUndo, faFilter } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrash, faTrashCan, faPlus, faPlusCircle, faMagicWandSparkles, faArrowsUpDown, faCopy, faUndo, faFilter, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
 import FlowchartRenderer from "./FlowchartRenderer";
 import { aiRewrite } from "../../utils/jraAI";
 import {
@@ -11,6 +11,7 @@ import {
     faChevronUp
 } from "@fortawesome/free-solid-svg-icons";
 import RiskAssessmentDeletePopup from "../RiskRelated/RiskAssessmentDeletePopup";
+import InfoSubStepsDDS from "./InfoSubStepsDDS";
 
 const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow, removeRow, updateRow, error, title, documentType, updateProcRows, readOnly = false, setErrors, setFormData, formData }, ref) => {
     const [collapsed, setCollapsed] = useState(false);
@@ -28,6 +29,7 @@ const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow,
     const mainInputRefs = useRef({});
     const subInputRefs = useRef({});
     const [rowPendingDelete, setRowPendingDelete] = useState(null);
+    const [showSubStepsInfo, setShowSubStepsInfo] = useState(false);
 
     const [armedDragRow, setArmedDragRow] = useState(null);
     const [draggedRowNr, setDraggedRowNr] = useState(null);
@@ -798,6 +800,18 @@ const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow,
                                                     onClick={(e) => !col.noFilter && openExcelFilterPopup(col.id, e)}
                                                 >
                                                     {col.label}
+                                                    {col.id === "SubStep" && (
+                                                        <FontAwesomeIcon
+                                                            icon={faCircleInfo}
+                                                            className="th-info-icon"
+                                                            title="More info about Procedure Sub Steps"
+                                                            style={{ marginLeft: "8px", cursor: "pointer" }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setShowSubStepsInfo(true);
+                                                            }}
+                                                        />
+                                                    )}
                                                     {col.subLabel && <div className="procFineText" style={{ color: "white" }}>{col.subLabel}</div>}
                                                     {(!col.noFilter && (filters[col.id] || sortConfig.colId === col.id) && col.id !== "nr") && (
                                                         <FontAwesomeIcon icon={faFilter} className="active-filter-icon" style={{ marginLeft: "10px" }} />
@@ -1232,6 +1246,9 @@ const ProcedureTable = forwardRef(({ collapsible = false, procedureRows, addRow,
                     type="Procedure"
                     removeRow={confirmRemoveRow}
                 />
+            )}
+            {showSubStepsInfo && (
+                <InfoSubStepsDDS setClose={() => setShowSubStepsInfo(false)} />
             )}
         </div>
     );

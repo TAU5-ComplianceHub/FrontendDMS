@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
+import InfoPopupFrequencyTemplateCreation from "./InfoPopupFrequencyTemplateCreation";
 
 const DAYS_PER_UNIT = {
     hour: 1 / 24,
@@ -85,6 +88,7 @@ const FrequencyTemplateCreation = ({
 }) => {
     const [fetchedOptions, setFetchedOptions] = useState([]);
     const [loadingOptions, setLoadingOptions] = useState(!frequencyOptionsProp);
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
 
     useEffect(() => {
         if (frequencyOptionsProp) return;
@@ -139,31 +143,45 @@ const FrequencyTemplateCreation = ({
     }, [frequencyOptionsProp, fetchedOptions]);
 
     return (
-        <div className={`input-box-type-risk-create ${error ? "error-create" : ""}`}>
-            <h3 className="font-fam-labels">
-                Work Order Frequency {required && <span className="required-field">*</span>}
-            </h3>
+        <>
+            <div className={`input-box-type-risk-create ${error ? "error-create" : ""}`} style={{ position: "relative" }}>
+                <FontAwesomeIcon
+                    icon={faInfoCircle}
+                    className="top-left-button-refs"
+                    style={{ color: "grey", fontSize: "20px", width: "30px", height: "30px", left: "15px", cursor: "pointer" }}
+                    title="Information"
+                    onClick={() => setIsInfoOpen(true)}
+                />
 
-            <div className="jra-info-popup-page-select-container">
-                <select
-                    className="table-control font-fam remove-default-styling"
-                    name="frequency"
-                    value={value || ""}
-                    onChange={onChange}
-                    onFocus={onFocus}
-                    disabled={readOnly || loadingOptions}
-                >
-                    <option value="" disabled>
-                        {loadingOptions ? "Loading..." : "Select Work Order Frequency"}
-                    </option>
-                    {frequencyOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                            {opt.label}
+                <h3 className="font-fam-labels">
+                    Work Order Frequency {required && <span className="required-field">*</span>}
+                </h3>
+
+                <div className="jra-info-popup-page-select-container">
+                    <select
+                        className="table-control font-fam remove-default-styling"
+                        name="frequency"
+                        value={value || ""}
+                        onChange={onChange}
+                        onFocus={onFocus}
+                        disabled={readOnly || loadingOptions}
+                    >
+                        <option value="" disabled>
+                            {loadingOptions ? "Loading..." : "Select Work Order Frequency"}
                         </option>
-                    ))}
-                </select>
+                        {frequencyOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
-        </div>
+
+            {isInfoOpen && (
+                <InfoPopupFrequencyTemplateCreation setClose={() => setIsInfoOpen(false)} />
+            )}
+        </>
     );
 };
 

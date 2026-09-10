@@ -100,10 +100,14 @@ const ManageAbbreviations = ({ closePopup, onClose, onUpdate, setAbbrData, onAdd
             };
             setAbbrData((prevData) => [...prevData, newAbbrObj]);
 
-            if (onAdd) onAdd(newAbbrObj);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newAbbrObj, abbreviation);
 
             setTimeout(() => {
                 handleClose();
+                closePopup();
             }, 1000);
         } catch (err) {
             setError("Failed to update abbreviation.");
@@ -163,8 +167,8 @@ const ManageAbbreviations = ({ closePopup, onClose, onUpdate, setAbbrData, onAdd
                     </div>
                 </div>
 
-                {message && <div className="manAbbr-message-manage">{message}</div>}
-                {error && <div className="manAbbr-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manAbbr-buttons">
                     <button className="manAbbr-update-button" onClick={handleUpdate}>

@@ -95,11 +95,15 @@ const RiskManageHandTools = ({ closePopup, onClose, onUpdate, setToolData, onAdd
             };
             setToolData((prevData) => [...prevData, newTool]);
 
-            if (onAdd) onAdd(newTool);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newTool, tool);
 
             setTimeout(() => {
                 handleClose();
-            }, 1000);
+                closePopup();
+            }, 1500);
         } catch (err) {
             setError("Failed to update tool.");
         }
@@ -162,8 +166,8 @@ const RiskManageHandTools = ({ closePopup, onClose, onUpdate, setToolData, onAdd
                     </div>
                 </div>
 
-                {message && <div className="manTool-message-manage">{message}</div>}
-                {error && <div className="manTool-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manTool-buttons">
                     <button className="manTool-update-button" onClick={handleUpdate}>

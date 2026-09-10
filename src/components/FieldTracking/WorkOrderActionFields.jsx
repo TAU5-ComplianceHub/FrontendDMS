@@ -9,10 +9,12 @@ import {
     faArrowUp,
     faArrowDown,
     faEdit,
+    faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { FIELD_TYPE_MAP } from "./WorkOrderActionFieldTypes";
 import AddActionFieldPopup from "./AddActionFieldPopup";
 import EditActionFieldPopup from "./EditActionFieldPopup";
+import InfoPopupWorkOrderActionFields from "./InfoPopupWorkOrderActionFields";
 
 // ---------------------------------------------------------------------------
 // WorkOrderActionFields
@@ -67,6 +69,7 @@ const WorkOrderActionFields = ({
     const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
     const toggleCollapse = () => setCollapsed(!collapsed);
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
 
     const actionFields = formData.actionFields || [];
 
@@ -161,7 +164,15 @@ const WorkOrderActionFields = ({
 
     return (
         <div className="input-row">
-            <div className={`input-box-ref ${error ? "error-create" : ""}`}>
+            <div className={`input-box-ref ${error ? "error-create" : ""}`} style={{ position: "relative" }}>
+                <FontAwesomeIcon
+                    icon={faInfoCircle}
+                    className="top-left-button-refs"
+                    style={{ color: "grey", fontSize: "20px", width: "30px", height: "30px", left: "15px", cursor: "pointer" }}
+                    title="Information"
+                    onClick={() => setIsInfoOpen(true)}
+                />
+
                 <h3 className="font-fam-labels">
                     Work Order Action Fields <span className="required-field">*</span>
                 </h3>
@@ -321,6 +332,10 @@ const WorkOrderActionFields = ({
                 }}
                 onSave={handleSaveEditedField}
             />
+
+            {isInfoOpen && (
+                <InfoPopupWorkOrderActionFields setClose={() => setIsInfoOpen(false)} />
+            )}
         </div>
     );
 };

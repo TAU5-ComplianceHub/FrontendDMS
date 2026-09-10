@@ -69,7 +69,7 @@ const MobileMachineTable = ({ collapsible = false, formData, setFormData, usedMo
     const handleMacUpdate = (updatedMac, oldMac) => {
         // 1) Swap out the code in usedAbbrCodes
         setUsedMobileMachine(prev =>
-            prev.map(code => (code === oldMac ? updatedMac.mac : code))
+            prev.map(code => (code === oldMac ? updatedMac.machine : code))
         );
 
         // 2) Update the selectedAbbrs Set
@@ -87,7 +87,7 @@ const MobileMachineTable = ({ collapsible = false, formData, setFormData, usedMo
             ...prev,
             MobileMachine: prev.MobileMachine.map(row =>
                 row.mac === oldMac
-                    ? { mac: updatedMac.machine + " *" }
+                    ? { mac: updatedMac.machine }
                     : row
             ),
         }));
@@ -178,8 +178,8 @@ const MobileMachineTable = ({ collapsible = false, formData, setFormData, usedMo
         setUsedMobileMachine(selectedMacArray);
 
         const selectedRows = selectedMacArray.map((mac) => {
-            const found = macData.find((item) => item.mac === mac);
-            return found || { mac }; // Fallback if not found
+            const found = macData.find((item) => item.machine === mac);
+            return found ? { mac: found.machine } : { mac }; // Fallback if not found
         });
 
         setFormData({

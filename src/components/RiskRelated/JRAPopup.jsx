@@ -1430,7 +1430,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                                                 />
                                                                                 {!readOnly && (<>
                                                                                     {loadingWEDKeys.has(`${si}-${idx}`) && (<FontAwesomeIcon icon={faSpinner} spin className="jra-popup-page-control-icon-spin spin-animation" />)}
-                                                                                    {wedHistory[`${si}-${idx}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon-2" onClick={() => handleUndoWED(si, idx)} />)}
+                                                                                    {wedHistory[`${si}-${idx}`]?.length > 0 && (<FontAwesomeIcon icon={faUndo} title={"Undo AI Rewrite WED Question"} className="jra-popup-page-control-icon-2" onClick={() => handleUndoWED(si, idx)} />)}
                                                                                     {!loadingWEDKeys.has(`${si}-${idx}`) && (<FontAwesomeIcon icon={faMagicWandSparkles} title={"AI Rewrite WED Question"} className="jra-popup-page-control-icon" onClick={() => handleAiWEDCreate(si, idx)} />)}
                                                                                 </>)}
                                                                             </div>

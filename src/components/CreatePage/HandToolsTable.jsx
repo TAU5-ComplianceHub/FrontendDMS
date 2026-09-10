@@ -76,8 +76,8 @@ const HandToolTable = ({ collapsible = false, formData, setFormData, usedHandToo
             prev.map(code => (code === oldTool ? updatedTool.tool : code))
         );
 
-        // 2) Update the selectedAbbrs Set
-        setUsedHandTools(prev => {
+        // 2) Update the selectedTools Set
+        setSelectedTools(prev => {
             const next = new Set(prev);
             if (next.has(oldTool)) {
                 next.delete(oldTool);
@@ -91,7 +91,7 @@ const HandToolTable = ({ collapsible = false, formData, setFormData, usedHandToo
             ...prev,
             HandTools: prev.HandTools.map(row =>
                 row.tool === oldTool
-                    ? { tool: updatedTool.tool + " *" }
+                    ? { tool: updatedTool.tool }
                     : row
             ),
         }));

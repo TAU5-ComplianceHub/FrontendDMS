@@ -134,7 +134,7 @@ const MaterialsTable = ({ collapsible = false, formData, setFormData, usedMateri
             ...prev,
             Materials: prev.Materials.map(row =>
                 row.mat === oldMat
-                    ? { mat: updatedMat.mat + " *" }
+                    ? { mat: updatedMat.mat }
                     : row
             ),
         }));

@@ -71,12 +71,10 @@ const EquipmentTableRisk = ({ collapsible = false, formData, setFormData, usedEq
             ...prev,
             Equipment: prev.Equipment.map(row =>
                 row.eqp === oldEqp
-                    ? { eqp: updatedEqp.eqp + " *" }
+                    ? { eqp: updatedEqp.eqp }
                     : row
             ),
         }));
-
-        closeManagePopup();
     };
 
     const handleUpdateEqp = (newEqpObj, oldEqp) => {

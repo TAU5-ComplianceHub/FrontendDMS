@@ -7,12 +7,15 @@ import {
     faChevronUp
 } from "@fortawesome/free-solid-svg-icons";
 
+import InfoPopupSupportingDocumentTableFTS from "./InfoPopupSupportingDocumentTableFTS";
+
 const SupportingDocumentTableFTS = ({ collapsible = false, formData, setFormData, readOnly = false }) => {
     const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
     const fileInputRef = useRef(null);
     const [selectedFiles, setSelectedFiles] = useState([]);
     const [confirmDeleteIndex, setConfirmDeleteIndex] = useState(null);
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
 
     const toggleCollapse = () => {
         const newState = !collapsed;
@@ -212,7 +215,15 @@ const SupportingDocumentTableFTS = ({ collapsible = false, formData, setFormData
 
     return (
         <div className="input-row">
-            <div className="input-box-ref">
+            <div className="input-box-ref" style={{ position: "relative" }}>
+
+                <FontAwesomeIcon
+                    icon={faInfoCircle}
+                    className="top-left-button-refs"
+                    style={{ color: "grey", fontSize: "20px", width: "30px", height: "30px", left: "15px", cursor: "pointer" }}
+                    title="Information"
+                    onClick={() => setIsInfoOpen(true)}
+                />
 
                 <h3 className="font-fam-labels">Supporting Information</h3>
 
@@ -304,6 +315,10 @@ const SupportingDocumentTableFTS = ({ collapsible = false, formData, setFormData
                     </>
                 )}
             </div>
+
+            {isInfoOpen && (
+                <InfoPopupSupportingDocumentTableFTS setClose={() => setIsInfoOpen(false)} />
+            )}
         </div>
     );
 };

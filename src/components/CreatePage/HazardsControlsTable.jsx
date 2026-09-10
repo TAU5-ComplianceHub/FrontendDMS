@@ -4,8 +4,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faChevronDown,
     faChevronUp,
-    faTrash
+    faTrash,
+    faInfoCircle
 } from "@fortawesome/free-solid-svg-icons";
+import InfoHazardsControlsDDS from "./InfoHazardsControlsDDS";
 
 const HazardsControlsTable = ({
     collapsible = false,
@@ -20,6 +22,7 @@ const HazardsControlsTable = ({
 }) => {
     const [collapsed, setCollapsed] = useState(defaultCollapsed);
     const isCollapsed = collapsible ? collapsed : false;
+    const [showHazardsControlsInfo, setShowHazardsControlsInfo] = useState(false);
 
     const toggleCollapse = () => {
         setCollapsed((prev) => !prev);
@@ -96,6 +99,19 @@ const HazardsControlsTable = ({
     return (
         <div className="input-row">
             <div className="input-box-ref">
+                <button
+                    className="top-left-button-refs"
+                    title="Information"
+                    type="button"
+                    onClick={() => setShowHazardsControlsInfo(true)}
+                >
+                    <FontAwesomeIcon
+                        icon={faInfoCircle}
+                        style={{ cursor: "pointer" }}
+                        className="icon-um-search"
+                    />
+                </button>
+
                 <h3 className="font-fam-labels">
                     Hazards and Controls <span className="required-field">{required ? "*" : ""}</span>
                 </h3>
@@ -189,6 +205,10 @@ const HazardsControlsTable = ({
                     </table>
                 )}
             </div>
+
+            {showHazardsControlsInfo && (
+                <InfoHazardsControlsDDS setClose={() => setShowHazardsControlsInfo(false)} />
+            )}
         </div>
     );
 };

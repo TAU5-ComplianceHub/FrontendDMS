@@ -1,4 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
+import InfoPopupTemplateTitleField from "./InfoPopupTemplateTitleField";
 
 // Auto-generates the "templateTitle" value once every field it depends on
 // has been filled in: Frequency, the field driven by Work Order Basis
@@ -56,6 +59,8 @@ const TemplateTitleField = ({
     required = true,
     showUI = true,
 }) => {
+    const [isInfoOpen, setIsInfoOpen] = useState(false);
+
     useEffect(() => {
         const basisValue = getBasisDrivenValue(workOrderBasis, assetType, mainArea, department);
         const requiredValues = [frequency, basisValue, workOrderType];
@@ -76,7 +81,15 @@ const TemplateTitleField = ({
 
     return (
         <div className="input-row">
-            <div className={`input-box-title ${error ? "error-create" : ""}`}>
+            <div className={`input-box-title ${error ? "error-create" : ""}`} style={{ position: "relative" }}>
+                <FontAwesomeIcon
+                    icon={faInfoCircle}
+                    className="top-left-button-refs"
+                    style={{ color: "grey", fontSize: "20px", width: "30px", height: "30px", left: "15px", cursor: "pointer" }}
+                    title="Information"
+                    onClick={() => setIsInfoOpen(true)}
+                />
+
                 <h3 className="font-fam-labels">
                     Work Order Title
                 </h3>
@@ -91,6 +104,10 @@ const TemplateTitleField = ({
                     style={{ minHeight: 0, color: "grey" }}
                 />
             </div>
+
+            {isInfoOpen && (
+                <InfoPopupTemplateTitleField setClose={() => setIsInfoOpen(false)} />
+            )}
         </div>
     );
 };

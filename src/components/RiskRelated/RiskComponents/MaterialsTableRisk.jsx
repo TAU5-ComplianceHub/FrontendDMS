@@ -158,12 +158,10 @@ const MaterialsTableRisk = ({ collapsible = false, formData, setFormData, usedMa
             ...prev,
             Materials: prev.Materials.map(row =>
                 row.mat === oldMat
-                    ? { mat: updatedMat.mat + " *" }
+                    ? { mat: updatedMat.mat }
                     : row
             ),
         }));
-
-        closeManagePopup();
     };
 
     useEffect(() => {

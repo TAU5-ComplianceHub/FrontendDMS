@@ -96,10 +96,14 @@ const ManagePPE = ({ closePopup, onClose, onUpdate, setPPEData, onAdd, userID, p
             };
             setPPEData((prevData) => [...prevData, newPpe]);
 
-            if (onAdd) onAdd(newPpe);
+            // Replace the original abbreviation row instead of appending a
+            // duplicate — use onUpdate (not onAdd) so the parent swaps out
+            // the old row for this one.
+            if (onUpdate) onUpdate(newPpe, ppe);
 
             setTimeout(() => {
                 handleClose();
+                closePopup();
             }, 1000);
         } catch (err) {
             setError("Failed to update ppe.");
@@ -164,8 +168,8 @@ const ManagePPE = ({ closePopup, onClose, onUpdate, setPPEData, onAdd, userID, p
                     </div>
                 </div>
 
-                {message && <div className="manPPE-message-manage">{message}</div>}
-                {error && <div className="manPPE-error-message-manage">{error}</div>}
+                {message && <div className="manPPE-message-manage" style={{ color: "white" }}>{message}</div>}
+                {error && <div className="manPPE-error-message-manage" style={{ color: "white" }}>{error}</div>}
 
                 <div className="manPPE-buttons">
                     <button className="manPPE-update-button" onClick={handleUpdate}>
