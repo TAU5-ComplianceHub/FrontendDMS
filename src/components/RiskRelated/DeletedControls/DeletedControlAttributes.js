@@ -463,30 +463,10 @@ const DeletedControlAttributes = () => {
                 sensitivity: "base"
             });
 
-        const compareDefaultCategory = (a, b) => {
-            const catA = normalize(a?.category);
-            const catB = normalize(b?.category);
-
-            const isGeneralA = catA.toLowerCase() === "general";
-            const isGeneralB = catB.toLowerCase() === "general";
-
-            if (isGeneralA && !isGeneralB) return -1;
-            if (!isGeneralA && isGeneralB) return 1;
-
-            if (catA === "(Blanks)" && catB !== "(Blanks)") return 1;
-            if (catA !== "(Blanks)" && catB === "(Blanks)") return -1;
-
-            return compareText(catA, catB);
-        };
-
         current.sort((a, b) => {
             if (!sortConfig?.colId) {
-                const categoryResult = compareDefaultCategory(a, b);
-                if (categoryResult !== 0) return categoryResult;
-
-                const controlA = normalize(a?.control);
-                const controlB = normalize(b?.control);
-                return compareText(controlA, controlB);
+                // Default Sort: Deleted On (deletedAt) Descending, newest first
+                return new Date(b?.deletedAt) - new Date(a?.deletedAt);
             }
 
             const { colId, direction } = sortConfig;

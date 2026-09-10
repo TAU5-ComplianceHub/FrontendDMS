@@ -92,6 +92,10 @@ const DeletedRiskDocumentsIBRA = () => {
                 if (colId === "version") return (Number(valA) - Number(valB)) * dir;
                 return normalize(valA).localeCompare(normalize(valB), undefined, { numeric: true, sensitivity: 'base' }) * dir;
             });
+        } else {
+            // Default Sort: Date Deleted Descending (newest first) — applied on fetch,
+            // no colId change so this never registers as an "active" sort in the UI.
+            current.sort((a, b) => new Date(b.dateDeleted) - new Date(a.dateDeleted));
         }
         return current;
     }, [files, searchQuery, activeExcelFilters, sortConfig]);

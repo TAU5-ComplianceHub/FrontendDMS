@@ -418,7 +418,11 @@ const DeletedDocumentsSI = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredFiles.map((file, index) => (
+                                {filteredFiles.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={7} className="cent-values-gen">No documents found.</td>
+                                    </tr>
+                                ) : filteredFiles.map((file, index) => (
                                     <tr key={file._id} className={`file-info-row-height gen-tr`}>
                                         <td className="cent-values-gen gen-point">{index + 1}</td>
                                         <td className=" gen-point">

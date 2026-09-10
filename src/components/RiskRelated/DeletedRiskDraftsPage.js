@@ -94,14 +94,12 @@ const DeletedRiskDraftsPage = () => {
         const date = new Date(dateString);
         const options = {
             year: 'numeric', month: '2-digit', day: '2-digit',
-            hour: '2-digit', minute: '2-digit', hour12: true,
             timeZone: 'Africa/Johannesburg'
         };
         const formatter = new Intl.DateTimeFormat(undefined, options);
         const parts = formatter.formatToParts(date);
         const datePart = `${parts.find(p => p.type === 'year').value}-${parts.find(p => p.type === 'month').value}-${parts.find(p => p.type === 'day').value}`;
-        const timePart = `${parts.find(p => p.type === 'hour').value}:${parts.find(p => p.type === 'minute').value} ${parts.find(p => p.type === 'dayPeriod').value}`;
-        return `${datePart} ${timePart}`;
+        return datePart;
     };
 
     const getRawValue = (item, colId) => {
@@ -111,6 +109,8 @@ const DeletedRiskDraftsPage = () => {
             case "creationDate": return formatDateTime(item.dateCreated);
             case "lastModifiedBy": return item.lockActive ? item.lockOwner?.username : (item.updater?.username || "-");
             case "lastModifiedDate": return item.lockActive ? "Active" : item.dateUpdated ? formatDateTime(item.dateUpdated) : "Not Updated Yet";
+            case "dateDeleted": return item.dateDeleted ? formatDateTime(item.dateDeleted) : "N/A";
+            case "expiryDate": return item.expiryDate ? formatDateTime(item.expiryDate) : "N/A";
             default: return "";
         }
     };
@@ -149,23 +149,43 @@ const DeletedRiskDraftsPage = () => {
     const displayDrafts = useMemo(() => {
         const list = [...filteredDrafts];
 
+        const DATE_FIELD_MAP = {
+            creationDate: "dateCreated",
+            dateDeleted: "dateDeleted",
+            expiryDate: "expiryDate",
+        };
+
         return list.sort((a, b) => {
             // 1) Publishable first
             if (a.publishable && !b.publishable) return -1;
             if (!a.publishable && b.publishable) return 1;
 
-            if (!sortBy || !sortDir) return 0;
+            // No active column sort selected: default to date deleted, newest first.
+            const effectiveSortBy = sortBy || "dateDeleted";
+            const effectiveSortDir = sortDir || "desc";
 
-            const valA = getRawValue(a, sortBy);
-            const valB = getRawValue(b, sortBy);
+            const dir = effectiveSortDir === 'asc' ? 1 : -1;
 
-            // Special handling for dates if needed, otherwise string compare
-            if (sortBy === 'creationDate' || sortBy === 'lastModifiedDate') {
-                // Simple string compare works for formatted ISO-like dates, but formatDateTime output is YYYY-MM-DD
-                // Ideally use raw dates, but for excel filter consistency we sort the display values
+            // Sort real date columns by their actual timestamp, not the
+            // formatted display string, and always sink blanks to the
+            // bottom regardless of sort direction.
+            const dateField = DATE_FIELD_MAP[effectiveSortBy];
+            if (dateField) {
+                const aRaw = a[dateField];
+                const bRaw = b[dateField];
+                const aBlank = !aRaw;
+                const bBlank = !bRaw;
+
+                if (aBlank && !bBlank) return 1;
+                if (!aBlank && bBlank) return -1;
+                if (aBlank && bBlank) return 0;
+
+                return (new Date(aRaw).getTime() - new Date(bRaw).getTime()) * dir;
             }
 
-            const dir = sortDir === 'asc' ? 1 : -1;
+            const valA = getRawValue(a, effectiveSortBy);
+            const valB = getRawValue(b, effectiveSortBy);
+
             return String(valA).localeCompare(String(valB), undefined, { numeric: true }) * dir;
         });
     }, [filteredDrafts, sortBy, sortDir]);
