@@ -931,7 +931,7 @@ const FileInfo = () => {
             </div>
           )}
           <div className="sidebar-logo-dm-fi">
-            <img src={isTrashView ? "/trashIcon.svg" : `/${iconMap[type] || `policiesDMSInverted.svg`}`} alt="Logo" className="icon-risk-rm" />
+            <img src={isTrashView ? `${process.env.PUBLIC_URL}/trashIcon.svg` : `${process.env.PUBLIC_URL}/${iconMap[type] || `${process.env.PUBLIC_URL}policiesDMSInverted.svg`}`} alt="Logo" className="icon-risk-rm" />
             <p className="logo-text-dm-fi">
               {isTrashView ? getDeletedTitle() : toPlural(type)}
             </p>
