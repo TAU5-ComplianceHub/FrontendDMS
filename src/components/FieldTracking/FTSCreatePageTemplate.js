@@ -2654,7 +2654,7 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
                 }}
               >
                 <span className="font-fam" style={{ marginTop: "15px", marginBottom: "10px", fontWeight: "bold", fontFamily: "Arial" }}>
-                  Import Hazards, Controls, PPEs, Materials, and Hand Tools from selected JRAs.
+                  Import Hazards, Controls, PPE, Materials, and Hand Tools from selected JRAs.
                 </span>
 
                 <button
