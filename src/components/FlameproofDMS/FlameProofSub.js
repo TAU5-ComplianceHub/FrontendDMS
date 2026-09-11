@@ -358,7 +358,7 @@ const FlameProofSub = () => {
     else if (colId === "deptHead") val = row.asset.departmentHead;
     else if (colId === "status") val = formatStatus(row.status);
     else if (colId === "invalidReason") val = getReason(row.status, row);
-    else if (colId === "issue") val = formatDate(row.issueDate);
+    else if (colId === "issue") val = isTrashView ? formatDate(row.dateDeleted) : formatDate(row.issueDate);
     else if (colId === "expiry") val = formatDate(row.certificateExipryDate);
     else val = row[colId];
 
@@ -435,7 +435,7 @@ const FlameProofSub = () => {
   const assetIconMap = { "all-assets": "/allDocumentsDMS.svg", "Continuous Miner": "/FCMS_CM2.png", "Shuttle Car": "/FCMS_SC2.png", "Roof Bolter": "/FCMS_RB2.png", "Feeder Breaker": "/FCMS_FB2.png", "Load Haul Dumper": "/FCMS_LHD2.png", "Tractor": "/FCMS_T2.png", }
   const versionAssetIconMap = { "all-assets": "allDocumentsDMS.svg", "Continuous Miner": "FCMS_CM2.png", "Shuttle Car": "FCMS_SC2.png", "Roof Bolter": "FCMS_RB2.png", "Feeder Breaker": "FCMS_FB2.png", "Load Haul Dumper": "FCMS_LHD2.png", "Tractor": "FCMS_T2.png", }
   const getAssetIconSrc = async () => {
-    if (isTrashView) { setIcon(`${process.env.PUBLIC_URL}/trashIcon.svg`); return; }
+    if (isTrashView) { setIcon("/trashIcon.svg"); return; }
     const route = `/api/flameproof/getAsset/${type}`;
     try {
       const response = await fetch(`${process.env.REACT_APP_URL}${route}`, {});
@@ -443,8 +443,8 @@ const FlameProofSub = () => {
       const data = await response.json();
       setAssetType(data.assets.assetType);
       const key = data.assets.assetType.replace(/\s+/g, " ");
-      setIcon(`${process.env.PUBLIC_URL}/${assetIconMap[key]}` || `${process.env.PUBLIC_URL}/genericAssetType2.svg`);
-      setVersionIcon(`${process.env.PUBLIC_URL}/${versionAssetIconMap[key]}` || `${process.env.PUBLIC_URL}/genericAssetType2.svg`);
+      setIcon(assetIconMap[key] || "/genericAssetType2.svg");
+      setVersionIcon(versionAssetIconMap[key] || "/genericAssetType2.svg");
     } catch (error) { setError(error.message); }
   };
 
@@ -499,7 +499,26 @@ const FlameProofSub = () => {
       current.sort((a, b) => {
         const av = getFilterValuesForCell(a, colId)[0];
         const bv = getFilterValuesForCell(b, colId)[0];
+        // Blanks always sink to the bottom, regardless of sort direction
+        // (formatted date/blank strings otherwise sort unpredictably).
+        const aBlank = av === BLANK;
+        const bBlank = bv === BLANK;
+        if (aBlank && !bBlank) return 1;
+        if (!aBlank && bBlank) return -1;
+        if (aBlank && bBlank) return 0;
         return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+      });
+    } else if (isTrashView) {
+      // No active column sort in trash view: default to date deleted, newest first.
+      current.sort((a, b) => {
+        const aRaw = a.dateDeleted;
+        const bRaw = b.dateDeleted;
+        const aBlank = !aRaw;
+        const bBlank = !bRaw;
+        if (aBlank && !bBlank) return 1;
+        if (!aBlank && bBlank) return -1;
+        if (aBlank && bBlank) return 0;
+        return new Date(bRaw).getTime() - new Date(aRaw).getTime();
       });
     } else {
       // Default sort if no column sort active
@@ -730,7 +749,7 @@ const FlameProofSub = () => {
                   {renderHeader("deptHead", "Department Head")}
                   {renderHeader("status", "Status")}
                   {renderHeader("invalidReason", "Invalidity Reason")}
-                  {renderHeader("issue", "Issue Date")}
+                  {renderHeader("issue", isTrashView ? "Date Deleted" : "Issue Date")}
                   {!isTrashView && renderHeader("expiry", "Expiry Date")}
                   {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<th className="flame-sub-act-filter col" style={{ fontSize: "14px" }}>Action</th>)}
                 </tr>
@@ -752,7 +771,7 @@ const FlameProofSub = () => {
                     <td className="col">{file.asset.departmentHead}</td>
                     <td className={`col ${getComplianceColor(file.status)}`}>{formatStatus(file.status)}</td>
                     <td className={`col`}>{getReason(file.status, file)}</td>
-                    <td className={`col`}>{formatDate(file.issueDate)}</td>
+                    <td className={`col`}>{formatDate(isTrashView ? file.dateDeleted : file.issueDate)}</td>
                     {!isTrashView && (<td className={`col ${getExpiryClass(file.certificateExipryDate)}`}>{formatDate(file.certificateExipryDate)}</td>)}
                     {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
                       <td className={`col-act ${isTrashView ? "trashed" : ""}`}>

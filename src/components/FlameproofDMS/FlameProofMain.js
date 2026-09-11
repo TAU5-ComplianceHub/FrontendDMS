@@ -426,10 +426,41 @@ const FlameProofMain = () => {
     if (sortConfig.colId) {
       const { colId, direction } = sortConfig;
       const dir = direction === 'desc' ? -1 : 1;
+      if (colId === "dateDeleted") {
+        current.sort((a, b) => {
+          const aRaw = a.deletedAt || a.dateDeleted;
+          const bRaw = b.deletedAt || b.dateDeleted;
+          const aBlank = !aRaw;
+          const bBlank = !bRaw;
+          // Blanks always sink to the bottom, regardless of sort direction.
+          if (aBlank && !bBlank) return 1;
+          if (!aBlank && bBlank) return -1;
+          if (aBlank && bBlank) return 0;
+          return (new Date(aRaw).getTime() - new Date(bRaw).getTime()) * dir;
+        });
+      } else {
+        current.sort((a, b) => {
+          const av = getFilterValuesForCell(a, colId)[0];
+          const bv = getFilterValuesForCell(b, colId)[0];
+          const aBlank = av === BLANK;
+          const bBlank = bv === BLANK;
+          if (aBlank && !bBlank) return 1;
+          if (!aBlank && bBlank) return -1;
+          if (aBlank && bBlank) return 0;
+          return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+        });
+      }
+    } else if (isTrashView) {
+      // No active column sort in trash view: default to date deleted, newest first.
       current.sort((a, b) => {
-        const av = getFilterValuesForCell(a, colId)[0];
-        const bv = getFilterValuesForCell(b, colId)[0];
-        return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+        const aRaw = a.deletedAt || a.dateDeleted;
+        const bRaw = b.deletedAt || b.dateDeleted;
+        const aBlank = !aRaw;
+        const bBlank = !bRaw;
+        if (aBlank && !bBlank) return 1;
+        if (!aBlank && bBlank) return -1;
+        if (aBlank && bBlank) return 0;
+        return new Date(bRaw).getTime() - new Date(aRaw).getTime();
       });
     }
 

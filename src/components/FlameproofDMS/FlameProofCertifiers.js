@@ -235,6 +235,7 @@ const FlameProofCertifiers = () => {
     else if (colId === "licenseNumber") val = row.licenseNumber;
     else if (colId === "issue") val = formatDate(row.licenseIssueDate);
     else if (colId === "expiry") val = formatDate(row.licenseExpiryDate);
+    else if (colId === "dateDeleted") val = formatDate(row.deletedAt || row.dateDeleted);
     else if (colId === "status") val = row.status;
     else val = row[colId];
 
@@ -363,10 +364,41 @@ const FlameProofCertifiers = () => {
     if (sortConfig.colId) {
       const { colId, direction } = sortConfig;
       const dir = direction === 'desc' ? -1 : 1;
+      if (colId === "dateDeleted") {
+        current.sort((a, b) => {
+          const aRaw = a.deletedAt || a.dateDeleted;
+          const bRaw = b.deletedAt || b.dateDeleted;
+          const aBlank = !aRaw;
+          const bBlank = !bRaw;
+          // Blanks always sink to the bottom, regardless of sort direction.
+          if (aBlank && !bBlank) return 1;
+          if (!aBlank && bBlank) return -1;
+          if (aBlank && bBlank) return 0;
+          return (new Date(aRaw).getTime() - new Date(bRaw).getTime()) * dir;
+        });
+      } else {
+        current.sort((a, b) => {
+          const av = getFilterValuesForCell(a, colId)[0];
+          const bv = getFilterValuesForCell(b, colId)[0];
+          const aBlank = av === BLANK;
+          const bBlank = bv === BLANK;
+          if (aBlank && !bBlank) return 1;
+          if (!aBlank && bBlank) return -1;
+          if (aBlank && bBlank) return 0;
+          return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+        });
+      }
+    } else if (isTrashView) {
+      // No active column sort in trash view: default to date deleted, newest first.
       current.sort((a, b) => {
-        const av = getFilterValuesForCell(a, colId)[0];
-        const bv = getFilterValuesForCell(b, colId)[0];
-        return String(av).localeCompare(String(bv), undefined, { sensitivity: 'base', numeric: true }) * dir;
+        const aRaw = a.deletedAt || a.dateDeleted;
+        const bRaw = b.deletedAt || b.dateDeleted;
+        const aBlank = !aRaw;
+        const bBlank = !bRaw;
+        if (aBlank && !bBlank) return 1;
+        if (!aBlank && bBlank) return -1;
+        if (aBlank && bBlank) return 0;
+        return new Date(bRaw).getTime() - new Date(aRaw).getTime();
       });
     } else {
       // Fallback to default sort if no column sort is active
@@ -634,19 +666,21 @@ const FlameProofCertifiers = () => {
             <p className="logo-text-um">EPA Management</p>
           </div>
 
-          <div className="filter-dm-fi">
-            <p className="filter-text-dm-fi">Filter</p>
-            <div className="button-container-dm-fi">
-              <div className="fi-info-popup-page-select-container">
-                <Select options={authorities.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedAuthority(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Certification Body"
-                  classNamePrefix="sb" />
-              </div>
-              <div className="fi-info-popup-page-select-container">
-                <Select options={status.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedStatus(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Status"
-                  classNamePrefix="sb" />
+          {false && (
+            <div className="filter-dm-fi">
+              <p className="filter-text-dm-fi">Filter</p>
+              <div className="button-container-dm-fi">
+                <div className="fi-info-popup-page-select-container">
+                  <Select options={authorities.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedAuthority(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Certification Body"
+                    classNamePrefix="sb" />
+                </div>
+                <div className="fi-info-popup-page-select-container">
+                  <Select options={status.map(d => ({ value: d, label: d }))} isMulti onChange={(selected) => setSelectedStatus(selected.map(s => s.value))} className="sidebar-select remove-default-styling" placeholder="Status"
+                    classNamePrefix="sb" />
+                </div>
               </div>
             </div>
-          </div>
+          )}
           {!isTrashView && canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (
             <div className="filter-dm-fi-2" >
               <div className="button-container-dm-fi">
@@ -767,7 +801,7 @@ const FlameProofCertifiers = () => {
                   {renderHeader("authority", "Certification Body")}
                   {renderHeader("licenseNumber", "Accreditation Number")}
                   {renderHeader("issue", "Initial Accreditation Date")}
-                  {renderHeader("expiry", "Expiry Date")}
+                  {!isTrashView ? renderHeader("expiry", "Expiry Date") : renderHeader("dateDeleted", "Date Deleted")}
                   {renderHeader("status", "Status")}
                   <th className="flame-certification-act-filter col">Action</th>
                 </tr>
@@ -804,7 +838,7 @@ const FlameProofCertifiers = () => {
                     </td>
                     <td className="file-name-cell" style={{ textAlign: "center" }}>{(file.licenseNumber)}</td>
                     <td className="col">{formatDate(file.licenseIssueDate)}</td>
-                    <td className={`col`}>{formatDate(file.licenseExpiryDate)}</td>
+                    <td className={`col`}>{!isTrashView ? formatDate(file.licenseExpiryDate) : formatDate(file.deletedAt || file.dateDeleted)}</td>
                     <td className={`col ${getComplianceColor(file.status)}`}>{file.status}</td>
                     {canIn(access, "FCMS", ["systemAdmin", "contributor"]) && (<td className={"col-act"}>
                       {!isTrashView && (

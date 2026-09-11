@@ -120,14 +120,26 @@ const FTSDeletedTemplateDocuments = () => {
             }
             return true;
         });
-        const { colId, direction } = sortConfig;
+        const { colId: rawColId, direction: rawDirection } = sortConfig;
+        // "nr" means no explicit user sort is active — default the *display order*
+        // to dateDeleted, newest first, without altering sortConfig/DEFAULT_SORT itself.
+        const colId = rawColId === "nr" ? "dateDeleted" : rawColId;
+        const direction = rawColId === "nr" ? "desc" : rawDirection;
         const dir = direction === "desc" ? -1 : 1;
-        if (colId !== "nr") {
+        {
             const normalize = (v) => { const s = v == null ? "" : String(v).trim(); return s === "" ? "(Blanks)" : s; };
             current.sort((a, b) => {
                 let valA, valB;
                 switch (colId) { case "name": valA = a.formData.title; valB = b.formData.title; break; case "version": valA = a.formData.version; valB = b.formData.version; break; case "deletedBy": valA = a.deleter?.username; valB = b.deleter?.username; break; case "dateDeleted": valA = a.dateDeleted; valB = b.dateDeleted; break; case "expiryDate": valA = a.expiryDate; valB = b.expiryDate; break; default: valA = a[colId]; valB = b[colId]; }
-                if (["dateDeleted", "expiryDate"].includes(colId)) { return (new Date(valA) - new Date(valB)) * dir; }
+                if (["dateDeleted", "expiryDate"].includes(colId)) {
+                    // Blanks always sink to the bottom, regardless of sort direction.
+                    const aBlank = !valA;
+                    const bBlank = !valB;
+                    if (aBlank && !bBlank) return 1;
+                    if (!aBlank && bBlank) return -1;
+                    if (aBlank && bBlank) return 0;
+                    return (new Date(valA) - new Date(valB)) * dir;
+                }
                 if (colId === "version") return (Number(valA) - Number(valB)) * dir;
                 return normalize(valA).localeCompare(normalize(valB), undefined, { numeric: true, sensitivity: 'base' }) * dir;
             });
