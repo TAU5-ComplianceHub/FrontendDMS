@@ -156,12 +156,23 @@ const SGIAdminPage = () => {
             } else {
                 console.error("Upload failed:", result);
 
+                // The backend puts most failures under "error" and a couple under
+                // "message" - checking only "message" is why the stale-version
+                // response (which uses "error") was falling through to the generic text.
+                let errorMessage = result?.error || result?.message
+                    || "Upload failed. The Excel format may be incorrect or has been modified.";
+                let autoClose = 1200;
+
+                if (response.status === 409) {
+                    errorMessage = "This is an older version of the SGI. Please export the latest version through the system, make your changes on that file, and try uploading again.";
+                    autoClose = 4000;
+                }
+
                 toast.error(
-                    result?.message ||
-                    "Upload failed. The Excel format may be incorrect or has been modified.",
+                    errorMessage,
                     {
                         closeButton: false,
-                        autoClose: 1200,
+                        autoClose,
                         style: { textAlign: "center" }
                     }
                 );

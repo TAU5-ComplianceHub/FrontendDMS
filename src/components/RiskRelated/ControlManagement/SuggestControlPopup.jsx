@@ -11,6 +11,7 @@ import ControlActivation from '../RiskInfo/ControlActivation';
 import ControlHierarchy from '../RiskInfo/ControlHierarchy';
 import CriticalControl from '../RiskInfo/CriticalControl';
 import ControlQuality from '../RiskInfo/ControlQuality';
+import EscalateApproverPopup from './EscalateApproverPopup';
 
 const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
     const [controlName, setControlName] = useState("");
@@ -36,6 +37,7 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
     const [categoryOptions, setCategoryOptions] = useState([]);
 
     const [loading, setLoading] = useState(false);
+    const [showEscalatePopup, setShowEscalatePopup] = useState(false);
     const [errors, setErrors] = useState({
         author: false,
         departmentHead: false,
@@ -123,6 +125,11 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
     }, [data]);
 
     const approve = async () => {
+        if (criticalControl.trim() === "Yes" && !performance.trim()) {
+            toast.warn(`Please complete the Performance Requirements and Verification field, as this is a Critical Control.`, { autoClose: 1200, closeButton: false });
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
@@ -188,6 +195,15 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleEscalateClick = () => {
+        setShowEscalatePopup(true);
+    };
+
+    const handleEscalateSuccess = () => {
+        onSuccess?.();
+        onClose();
     };
 
     const sortedAimOptions = [...aimOptions].sort((a, b) =>
@@ -406,6 +422,7 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
                             <div className="ibra-popup-page-component-wrapper">
                                 <div className="ibra-popup-page-form-group">
                                     <label style={{ fontSize: "15px" }}>Performance Requirements and Verification
+                                        {criticalControl.trim() === "Yes" && <span className="required-field"> *</span>}
                                     </label>
                                     <textarea
                                         value={performance}
@@ -424,20 +441,37 @@ const SuggestControlPopup = ({ onClose, data, onSuccess }) => {
                             <button
                                 className="approve-suggestion-button-download"
                                 onClick={approve}
+                                style={{ width: "20%" }}
                             >
                                 {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Approve`)}
                             </button>
                             <button
                                 className="approve-suggestion-button-cancel"
-                                style={{ marginLeft: "20px" }}
+                                style={{ marginLeft: "10px", marginRight: "10px", width: "20%" }}
                                 onClick={decline}
                             >
                                 Decline
+                            </button>
+                            <button
+                                className="approve-suggestion-button-cancel"
+                                style={{ marginLeft: "10px", width: "20%" }}
+                                onClick={handleEscalateClick}
+                            >
+                                Escalate
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {showEscalatePopup && (
+                <EscalateApproverPopup
+                    isOpen={showEscalatePopup}
+                    onClose={() => setShowEscalatePopup(false)}
+                    controlId={data?._id}
+                    onSuccess={handleEscalateSuccess}
+                />
+            )}
 
             {helpCT && (<ControlType setClose={closeHelpCT} />)}
             {helpCA && (<ControlActivation setClose={closeHelpCA} />)}

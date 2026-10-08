@@ -1089,7 +1089,7 @@ const ControlVersionHistory = () => {
                                         </th>
                                     )}
 
-                                    {showColumns.includes("action") && (
+                                    {canIn(access, "RMS", ["systemAdmin"]) && showColumns.includes("action") && (
                                         <th
                                             className="risk-control-attributes-action"
                                             rowSpan={2}
@@ -1336,7 +1336,7 @@ const ControlVersionHistory = () => {
                                                 );
                                             })()}
 
-                                            {showColumns.includes("action") && (
+                                            {canIn(access, "RMS", ["systemAdmin"]) && showColumns.includes("action") && (
                                                 <td className="risk-control-attributes-action-cell">
                                                     <button
                                                         type="button"

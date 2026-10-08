@@ -249,6 +249,7 @@ import TrainingVersionPreviewPage from './components/VisitorsInduction/Induction
 import FTSVersionHistoryPage from './components/FieldTracking/FTSVersionHistoryPage';
 import SignedOffPreviewDDS from './components/DocumentCreationPages/SignedOffPreviewDDS';
 import SignedOffPreviewRMS from './components/RiskRelated/SignedOffPreviewRMS';
+import ControlEvaluationManagement from './components/ComplainceTracking/TaskingPages/ControlEvaluations/ControlEvaluationManagement';
 
 const AUTO_LOGOUT_TIME = 45 * 60 * 1000;
 const WARNING_TIME = 5 * 60 * 1000;
@@ -565,6 +566,7 @@ function App() {
         <Route path="FrontendDMS/ftsDraftVersionPreview/:type/:id/:version" element={<FTSCreatePageTemplate versionPreview />} />
         <Route path="FrontendDMS/ddsSignedOffPreview/:type/:id" element={<SignedOffPreviewDDS />} />
         <Route path="FrontendDMS/rmsSignedOffPreview/:type/:id" element={<SignedOffPreviewRMS />} />
+        <Route path="FrontendDMS/controlEvals" element={<ControlEvaluationManagement />} />
 
         {/* Mobile Routes */}
         <Route path='FrontendDMS/mobileLogin' element={!isMobile ? <Navigate to="FrontendDMS/" /> : <LoginPageMobile />} />

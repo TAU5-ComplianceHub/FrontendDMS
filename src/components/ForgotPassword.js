@@ -21,6 +21,7 @@ function ForgotPassword() {
     const [newPasswordInvalid, setNewPasswordInvalid] = useState(false);
     const [confirmPasswordInvalid, setConfirmPasswordInvalid] = useState(false);
     const [resending, setResending] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const getPasswordErrors = (password) => {
         const errors = [];
@@ -115,10 +116,16 @@ function ForgotPassword() {
 
     const handleLogin = async (e) => {
         e.preventDefault();
+
+        // Guard against double-submits (e.g. Enter key firing while a
+        // request for this same form is already in flight).
+        if (loading) return;
+
         setError(''); // Clear previous errors
 
         if (step === 1) {
             // Step 1: Username and Email, Request OTP
+            setLoading(true);
             try {
                 const response = await fetch(`${process.env.REACT_APP_URL}/api/user/request-otp`, {
                     method: 'POST',
@@ -146,9 +153,12 @@ function ForgotPassword() {
                 }
             } catch (err) {
                 setError(err.message);
+            } finally {
+                setLoading(false);
             }
         } else if (step === 2) {
             // Step 2: OTP, Verify OTP
+            setLoading(true);
             try {
                 const response = await fetch(`${process.env.REACT_APP_URL}/api/user/verify-otp`, {
                     method: 'POST',
@@ -185,6 +195,8 @@ function ForgotPassword() {
                 setStep(3);
             } catch (err) {
                 setError(err.message);
+            } finally {
+                setLoading(false);
             }
         } else if (step === 3) {
             // Step 3: New Password and Confirm Password
@@ -215,6 +227,7 @@ function ForgotPassword() {
                 return;
             }
 
+            setLoading(true);
             try {
                 const response = await fetch(`${process.env.REACT_APP_URL}/api/user/reset-password`, {
                     method: 'POST',
@@ -246,9 +259,12 @@ function ForgotPassword() {
                             textAlign: 'center',
                         },
                     });
+                    navigate('/FrontendDMS/');
                 }
             } catch (err) {
                 setError(err.message);
+            } finally {
+                setLoading(false);
             }
         }
     };
@@ -293,6 +309,21 @@ function ForgotPassword() {
                                 className="forgot-password-label"
                                 style={{
                                     display: "flex",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    textAlign: "center",
+                                    marginBottom: "20px",
+                                    fontWeight: "normal",
+                                    fontSize: "15px",
+                                    color: "white"
+                                }}
+                            >
+                                We sent a one-time verification code to your registered email address. Enter the code below to continue.
+                            </label>
+                            <label
+                                className="forgot-password-label"
+                                style={{
+                                    display: "flex",
                                     justifyContent: "space-between",
                                     alignItems: "center"
                                 }}
@@ -316,7 +347,7 @@ function ForgotPassword() {
                                                 cursor: resending ? 'default' : 'pointer',
                                             }}
                                         >
-                                            {resending ? 'Resending...' : 'Resend OTP'}
+                                            {resending ? <FontAwesomeIcon icon={faSpinner} className="spin-animation" /> : 'Resend OTP'}
                                         </button>
                                     )}
                                 </span>
@@ -368,8 +399,14 @@ function ForgotPassword() {
                     )}
 
                     <div className="forgot-password-button-container">
-                        <button type="submit" className="forgot-password-button">{step === 1 ? 'Request OTP' : step === 2 ? 'Verify OTP' : 'Reset Password'}</button>
-                        <button className="forgot-password-button" onClick={() => navigate(-1)}>Back</button>
+                        <button type="submit" className="forgot-password-button" disabled={loading}>
+                            {loading ? (
+                                <FontAwesomeIcon icon={faSpinner} className="spin-animation" />
+                            ) : (
+                                step === 1 ? 'Request OTP' : step === 2 ? 'Verify OTP' : 'Reset Password'
+                            )}
+                        </button>
+                        <button type="button" className="forgot-password-button" onClick={() => navigate(-1)} disabled={loading}>Back</button>
                     </div>
                 </form>
 

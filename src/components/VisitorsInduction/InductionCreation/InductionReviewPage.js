@@ -24,6 +24,7 @@ import SavingInProgress from "../../DocumentCreationPages/SavingInProgress";
 import RemoveFromApprovalPopup from "../../Popups/RemoveFromApprovalPopup";
 import RejectReason from "../../Popups/RejectReason";
 import RejectReasonView from "../../Popups/RejectReasonView";
+import ConfirmPublish from "../../Popups/ConfirmPublish";
 
 const InductionReviewPage = () => {
   const navigate = useNavigate();
@@ -60,6 +61,7 @@ const InductionReviewPage = () => {
   const [rejecting, setRejecting] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
   const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
   const readOnlyRef = useRef(false);
@@ -538,8 +540,17 @@ const InductionReviewPage = () => {
         }
       });
     } else {
-      openApproval();
+      setIsConfirmPublishOpen(true);
     }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+    openApproval();
   };
 
   const handleApproveClick = () => {
@@ -1354,6 +1365,7 @@ const InductionReviewPage = () => {
       </div>
       {preview && (<PublishedInductionPreviewPage draftID={loadedIDRef.current} closeModal={closePreview} />)}
       {confrimation && (<RepublishInduction closeModal={closeConfirmation} normalPublish={normalPublish} retakeInduction={retakeInduction} />)}
+      {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.courseTitle} />)}
       {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       {removeApprovalState && (
         <RemoveFromApprovalPopup

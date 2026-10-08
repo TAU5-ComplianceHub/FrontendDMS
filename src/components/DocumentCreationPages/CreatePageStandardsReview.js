@@ -23,6 +23,7 @@ import StandardsTable from "../CreatePage/StandardsTable";
 import SupportingDocumentTable from "../RiskRelated/SupportingDocumentTable";
 import SaveAsPopup from "../Popups/SaveAsPopup";
 import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 import DraftPopup from "../Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import ApproversPopup from "../VisitorsInduction/InductionCreation/ApproversPopup";
@@ -51,6 +52,7 @@ const CreatePageStandardsReview = () => {
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false); // spinner state for the top "Save" icon
   const [isPublishing, setIsPublishing] = useState(false); // spinner state for the top "Publish" icon
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [errors, setErrors] = useState([]);
   const [isSaveAsModalOpen, setIsSaveAsModalOpen] = useState(false);
   const loadedIDRef = useRef('');
@@ -348,12 +350,21 @@ const CreatePageStandardsReview = () => {
         }
       })
     } else {
-      setIsPublishing(true);
-      try {
-        await handlePublishApprovalFlow();
-      } finally {
-        setIsPublishing(false);
-      }
+      setIsConfirmPublishOpen(true);
+    }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    setIsConfirmPublishOpen(false);
+    setIsPublishing(true);
+    try {
+      await handlePublishApprovalFlow();
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -2177,6 +2188,7 @@ const CreatePageStandardsReview = () => {
         {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={type} userID={userID} create={false} standard={true} />)}
         {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
         {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+        {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
       </div>
       <ToastContainer />
       {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}

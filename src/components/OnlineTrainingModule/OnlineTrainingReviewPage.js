@@ -25,6 +25,7 @@ import SavingInProgress from "../DocumentCreationPages/SavingInProgress";
 import RemoveFromApprovalPopup from "../Popups/RemoveFromApprovalPopup";
 import RejectReason from "../Popups/RejectReason";
 import RejectReasonView from "../Popups/RejectReasonView";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 
 const OnlineTrainingReviewPage = () => {
   const navigate = useNavigate();
@@ -61,6 +62,7 @@ const OnlineTrainingReviewPage = () => {
   const [rejecting, setRejecting] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
   const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
   const readOnlyRef = useRef(false);
@@ -660,8 +662,17 @@ const OnlineTrainingReviewPage = () => {
         }
       });
     } else {
-      openApproval();
+      setIsConfirmPublishOpen(true);
     }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+    openApproval();
   };
 
   const handleApproveClick = () => {
@@ -1479,6 +1490,7 @@ const OnlineTrainingReviewPage = () => {
       </div>
       {preview && (<PublishedOnlineTrainingPreviewPage draftID={loadedIDRef.current} closeModal={closePreview} />)}
       {confrimation && (<RepublishTraining closeModal={closeConfirmation} normalPublish={normalPublish} retakeInduction={retakeInduction} />)}
+      {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.courseTitle} />)}
       {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       {removeApprovalState && (
         <RemoveFromApprovalPopup

@@ -18,6 +18,7 @@ const DeletedUserTable = ({
 }) => {
     const navigate = useNavigate();
     const excelPopupRef = useRef(null);
+    const excelAnchorElRef = useRef(null);
 
     const BLANK = "(Blanks)";
 
@@ -125,6 +126,8 @@ const DeletedUserTable = ({
         const allValues = getAvailableOptions(colId);
         const existing = filters[colId];
 
+        excelAnchorElRef.current = e.currentTarget;
+
         setExcelSelected(new Set(Array.isArray(existing) ? existing : allValues));
         setExcelSearch("");
         setExcelFilter({
@@ -142,24 +145,55 @@ const DeletedUserTable = ({
     useEffect(() => {
         if (!excelFilter.open) return;
 
-        const handleClickOutside = (e) => {
-            if (excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
-                setExcelFilter({
-                    open: false,
-                    colId: null,
-                    anchorRect: null,
-                    pos: { top: 0, left: 0, width: 0 }
-                });
-            }
-        };
-
-        const handleScroll = () => {
+        const closePopup = () => {
+            excelAnchorElRef.current = null;
             setExcelFilter({
                 open: false,
                 colId: null,
                 anchorRect: null,
                 pos: { top: 0, left: 0, width: 0 }
             });
+        };
+
+        const handleClickOutside = (e) => {
+            if (excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
+                closePopup();
+            }
+        };
+
+        // Scrolling the table body (or the page) moves the header cell the
+        // popup is anchored to. Re-measure that cell and follow it instead
+        // of just closing the popup - only close if the cell has actually
+        // scrolled out of view, so a normal scroll through the rows doesn't
+        // make the filter vanish.
+        const handleScroll = () => {
+            const anchorEl = excelAnchorElRef.current;
+            if (!anchorEl || !anchorEl.isConnected) {
+                closePopup();
+                return;
+            }
+
+            const rect = anchorEl.getBoundingClientRect();
+            const isVisible =
+                rect.bottom > 0 &&
+                rect.top < window.innerHeight &&
+                rect.right > 0 &&
+                rect.left < window.innerWidth;
+
+            if (!isVisible) {
+                closePopup();
+                return;
+            }
+
+            setExcelFilter(prev => ({
+                ...prev,
+                anchorRect: rect,
+                pos: {
+                    top: rect.bottom + window.scrollY + 4,
+                    left: rect.left + window.scrollX,
+                    width: Math.max(rect.width, 220)
+                }
+            }));
         };
 
         document.addEventListener("mousedown", handleClickOutside);
@@ -427,6 +461,7 @@ const DeletedUserTable = ({
                                     return next;
                                 });
 
+                                excelAnchorElRef.current = null;
                                 setExcelFilter({
                                     open: false,
                                     colId: null,
@@ -436,6 +471,7 @@ const DeletedUserTable = ({
                             };
 
                             const onCancel = () => {
+                                excelAnchorElRef.current = null;
                                 setExcelFilter({
                                     open: false,
                                     colId: null,

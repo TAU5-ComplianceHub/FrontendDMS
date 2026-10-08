@@ -6,16 +6,21 @@ import { v4 as uuidv4 } from "uuid";
 import ControlEAPopup from "./ControlEAPopup";
 import { saveAs } from "file-saver";
 import DeleteControlPopup from "./RiskComponents/DeleteControlPopup";
+import RelevantControlsSelectionPopup from "./RelevantControlsSelectionPopup";
 import {
     faChevronDown,
     faChevronUp
 } from "@fortawesome/free-solid-svg-icons";
 
-const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls, highlightedRows = [] }) => {
+const ControlAnalysisTable = ({ typeRA, collapsible = false, rows, updateRows, ibra, addRow, removeRow, updateRow, error, title, onControlRename, isSidebarVisible, readOnly = false, relevantControls, highlightedRows = [], globalControls = [], onSaveControls }) => {
     const [collapsed, setCollapsed] = useState(false);
     const isCollapsed = collapsible ? collapsed : false;
     const [insertPopup, setInsertPopup] = useState();
     const [selectedRowData, setSelectedRowData] = useState();
+    // ✅ Controls the "add/select controls" popup below the CEA table - this now
+    // owns the functionality that used to live solely on the Applicable Controls table.
+    const [isControlPopupOpen, setIsControlPopupOpen] = useState(false);
+    const toggleControlPopup = () => setIsControlPopupOpen(prev => !prev);
     const ceaSavedWidthRef = useRef(null);
     const caeBoxRef = useRef(null);
     const excelPopupRef = useRef(null);
@@ -68,6 +73,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
         { id: "action", title: "Control Improvement/ Action", className: "control-analysis-action", icon: null },
         { id: "responsible", title: "Responsible Person", className: "control-analysis-responsible", icon: null },
         { id: "dueDate", title: "Due Date", className: "control-analysis-date", icon: null },
+        { id: "usage", title: "Control Usage", className: "control-analysis-nr", icon: null },
         ...(!readOnly
             ? [{ id: "actions", title: "Action", className: "control-analysis-nr", icon: null }] : []),
     ];
@@ -78,6 +84,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
         nr: 55,
         category: 75,
         control: 500,
+        usage: 90,
         description: 500,
         performance: 500,
         critical: 75,
@@ -99,6 +106,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
         nr: { min: 40, max: 120 },
         category: { min: 60, max: 150 },
         control: { min: 200, max: 900 },
+        usage: { min: 60, max: 150 },
         description: { min: 200, max: 900 },
         performance: { min: 200, max: 900 },
         critical: { min: 60, max: 150 },
@@ -276,7 +284,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
     }, [isSidebarVisible, isCollapsed]);
 
     const [showColumns, setShowColumns] = useState([
-        "nr", "category", "control", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", ...(readOnly ? [] : ["actions"])
+        "nr", "category", "control", "usage", "critical", "act", "activation", "hierarchy", "cons", "quality", "cer", "notes", ...(readOnly ? [] : ["actions"])
     ]);
 
     const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -511,6 +519,67 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
         return 'cea-table-page-quality-excellent';
     };
 
+    // Count how many IBRA/BLRA task rows reference each control, keyed by the
+    // trimmed control name (same normalization used elsewhere for matching
+    // CEA controls against the risk assessment table's selected controls).
+    const controlUsageCounts = useMemo(() => {
+        const counts = new Map();
+        (ibra || []).forEach(taskRow => {
+            if (!Array.isArray(taskRow?.controls)) return;
+            taskRow.controls.forEach(c => {
+                const name = typeof c === "string" ? c : c?.control;
+                const key = name == null ? "" : String(name).trim();
+                if (!key) return;
+                counts.set(key, (counts.get(key) || 0) + 1);
+            });
+        });
+        return counts;
+    }, [ibra]);
+
+    const getControlUsage = (controlName) => {
+        const key = controlName == null ? "" : String(controlName).trim();
+        if (!key) return 0;
+        return controlUsageCounts.get(key) || 0;
+    };
+
+    // Promote a control to "Critical" here in the CEA table the moment it's
+    // marked critical on ANY IBRA/BLRA row (the per-row "Critical Control"
+    // flag in the popup, saved as `criticalControls` on the task row).
+    //
+    // One-way and one-time: if a control isn't critical in CEA yet and an
+    // IBRA/BLRA row now has it critical, CEA gets flipped to "Yes". The
+    // reverse never happens here - unchecking critical on an IBRA/BLRA row
+    // does not un-critical it in CEA.
+    useEffect(() => {
+        if (!Array.isArray(ibra) || ibra.length === 0) return;
+        if (!Array.isArray(rows) || rows.length === 0) return;
+
+        const criticalNames = new Set();
+        ibra.forEach(taskRow => {
+            (taskRow?.criticalControls || []).forEach(name => {
+                const key = name == null ? "" : String(name).trim().toLowerCase();
+                if (key) criticalNames.add(key);
+            });
+        });
+
+        if (criticalNames.size === 0) return;
+
+        let changed = false;
+        const nextRows = rows.map(row => {
+            const key = (row?.control || "").toString().trim().toLowerCase();
+            const alreadyCritical = (row?.critical || "").toString().trim().toLowerCase() === "yes";
+            if (!key || alreadyCritical || !criticalNames.has(key)) return row;
+
+            changed = true;
+            return { ...row, critical: "Yes" };
+        });
+
+        if (changed) {
+            updateRow(nextRows);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ibra, rows]);
+
     const filteredRows = useMemo(() => {
         // Start with a copy of the base rows
         let currentRows = [...rows];
@@ -620,11 +689,14 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
             return aStr.localeCompare(bStr) * dir;
         });
 
-        // 3. Renumber
-        currentRows.forEach((r, i) => (r.nr = i + 1));
+        // 3. Renumber, and stamp each row with its derived Control Usage count
+        currentRows.forEach((r, i) => {
+            r.nr = i + 1;
+            r.usage = getControlUsage(r.control);
+        });
 
         return currentRows;
-    }, [rows, filters, blankFilterColumns, sortConfig]);
+    }, [rows, filters, blankFilterColumns, sortConfig, controlUsageCounts]);
 
     const getSortedRows = () => {
         // Create a copy of the rows array
@@ -890,6 +962,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
         "nr",
         "category",
         "control",
+        "usage",
         "critical",
         "act",
         "activation",
@@ -1384,7 +1457,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
                                                 // e.g. 'critical' → highlight if "Yes", 'cer' → use getClass(...)
                                                 let cellClass = '';
                                                 if (columnId === 'critical' && value === 'Yes') {
-                                                    cellClass = '';
+                                                    cellClass = ' cea-table-page-critical';
                                                 } else if (columnId === 'cer') {
                                                     cellClass = getClass(value);
                                                 } else if (columnId === 'quality') {
@@ -1392,7 +1465,7 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
                                                 }
 
                                                 // Center‐align certain columns
-                                                const centerColumns = ['critical', 'act', 'quality', 'cer', "activation", "hierarchy", "cons", "responsible", "dueDate", "category"];
+                                                const centerColumns = ['critical', 'act', 'quality', 'cer', "activation", "hierarchy", "cons", "responsible", "dueDate", "category", "usage"];
                                                 const textAlign = centerColumns.includes(columnId) ? 'center' : 'left';
 
                                                 return (
@@ -1415,6 +1488,28 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
                                 </tbody>
                             </table>
                         </div>
+
+                        {!readOnly && (
+                            <>
+                                {(!rows || rows.length === 0) ? (
+                                    <button
+                                        className="add-row-button-ref"
+                                        onClick={toggleControlPopup}
+                                        type="button"
+                                    >
+                                        Select
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="add-row-button-pic-plus"
+                                        onClick={toggleControlPopup}
+                                        type="button"
+                                    >
+                                        <FontAwesomeIcon icon={faPlusCircle} title="Select More Controls" />
+                                    </button>
+                                )}
+                            </>
+                        )}
                     </>
                 )}
 
@@ -1573,12 +1668,24 @@ const ControlAnalysisTable = ({ collapsible = false, rows, updateRows, ibra, add
                     </div>
                 )}
             </div>
-            {deletePopupVisible && (<DeleteControlPopup controlName={controlToDelete.controlName} deleteControl={confirmDeleteControl} closeModal={closeDeletePopup} />)}
+            {deletePopupVisible && (<DeleteControlPopup type={typeRA} controlName={controlToDelete.controlName} deleteControl={confirmDeleteControl} closeModal={closeDeletePopup} />)}
             {insertPopup && (<ControlEAPopup data={selectedRowData} onClose={closeInsertPopup} onSave={updateRows} onControlRename={onControlRename} readOnly={readOnly} relevantControls={relevantControls}
                 existingControlNames={(rows || [])
                     .map(r => String(r.control ?? "").trim())
                     .filter(Boolean)}
             />)}
+
+            {/* ✅ Add/select controls popup - same mechanism the (now hidden) Applicable
+                Controls table used to use. Adding or unchecking a control here updates
+                the CEA table, the underlying Applicable Controls list, and the IBRA table. */}
+            {isControlPopupOpen && !readOnly && (
+                <RelevantControlsSelectionPopup
+                    closePopup={toggleControlPopup}
+                    onSave={onSaveControls}
+                    globalControls={globalControls}
+                    currentControls={relevantControls}
+                />
+            )}
         </div>
     );
 };

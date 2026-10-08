@@ -21,7 +21,7 @@ const AccountLockOut = ({ toggleLocked }) => {
                 <div className="account-lock-body">
                     <FontAwesomeIcon icon={faLock} className="account-lock-icon" />
                     <p className="account-lock-helper-text">
-                        This account has been temporarily locked due to multiple unsuccessful login attempts.
+                        This account has been locked due to multiple unsuccessful login attempts.
                         Please use the forgot password feature to reset password.
                     </p>
                 </div>

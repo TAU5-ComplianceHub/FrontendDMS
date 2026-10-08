@@ -221,7 +221,7 @@ const NewLogin = () => {
 
                 await fetchAndCacheProfilePic(userId, data.token);
 
-                navigate('/FrontendDMS/home');
+                navigate('/FrontendDMS/home', { replace: true });
             } else {
                 throw new Error('Invalid login attempt.');
             }
@@ -332,7 +332,7 @@ const NewLogin = () => {
         const userId = decodedToken.userId;
         await fetchAndCacheProfilePic(userId, token);
 
-        navigate('/FrontendDMS/home');
+        navigate('/FrontendDMS/home', { replace: true });
     };
 
     // Called by MFAOtpPage when OTP is successfully verified
@@ -360,6 +360,21 @@ const NewLogin = () => {
             }
         } catch (err) {
             toast.error('Error while resending code');
+        }
+    };
+
+    // Called by MFAOtpPage when user presses "Back" — hides the OTP popup and
+    // returns to the plain login form. If the user didn't opt in to
+    // "Remember Me", their typed credentials are cleared too so a stale
+    // username/password isn't left sitting in the fields.
+    const handleOtpBack = () => {
+        setShowOtpPopup(false);
+        setOtpUsername('');
+        setOtpDeviceId(null);
+
+        if (!rememberMe) {
+            setUsername('');
+            setPassword('');
         }
     };
 
@@ -411,17 +426,18 @@ const NewLogin = () => {
                             <input
                                 type="checkbox"
                                 checked={rememberMe}
+                                style={{ cursor: "pointer" }}
                                 onChange={(e) => setRememberMe(e.target.checked)}
                             />
                             Remember Me
                         </label>
-                        <a onClick={() => navigate("/FrontendDMS/forgot")} className="nl-forgot-password">Forgot Password?</a>
+                        <a onClick={() => navigate("/FrontendDMS/forgot")} className="nl-forgot-password" style={{ cursor: "pointer" }}>Forgot Password?</a>
                     </div>
 
                     <div className="nl-login-error">{error}</div>
 
                     <div className="nl-login-button-container">
-                        <button type="submit" className="nl-login-button">{loading ? <FontAwesomeIcon icon={faSpinner} className="spin-animation" /> : 'Log In'}</button>
+                        <button disabled={loading} type="submit" className="nl-login-button">{loading ? <FontAwesomeIcon icon={faSpinner} className="spin-animation" /> : 'Log In'}</button>
                     </div>
                 </form>
 
@@ -443,6 +459,7 @@ const NewLogin = () => {
                     deviceId={otpDeviceId}
                     resendOTP={resendOTP}
                     setOtpCompleted={handleOtpCompleted}
+                    onBack={handleOtpBack}
                 />
             )}
             <ToastContainer />

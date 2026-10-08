@@ -26,7 +26,7 @@ const ApproversPopup = ({ setApproversPublish, closeModal, handleSubmit }) => {
 
     const fetchUsers = async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_URL}/api/user/`, {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/user/tms/getTmsContributors`, {
                 headers: {}
             });
             if (!response.ok) {

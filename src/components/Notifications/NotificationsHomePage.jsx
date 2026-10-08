@@ -288,13 +288,12 @@ const NotificationsHomePage = ({ setClose, getCount }) => {
                 else if (note.actionLocation === "CTS") {
                     if (note.actionType === "suggestionTaskTemplate") {
                         targetPath = `/FrontendDMS/suggestedTaskTemplates/${note.actionId}`;
-
                     }
-                    if (note.action === "workOrder") {
-                        targetPath = `/FrontendDMS/workManagement`
+                    else if (note.action === "workOrder") {
+                        targetPath = `/FrontendDMS/workManagement`;
                     }
                     else {
-                        targetPath = `/FrontendDMS/manualTaskingPage`
+                        targetPath = `/FrontendDMS/manualTaskingPage`;
                     }
                 } else if (note.actionLocation === "FTS") {
                     if (note.actionType === "suggestion") {

@@ -48,6 +48,7 @@ import { useTauriCloseGuard } from "../../utils/useTauriCloseGuard";
 import ReshareDraftPopup from "../Popups/ReshareDraftPopup";
 import RejectReason from "../Popups/RejectReason";
 import RejectReasonView from "../Popups/RejectReasonView";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 
 const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = false }) => {
     const navigate = useNavigate();
@@ -110,6 +111,7 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
     const [rejecting, setRejecting] = useState(false);
     const [isRejected, setIsRejected] = useState(false);
     const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+    const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
     const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
     const SHARE_ROLES = ["collaborator", "viewer", "publisher"];
@@ -700,6 +702,7 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
             if (result.id) {
                 setLoadedID(result.id);
                 loadedIDRef.current = result.id;
+                setOwner(true);
             }
 
             if (result.formData) {
@@ -857,14 +860,22 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
 
             return;
         }
+        setIsConfirmPublishOpen(true);
+    };
 
+    const closeConfirmPublish = () => {
+        setIsConfirmPublishOpen(false);
+    };
+
+    const handleConfirmPublish = async () => {
+        setIsConfirmPublishOpen(false);
         setIsPublishing(true);
         try {
             await handlePublishApprovalFlow();
         } finally {
             setIsPublishing(false);
         }
-    }
+    };
 
     const loadData = async (loadID) => {
         try {
@@ -2358,7 +2369,7 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
                         )}
 
                         {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
-                            <button className="but-um" onClick={() => navigate('/signedOffJRA')}>
+                            <button className="but-um" onClick={() => navigate('/FrontendDMS/signedOffJRA')}>
                                 <div className="button-content">
                                     <FontAwesomeIcon icon={faFolderOpen} className="button-logo-custom" />
                                     <span className="button-text">Controlled</span>
@@ -2399,6 +2410,12 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
                             <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
                         </div>
 
+                        {!readOnly && (
+                            <div className="burger-menu-icon-risk-create-page-1">
+                                <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
+                            </div>
+                        )}
+
                         {!versionPreview && !readOnly && userIDs.length > 1 && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 {isSavingVersion ? (
@@ -2415,12 +2432,6 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
                                         />
                                     </span>
                                 )}
-                            </div>
-                        )}
-
-                        {!readOnly && (
-                            <div className="burger-menu-icon-risk-create-page-1">
-                                <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
                             </div>
                         )}
 
@@ -2448,7 +2459,7 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
                             </div>
                         )}
 
-                        {!readOnly && !inReview && !inApproval && (isPublisher || owner) && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && !inReview && !inApproval && (isPublisher || owner) && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
                         </div>)}
 
@@ -2671,6 +2682,7 @@ const RiskManagementPageJRA = ({ versionPreview = false, signedOffPreview = fals
             {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
             {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
             {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
+            {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
             {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
             {isSaveConfirmOpen && (
                 <SaveConfirmationPopup

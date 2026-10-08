@@ -15,13 +15,16 @@ import {
     faPen,
     faPlusCircle,
     faCircle,
-    faInfoCircle
+    faInfoCircle,
+    faFileCirclePlus,
+    faEye
 } from "@fortawesome/free-solid-svg-icons";
 import { jwtDecode } from 'jwt-decode';
 import { saveAs } from "file-saver";
 import TopBar from "../../../Notifications/TopBar";
 import { canIn, getCurrentUser } from "../../../../utils/auth";
 import { ToastContainer, toast } from "react-toastify";
+import TaskInfoPreview from "./TaskInfoPreview";
 import AddTaskPopup from "./AddTaskPopup";
 import AddSubTaskPopup from "./AddSubTaskPopup";
 import ViewSubTasksPopup from "./ViewSubTasksPopup";
@@ -72,7 +75,7 @@ const ALL_COLUMNS = [
     { id: "userComments", class: `task-grey1`, title: "Responsible Person Comments", views: "both", collapsed: true, collapsedFor: "both" },
     { id: "userAttachments", class: `task-grey1`, title: "Responsible Person Supporting Info", views: "both", collapsed: true, collapsedFor: "both" },
     { id: "completionDate", title: "Completion Date", views: "both", collapsed: true, collapsedFor: "both" },
-    { id: "closeStatus", title: "Closeout Status", views: "both", collapsed: false, collapsedFor: "allocator" },
+    { id: "closeStatus", title: "Closeout Status", views: "both", collapsed: true, collapsedFor: "viewer" },
     { id: "closeOutComments", title: "Close Out Comments", views: "both", collapsed: true, collapsedFor: "both" },
     { id: "action", title: "Action", views: "both", collapsed: false },
 ];
@@ -97,6 +100,11 @@ const getCategoryDisplay = (category) => {
     if (category === "Auto-Manual") return "User Triggered"; // ← replace empty string with the new display value
     if (category === "Manual") return "User Created"; // ← replace empty string with the new display value
     return category || "-";
+};
+
+const getTaskTypeDisplay = (taskType) => {
+    if (taskType === "SignOff") return "Sign Off";
+    return taskType || "-";
 };
 
 const STATUS_OPTIONS = [
@@ -278,6 +286,7 @@ const ManualTaskingPage = () => {
     const [deleteTaskPopup, setDeleteTaskPopup] = useState({ open: false, task: null, taskName: "" });
     const [closeTaskPopup, setCloseTaskPopup] = useState({ open: false, task: null, taskName: "" });
     const [reopenTaskPopup, setReopenTaskPopup] = useState({ open: false, task: null, taskName: "" });
+    const [previewTaskPopup, setPreviewTaskPopup] = useState({ open: false, task: null });
     const [showModifyAllocatedTaskPopup, setShowModifyAllocatedTaskPopup] = useState(false);
     const [selectedAllocatedTask, setSelectedAllocatedTask] = useState(null);
     const [closingTaskIds, setClosingTaskIds] = useState(new Set());
@@ -520,6 +529,17 @@ const ManualTaskingPage = () => {
     const closeCloseTaskPopup = () => setCloseTaskPopup({ open: false, task: null, taskName: "" });
     const openReopenTaskPopup = (task) => setReopenTaskPopup({ open: true, task, taskName: task?.taskTitle || "" });
     const closeReopenTaskPopup = () => setReopenTaskPopup({ open: false, task: null, taskName: "" });
+    const openPreviewTaskPopup = (task) => setPreviewTaskPopup({ open: true, task });
+    const closePreviewTaskPopup = () => setPreviewTaskPopup({ open: false, task: null });
+    // "Close Out Task" inside the preview popup doesn't close anything itself -
+    // it just closes the preview and hands off to the same CloseAllocatedTask
+    // confirmation popup the closeStatus checkbox already uses elsewhere in
+    // this table (mirrors handlePreviewCloseOut in WorkManagement.js).
+    const handlePreviewCloseOut = () => {
+        const task = previewTaskPopup.task;
+        closePreviewTaskPopup();
+        if (task) openCloseTaskPopup(task);
+    };
 
     // ── Sub-task popups ─────────────────────────────────────────────────────
     const openAddSubTaskPopup = (task) => {
@@ -853,6 +873,7 @@ const ManualTaskingPage = () => {
         if (colId === "closeStatus") return [row.closeStatus ? "Closed Out" : "Open"];
         if (colId === "allocationType") return [row._isAllocator ? "Tasks Assigned" : "My Tasks"];
         if (colId === "category") return [getCategoryDisplay(row.category)];
+        if (colId === "taskType") return [getTaskTypeDisplay(row.taskType)];
         if (colId === "attachments") return [Array.isArray(row.attachments) && row.attachments.length > 0 ? "Has Attachments" : "No Attachments"];
         if (colId === "userAttachments") return [Array.isArray(row.userAttachments) && row.userAttachments.length > 0 ? "Has Attachments" : "No Attachments"];
         // allocatedBy: null becomes "System" for filtering
@@ -1348,6 +1369,7 @@ const ManualTaskingPage = () => {
                     else if (hdr.id === "status") {
                         val = getStatusDisplay(row.status);
                     }
+                    else if (hdr.id === "taskType") val = getTaskTypeDisplay(row.taskType);
                     else val = String(row[hdr.id] ?? "-");
                     // Estimate lines: count newlines + rough word-wrap estimate based on col width
                     const colWidthChars = (hdr.meta.width || 18) * 1.2; // approximate chars per line
@@ -1374,6 +1396,8 @@ const ManualTaskingPage = () => {
                     } else if (hdr.id === "userAttachments") {
                         const a = row.userAttachments;
                         value = Array.isArray(a) && a.length > 0 ? a.join("\n") : "No files";
+                    } else if (hdr.id === "taskType") {
+                        value = getTaskTypeDisplay(row.taskType);
                     } else {
                         const v = row[hdr.id];
                         value = (v === null || v === undefined || v === "") ? "-" : v;
@@ -1426,51 +1450,13 @@ const ManualTaskingPage = () => {
         switch (col.id) {
             case "nr":
                 return <td key="nr" className="procCent" style={{ fontSize: "14px" }}>{index + 1}
-                    {view === "allocator" ? (
-                        <>
-                            {/* Pending repeating tasks: show a clock badge, no edit */}
-                            {row._isPendingRepeating ? (
-                                <FontAwesomeIcon
-                                    icon={faClock}
-                                    title={`Scheduled repeating task — starts ${row.dueDate || ""}`}
-                                    style={{ fontSize: "13px", marginLeft: "5px", color: "#888", opacity: 0.7 }}
-                                />
-                            ) : (
-                                /* Auto-auto tasks in allocator view: no edit button (system-managed) */
-                                (!isAutoAuto || !isAutoManual) && (
-                                    <button type="button" className="rca-action-btn" title="Modify Allocated Task"
-                                        onClick={() => handleOpenModifyAllocatedTaskPopup(row)}>
-                                        <FontAwesomeIcon icon={faEdit} style={{ fontSize: "14px", marginLeft: "5px" }} />
-                                    </button>
-                                )
-                            )}
-                        </>
-                    ) : (
-                        <>
-                            <button
-                                type="button"
-                                className="rca-action-btn"
-                                title={
-                                    // Auto-auto tasks are always accepted; manual need explicit accept
-                                    (!isAutoAuto || !isAutoManual) && row.acceptanceStatus !== "Accepted"
-                                        ? "You must accept this task before editing"
-                                        : "Modify Task Progress"
-                                }
-                                style={{
-                                    opacity: (!isAutoAuto || !isAutoManual) && row.acceptanceStatus !== "Accepted" ? 0.4 : 1,
-                                    cursor: (!isAutoAuto || !isAutoManual) && row.acceptanceStatus !== "Accepted" ? "not-allowed" : "pointer",
-                                }}
-                                onClick={() => {
-                                    if (!isAutoAuto && !isAutoManual && row.acceptanceStatus !== "Accepted") {
-                                        toast.warn("You must accept this task before editing.", { autoClose: 3000, closeButton: false });
-                                        return;
-                                    }
-                                    handleOpenModifyPopup({ ...row, attachments: row._rawAttachments, userAttachments: row._rawUserAttachments });
-                                }}
-                            >
-                                <FontAwesomeIcon icon={faEdit} style={{ fontSize: "14px", marginLeft: "5px" }} />
-                            </button>
-                        </>
+                    {view === "allocator" && row._isPendingRepeating && (
+                        /* Pending repeating tasks: show a clock badge, no edit */
+                        <FontAwesomeIcon
+                            icon={faClock}
+                            title={`Scheduled repeating task — starts ${row.dueDate || ""}`}
+                            style={{ fontSize: "13px", marginLeft: "5px", color: "#888", opacity: 0.7 }}
+                        />
                     )}
                 </td>;
 
@@ -1478,7 +1464,7 @@ const ManualTaskingPage = () => {
                 return <td key="uniqueID" className="backGrey procCent" style={{ fontSize: "14px" }}>{row.uniqueID || "-"}</td>;
 
             case "taskType":
-                return <td key="taskType" className="backGrey procCent" style={{ fontSize: "14px" }}>{row.taskType || "-"}</td>;
+                return <td key="taskType" className="backGrey procCent" style={{ fontSize: "14px" }}>{getTaskTypeDisplay(row.taskType)}</td>;
 
             case "taskTitle":
                 return (
@@ -1635,48 +1621,48 @@ const ManualTaskingPage = () => {
                     );
                 }
                 // Viewer (responsible person) view — editable dropdown
-                return (
-                    <td key="status" className="procCent" style={{ fontSize: "14px", backgroundColor: getStatusColor(row.status), padding: "4px 6px" }}>
-                        <select
-                            value={row.status || ""}
-                            disabled={
-                                !!row.closeStatus ||
-                                row.status === "Cancelled" ||
-                                // Manual tasks: must be accepted first. Auto-auto: always editable (pre-accepted)
-                                (!isAutoAuto && !isAutoManual && row.acceptanceStatus !== "Accepted") ||
-                                isAutoAuto || isAutoManual
-                            }
-                            title={
-                                row.status === "Cancelled"
-                                    ? "Cancelled tasks cannot be updated"
-                                    : row.closeStatus
-                                        ? "Task is closed out"
-                                        : "Update task status"
-                            }
-                            style={{
-                                width: "100%",
-                                border: "none",
-                                background: "transparent",
-                                fontSize: "14px",
-                                fontWeight: "500",
-                                color: getStatusTextColor(row.status),
-                                cursor: (row.closeStatus || row.status === "Cancelled" || (!isAutoAuto && !isAutoManual && row.acceptanceStatus !== "Accepted"))
-                                    ? "not-allowed"
-                                    : "pointer",
-                                outline: "none",
-                                appearance: "auto",
-                                textAlign: "center",
-                            }}
-                            onChange={(e) => handleStatusChange(row._id, e.target.value)}
-                            className="taskStatusSelect_a8f3c1"
-                        >
-                            <option value="" style={{ color: "black" }}>Not Started</option>
-                            {STATUS_OPTIONS.filter(opt => opt.value !== "Cancelled").map(opt => (
-                                <option key={opt.value} value={opt.value} style={{ color: "black" }}>{opt.label}</option>
-                            ))}
-                        </select>
-                    </td>
-                );
+                {
+                    const isStatusDisabled =
+                        !!row.closeStatus ||
+                        row.status === "Cancelled" ||
+                        // Manual tasks: must be accepted first. Auto-auto/Auto-manual: always editable (pre-accepted)
+                        (!isAutoAuto && !isAutoManual && row.acceptanceStatus !== "Accepted");
+
+                    return (
+                        <td key="status" className="procCent" style={{ fontSize: "14px", backgroundColor: getStatusColor(row.status), padding: "4px 6px" }}>
+                            <select
+                                value={row.status || ""}
+                                disabled={isStatusDisabled}
+                                title={
+                                    row.status === "Cancelled"
+                                        ? "Cancelled tasks cannot be updated"
+                                        : row.closeStatus
+                                            ? "Task is closed out"
+                                            : "Update task status"
+                                }
+                                style={{
+                                    width: "100%",
+                                    border: "none",
+                                    background: "transparent",
+                                    fontSize: "14px",
+                                    fontWeight: "500",
+                                    color: isStatusDisabled ? "gray" : getStatusTextColor(row.status),
+                                    cursor: isStatusDisabled ? "not-allowed" : "pointer",
+                                    outline: "none",
+                                    appearance: "auto",
+                                    textAlign: "center",
+                                }}
+                                onChange={(e) => handleStatusChange(row._id, e.target.value)}
+                                className="taskStatusSelect_a8f3c1"
+                            >
+                                <option value="" style={{ color: "black" }}>Not Started</option>
+                                {STATUS_OPTIONS.filter(opt => opt.value !== "Cancelled").map(opt => (
+                                    <option key={opt.value} value={opt.value} style={{ color: "black" }}>{opt.label}</option>
+                                ))}
+                            </select>
+                        </td>
+                    );
+                }
 
             case "attachments":
                 return (
@@ -1838,6 +1824,13 @@ const ManualTaskingPage = () => {
                     <td key="action" className="risk-control-attributes-action-cell">
                         {view === "allocator" ? (
                             <>
+                                {/* Auto-auto tasks in allocator view: no edit button (system-managed) */}
+                                {!row._isPendingRepeating && (!isAutoAuto || !isAutoManual) && (
+                                    <button type="button" className="rca-action-btn" title="Modify Allocated Task"
+                                        onClick={() => handleOpenModifyAllocatedTaskPopup(row)}>
+                                        <FontAwesomeIcon icon={faEdit} style={{ fontSize: "14px" }} />
+                                    </button>
+                                )}
                                 {/* Job card only for manual tasks */}
                                 {(!isAutoAuto && !isAutoManual && !row.isTagged) && (
                                     <button
@@ -1850,6 +1843,12 @@ const ManualTaskingPage = () => {
                                         <FontAwesomeIcon icon={faFilePdf} />
                                     </button>
                                 )}
+                                {row.status === "Completed" && (
+                                    <button type="button" className="rca-action-btn" title="View Task Information"
+                                        style={{ marginLeft: "5px" }} onClick={() => openPreviewTaskPopup(row)}>
+                                        <FontAwesomeIcon icon={faEye} />
+                                    </button>
+                                )}
                                 <button type="button" className="rca-action-btn" title="Delete Task"
                                     style={{ marginLeft: "5px" }} onClick={() => openDeleteTaskPopup(row)}>
                                     <FontAwesomeIcon icon={faTrash} />
@@ -1857,6 +1856,20 @@ const ManualTaskingPage = () => {
                             </>
                         ) : view === "closedOut" ? (
                             <>
+                                {/* Auto-auto tasks are always accepted; manual need explicit accept */}
+                                <button
+                                    type="button"
+                                    className="rca-action-btn"
+                                    title="Task is closed out"
+                                    disabled
+                                    style={{
+                                        opacity: 0.4,
+                                        cursor: "not-allowed",
+                                    }}
+                                    onClick={() => { }}
+                                >
+                                    <FontAwesomeIcon icon={faFileCirclePlus} style={{ fontSize: "14px" }} />
+                                </button>
                                 {/* In closed-out view: job card for manual allocators/both; nothing for responsible-only */}
                                 {(!isAutoAuto && !isAutoManual && !row.isTagged && row._isAllocator) && (
                                     <button
@@ -1901,13 +1914,36 @@ const ManualTaskingPage = () => {
                             </>
                         ) : (
                             <>
+                                {/* Auto-auto tasks are always accepted; manual need explicit accept */}
+                                <button
+                                    type="button"
+                                    className="rca-action-btn"
+                                    title={
+                                        (!isAutoAuto || !isAutoManual) && row.acceptanceStatus !== "Accepted"
+                                            ? "You must accept this task before editing"
+                                            : "Add Additional Information"
+                                    }
+                                    style={{
+                                        opacity: (!isAutoAuto || !isAutoManual) && row.acceptanceStatus !== "Accepted" ? 0.4 : 1,
+                                        cursor: (!isAutoAuto || !isAutoManual) && row.acceptanceStatus !== "Accepted" ? "not-allowed" : "pointer",
+                                    }}
+                                    onClick={() => {
+                                        if (!isAutoAuto && !isAutoManual && row.acceptanceStatus !== "Accepted") {
+                                            toast.warn("You must accept this task before editing.", { autoClose: 3000, closeButton: false });
+                                            return;
+                                        }
+                                        handleOpenModifyPopup({ ...row, attachments: row._rawAttachments, userAttachments: row._rawUserAttachments });
+                                    }}
+                                >
+                                    <FontAwesomeIcon icon={faFileCirclePlus} style={{ fontSize: "14px" }} />
+                                </button>
                                 {/* Accept/delegate only for manual tasks that haven't been accepted */}
                                 {(!isAutoAuto && !isAutoManual) && row.acceptanceStatus !== "Accepted" && (
                                     <button
                                         type="button"
                                         className="rca-action-btn"
                                         title="Accept or Delegate Task"
-                                        style={{ color: "gray" }}
+                                        style={{ color: "gray", marginLeft: "5px" }}
                                         onClick={() => setAcceptTaskPopup({ open: true, task: row })}
                                     >
                                         <FontAwesomeIcon icon={faCircleCheck} />
@@ -1988,13 +2024,13 @@ const ManualTaskingPage = () => {
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
 
-                    {view === "allocator" && canIn(access, "CTS", ["systemAdmin", "contributor"]) && (
+                    {canIn(access, "CTS", ["systemAdmin", "contributor"]) && (
                         <div className="burger-menu-icon-um">
                             <FontAwesomeIcon icon={faCirclePlus} title="Allocate Task" onClick={() => setShowAddTaskPopup(true)} />
                         </div>
                     )}
 
-                    {view === "allocator" && canIn(access, "CTS", ["systemAdmin", "contributor"]) && (
+                    {canIn(access, "CTS", ["systemAdmin", "contributor"]) && (
                         <span className="fa-layers fa-fw" style={{ fontSize: "28px", color: "grey", cursor: "pointer", marginRight: "5px" }} onClick={() => setShowAddRepeatingTaskPopup(true)} title="Schedule Repeating Task">
                             <FontAwesomeIcon icon={faClock} />
                             <FontAwesomeIcon
@@ -2139,6 +2175,16 @@ const ManualTaskingPage = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    <div className="control-analysis-labels" style={{ marginLeft: "5px" }}>
+                        <label className="control-analysis-label">
+                            {view === "allocator"
+                                ? "Tasks you have assigned to other users."
+                                : view === "closedOut"
+                                    ? "Tasks that have been completed and closed."
+                                    : "Tasks assigned to you by other users."}
+                        </label>
                     </div>
 
                     {/* Table */}
@@ -2361,6 +2407,15 @@ const ManualTaskingPage = () => {
                     open={reopenTaskPopup.open} taskName={reopenTaskPopup.taskName}
                     onClose={closeReopenTaskPopup}
                     onConfirm={(message) => { handleReopenTask(reopenTaskPopup.task._id, message); closeReopenTaskPopup(); }}
+                />
+            )}
+
+            {previewTaskPopup.open && (
+                <TaskInfoPreview
+                    open={previewTaskPopup.open}
+                    task={previewTaskPopup.task}
+                    onClose={closePreviewTaskPopup}
+                    onCloseOut={handlePreviewCloseOut}
                 />
             )}
 

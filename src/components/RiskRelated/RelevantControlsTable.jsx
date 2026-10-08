@@ -52,6 +52,9 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
             const updatedList = Array.from(selectedNames).map(name => {
                 const existing = byName.get(name);
                 const fromPopup = (selectedControlObjects || []).find(o => o.control === name);
+                // Full values captured via the Add Control Details popup (Detailed
+                // Add flow), if any - only present for newly created controls.
+                const details = fromPopup?.details || null;
 
                 if (existing) {
                     return {
@@ -68,6 +71,16 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
                     description: fromPopup?.description || "",
                     category: (fromPopup?.category ?? "").toString().trim(),
                     performance: fromPopup?.performance || "",
+                    ...(details
+                        ? {
+                            critical: details.criticalControl || "",
+                            act: details.controlType || "",
+                            activation: details.controlActivation || "",
+                            hierarchy: details.hierarchy || "",
+                            cons: details.controlAim || "",
+                            quality: details.quality || "",
+                        }
+                        : {}),
                 };
             });
 
@@ -79,11 +92,74 @@ const RelevantControlsTable = forwardRef(({ relevantControls, setFormData, readO
             // ✅ purge removed controls from IBRA + CEA
             const withPurges = purgeControlNamesFromIBRAAndCEA(prev, removedNamesNorm);
 
+            // ✅ pull the values captured via the Detailed Add popup through into
+            // the CEA (Control Effectiveness Analysis) table, so the user already
+            // has them there and can still change them later.
+            const nextCEA = mergeDetailedControlsIntoCEA(withPurges.cea, selectedControlObjects);
+
             return {
                 ...withPurges,
+                cea: nextCEA,
                 relevantControls: updatedList,
             };
         });
+    };
+
+    // Adds/hydrates CEA rows for any newly added control that came through with a
+    // full `details` payload (from the Add Control Details popup). Existing CEA
+    // rows are only filled in where they're still blank, so it never clobbers
+    // values the user has already changed - they can still edit them afterwards.
+    const mergeDetailedControlsIntoCEA = (prevCEA, selectedControlObjects) => {
+        const detailed = (selectedControlObjects || []).filter(o => o?.details && (o.control || "").trim());
+        if (detailed.length === 0) return prevCEA || [];
+
+        const cea = [...(prevCEA || [])];
+        const ceaIndexByName = new Map(cea.map((r, i) => [norm(r.control), i]));
+
+        detailed.forEach(({ control, details }) => {
+            const k = norm(control);
+            const existingIndex = ceaIndexByName.get(k);
+
+            const fillIfEmpty = (current, value) =>
+                (current == null || String(current).trim() === "") ? (value || "") : current;
+
+            if (existingIndex != null) {
+                const row = cea[existingIndex];
+                cea[existingIndex] = {
+                    ...row,
+                    description: fillIfEmpty(row.description, details.description),
+                    performance: fillIfEmpty(row.performance, details.performance),
+                    critical: fillIfEmpty(row.critical, details.criticalControl),
+                    act: fillIfEmpty(row.act, details.controlType),
+                    activation: fillIfEmpty(row.activation, details.controlActivation),
+                    hierarchy: fillIfEmpty(row.hierarchy, details.hierarchy),
+                    cons: fillIfEmpty(row.cons, details.controlAim),
+                    quality: fillIfEmpty(row.quality, details.quality),
+                };
+            } else {
+                cea.push({
+                    id: uuidv4(),
+                    nr: 0, // renumbered below
+                    control,
+                    description: details.description || "",
+                    performance: details.performance || "",
+                    critical: details.criticalControl || "",
+                    act: details.controlType || "",
+                    activation: details.controlActivation || "",
+                    hierarchy: details.hierarchy || "",
+                    cons: details.controlAim || "",
+                    quality: details.quality || "",
+                    cer: "",
+                    notes: "",
+                    dueDate: "",
+                    responsible: "",
+                    action: "",
+                });
+                ceaIndexByName.set(k, cea.length - 1);
+            }
+        });
+
+        return cea.map((r, i) => ({ ...r, nr: i + 1 }));
     };
 
     const removeControl = (id) => {

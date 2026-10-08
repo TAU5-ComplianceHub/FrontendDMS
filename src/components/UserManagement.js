@@ -4,6 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 import "./UserManagement.css";
 import AddUserModal from './UserManagement/AddUserModal';
 import EditUserModal from './UserManagement/EditUserModal';
+import AssignRolesModal from './UserManagement/AssignRolesModal';
 import UserTable from "./UserManagement/UserTable";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -27,6 +28,8 @@ const UserManagement = () => {
     const [userToDelete, setUserToDelete] = useState(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [userToEdit, setUserToEdit] = useState(null);
+    const [isAssignRolesModalOpen, setIsAssignRolesModalOpen] = useState(false);
+    const [userToAssignRoles, setUserToAssignRoles] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newUser, setNewUser] = useState({ username: '', email: '', role: '', reportingTo: '', department: '', designation: '' });;
     const [formError, setFormError] = useState('');
@@ -419,6 +422,11 @@ const UserManagement = () => {
         setIsEditModalOpen(true);
     };
 
+    const openAssignRolesModal = (user) => {
+        setUserToAssignRoles(user);
+        setIsAssignRolesModalOpen(true);
+    };
+
     return (
         <div className="user-info-container">
             {isSidebarVisible && (
@@ -577,21 +585,26 @@ const UserManagement = () => {
                         formatRole={formatRole}
                         loggedInUserId={loggedInUserId}
                         openPasswordModal={openPasswordModal}
+                        openAssignRolesModal={openAssignRolesModal}
                     />
                 )}
             </div>
 
-            <AddUserModal
-                isModalOpen={isModalOpen}
-                closeModal={() => setIsModalOpen(false)}
-                createUser={createUser}
-                formError={formError}
-                newUser={newUser}
-                setNewUser={setNewUser}
-                current={access}
-                isAdmin={isAdmin}
-                isCreatingUser={isCreatingUser}
-            />
+            {
+                isModalOpen && (
+                    <AddUserModal
+                        isModalOpen={isModalOpen}
+                        closeModal={() => setIsModalOpen(false)}
+                        createUser={createUser}
+                        formError={formError}
+                        newUser={newUser}
+                        setNewUser={setNewUser}
+                        current={access}
+                        isAdmin={isAdmin}
+                        isCreatingUser={isCreatingUser}
+                    />
+                )
+            }
 
             {
                 isDeleteModalOpen && (
@@ -605,16 +618,27 @@ const UserManagement = () => {
                 )
             }
 
-            <EditUserModal
-                isEditModalOpen={isEditModalOpen}
-                setIsEditModalOpen={setIsEditModalOpen}
-                updateUser={updateUser}
-                formError={formError}
-                userToEdit={userToEdit}
-                setUserToEdit={setUserToEdit}
-                current={access}
-                isAdmin={isAdmin}
-            />
+            {
+                isEditModalOpen && (
+                    <EditUserModal
+                        isEditModalOpen={isEditModalOpen}
+                        setIsEditModalOpen={setIsEditModalOpen}
+                        updateUser={updateUser}
+                        formError={formError}
+                        userToEdit={userToEdit}
+                        setUserToEdit={setUserToEdit}
+                        current={access}
+                        isAdmin={isAdmin}
+                    />
+                )
+            }
+
+            {isAssignRolesModalOpen && <AssignRolesModal
+                isModalOpen={isAssignRolesModalOpen}
+                closeModal={() => setIsAssignRolesModalOpen(false)}
+                userId={userToAssignRoles?._id}
+                username={userToAssignRoles?.username}
+            />}
 
             {
                 isPasswordModalOpen && (<ChangePasswordModal

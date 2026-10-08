@@ -35,6 +35,7 @@ import RemoveFromApprovalPopup from "../../Popups/RemoveFromApprovalPopup";
 import ReshareDraftPopup from "../../Popups/ReshareDraftPopup";
 import RejectReason from "../../Popups/RejectReason";
 import RejectReasonView from "../../Popups/RejectReasonView";
+import ConfirmPublish from "../../Popups/ConfirmPublish";
 
 const InductionCreationPage = ({ versionPreview = false }) => {
   const { id: routeId = '', version: versionNumber } = useParams();
@@ -80,6 +81,7 @@ const InductionCreationPage = ({ versionPreview = false }) => {
   const [rejecting, setRejecting] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
   const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
   const readOnlyRef = useRef(versionPreview);
@@ -556,6 +558,7 @@ const InductionCreationPage = ({ versionPreview = false }) => {
               textAlign: 'center'
             }
           });
+          setOwner(true);
         } else {
           toast.error("Failed to save draft. Please try again.", {
             closeButton: true,
@@ -829,8 +832,17 @@ const InductionCreationPage = ({ versionPreview = false }) => {
         }
       });
     } else {
-      openApproval();  // Call your function when the form is valid
+      setIsConfirmPublishOpen(true);
     }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+    openApproval();
   };
 
   const handleApproveClick = () => {
@@ -1846,28 +1858,28 @@ const InductionCreationPage = ({ versionPreview = false }) => {
               <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
             </div>
 
-            {!versionPreview && !readOnly && userIDs.length > 1 && (
-              <div className="burger-menu-icon-risk-create-page-1">
-                {isSavingVersion ? (
-                  <FontAwesomeIcon icon={faSpinner} spin title="Saving Version" />
-                ) : (
-                  <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={handleSaveVersion} title="Save As New Version">
-                    <FontAwesomeIcon icon={faSave} />
-                    <FontAwesomeIcon
-                      icon={faPen}
-                      transform="shrink-6 down-5 right-7"
-                      color="gray"
-                    />
-                  </span>
-                )}
-              </div>
-            )}
-
             {!readOnly && (
               <>
                 <div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
                 </div>
+
+                {!versionPreview && !readOnly && userIDs.length > 1 && (
+                  <div className="burger-menu-icon-risk-create-page-1">
+                    {isSavingVersion ? (
+                      <FontAwesomeIcon icon={faSpinner} spin title="Saving Version" />
+                    ) : (
+                      <span className="fa-layers fa-fw" style={{ fontSize: "24px" }} onClick={handleSaveVersion} title="Save As New Version">
+                        <FontAwesomeIcon icon={faSave} />
+                        <FontAwesomeIcon
+                          icon={faPen}
+                          transform="shrink-6 down-5 right-7"
+                          color="gray"
+                        />
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 <div className="burger-menu-icon-risk-create-page-1">
                   <FontAwesomeIcon icon={faCopy} onClick={openSaveAs} title="Create Copy" />
@@ -2091,6 +2103,7 @@ const InductionCreationPage = ({ versionPreview = false }) => {
         {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
         {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
         {preview && (<InductionPreviewPage draftID={loadedIDRef.current} closeModal={closePreview} />)}
+        {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.courseTitle} />)}
         {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
       </div>
       <ToastContainer />

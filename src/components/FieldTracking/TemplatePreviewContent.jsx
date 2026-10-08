@@ -101,6 +101,7 @@ const TemplatePreviewContent = ({
 
             <TemplateTitleField
                 value={formData.templateTitle}
+                descriptors={formData.workOrderDescriptors}
                 frequency={formData.frequency}
                 workOrderBasis={formData.workOrderBases}
                 assetType={formData.assetType}

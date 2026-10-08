@@ -20,6 +20,7 @@ import DocumentSignaturesTableSI from "../CreatePage/DocumentSignaturesTableSI";
 import AbbreviationTableSI from "../CreatePage/AbbreviationTableSI";
 import TermTableSI from "../CreatePage/TermTableSI";
 import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 import DraftPopup from "../Popups/DraftPopup";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
 import DatePicker from "react-multi-date-picker";
@@ -42,6 +43,7 @@ const CreatePageSIReview = () => {
   const autoSaveInterval = useRef(null);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false); // spinner state for the top "Save" icon
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [errors, setErrors] = useState([]);
   const loadedIDRef = useRef('');
   const [loadingAimIndex, setLoadingAimIndex] = useState(null);
@@ -679,8 +681,17 @@ const CreatePageSIReview = () => {
         }
       })
     } else {
-      await handleGeneratePDF();
+      setIsConfirmPublishOpen(true);
     }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    setIsConfirmPublishOpen(false);
+    await handleGeneratePDF();
   };
 
   useEffect(() => {
@@ -1761,6 +1772,7 @@ const CreatePageSIReview = () => {
       {isSaveAsModalOpen && (<SaveAsPopup saveAs={confirmSaveAs} onClose={closeSaveAs} current={formData.title} type={type} userID={userID} create={false} special={true} />)}
       {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
       {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+      {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
       <ToastContainer />
       {isSaving && (
         <SavingInProgress />

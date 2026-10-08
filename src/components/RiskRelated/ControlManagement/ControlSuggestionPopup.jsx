@@ -69,7 +69,7 @@ const ControlSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) => 
                 throw new Error(result.error || "Failed to submit suggestion");
             }
 
-            toast.success("Control suggestion submitted successfully!");
+            toast.success("Control suggestion submitted successfully.");
             if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
@@ -84,13 +84,13 @@ const ControlSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) => 
 
     return (
         <div className="abbr-popup-overlay">
-            <div className="abbr-popup-content" style={{width: "600px", maxWidth: "600px"}}>
+            <div className="abbr-popup-content" style={{ width: "600px", maxWidth: "600px" }}>
                 <div className="abbr-popup-header">
                     <h2 className="abbr-popup-title">Suggest New Control</h2>
                     <button className="abbr-popup-close" onClick={onClose} title="Close Popup">×</button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="term-popup-scrollable" style={{marginBottom: "5px"}}>
+                    <div className="term-popup-scrollable" style={{ marginBottom: "5px" }}>
                         <div className="abbr-popup-group">
                             <label className="abbr-popup-label">Select Approver:</label>
                             <div className="abbr-popup-page-select-container">
@@ -103,7 +103,7 @@ const ControlSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) => 
                                     <option value="">Select Approver</option>
                                     {usersList.map((user, index) => (
                                         <option key={index} value={user.id || user._id}>
-                                                {user.username || user.label}
+                                            {user.username || user.label}
                                         </option>
                                     ))}
                                 </select>

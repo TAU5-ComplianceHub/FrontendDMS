@@ -24,6 +24,7 @@ import SupportingDocumentTable from "../RiskRelated/SupportingDocumentTable";
 import SaveAsPopup from "../Popups/SaveAsPopup";
 import RenameDraftPopup from "../Popups/RenameDraftPopup";
 import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 import DraftPopup from "../Popups/DraftPopup";
 import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
@@ -95,6 +96,7 @@ const CreatePageStandards = ({ versionPreview = false, signedOffPreview = false 
   const [isPublisher, setIsPublisher] = useState(false);
   const [isSaving, setIsSaving] = useState(false); // spinner state for the top "Save" icon
   const [isPublishing, setIsPublishing] = useState(false); // spinner state for the top "Publish" icon
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [removeApprovalState, setRemoveApprovalState] = useState(false);
   const [removingApproval, setRemovingApproval] = useState(false);
   const [canRemove, setCanRemove] = useState(false);
@@ -713,6 +715,7 @@ const CreatePageStandards = ({ versionPreview = false, signedOffPreview = false 
       if (result.id) {
         setLoadedID(result.id);
         loadedIDRef.current = result.id;
+        setOwner(true);
       }
 
       if (result.formData) {
@@ -854,12 +857,21 @@ const CreatePageStandards = ({ versionPreview = false, signedOffPreview = false 
         }
       });
     } else {
-      setIsPublishing(true);
-      try {
-        await handlePublishApprovalFlow();
-      } finally {
-        setIsPublishing(false);
-      }
+      setIsConfirmPublishOpen(true);
+    }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    setIsConfirmPublishOpen(false);
+    setIsPublishing(true);
+    try {
+      await handlePublishApprovalFlow();
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -2823,6 +2835,10 @@ const CreatePageStandards = ({ versionPreview = false, signedOffPreview = false 
               <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
             </div>
 
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
+            </div>)}
+
             {!versionPreview && !readOnly && userIDs.length > 1 && (
               <div className="burger-menu-icon-risk-create-page-1">
                 {isSavingVersion ? (
@@ -2841,10 +2857,6 @@ const CreatePageStandards = ({ versionPreview = false, signedOffPreview = false 
                 )}
               </div>
             )}
-
-            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
-            </div>)}
 
             {(
               <div className="burger-menu-icon-risk-create-page-1">
@@ -3100,6 +3112,7 @@ const CreatePageStandards = ({ versionPreview = false, signedOffPreview = false 
         {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
         {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
         {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+        {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
         {showReshareDraft && (<ReshareDraftPopup reshare={handleReshareDraft} doNotReshare={handleDoNotReshareDraft} />)}
         {showRejectReasonView && (
           <RejectReasonView

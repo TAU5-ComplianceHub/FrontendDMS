@@ -91,7 +91,7 @@ const ALL_COLUMNS = [
     { id: "acceptanceStatus", class: `task-grey1`, title: "Acceptance Status", views: "both", collapsed: true, collapsedFor: "viewer" },
     { id: "status", class: `task-grey1`, title: "Completion Status", views: "both", collapsed: false },
     { id: "completionDate", title: "Completion Date", views: "both", collapsed: true, collapsedFor: "both", hidden: true },
-    { id: "closeStatus", title: "Closeout Status", views: "both", collapsed: true },
+    { id: "closeStatus", title: "Closeout Status", views: "both", collapsed: true, collapsedFor: "viewer" },
     { id: "completionChain", title: "Completion Chain", views: "both", collapsed: false },
     { id: "closeOutComments", title: "Close Out Comments", views: "both", collapsed: true, collapsedFor: "both" },
     { id: "ppe", class: `task-grey2`, title: "PPE", views: "both", collapsed: true, collapsedFor: "both" },
@@ -1530,50 +1530,6 @@ const WorkManagement = () => {
         switch (col.id) {
             case "nr":
                 return <td key="nr" className="procCent" style={{ fontSize: "14px" }}>{index + 1}
-                    {view === "allocator" ? (
-                        <>
-                            <button type="button" className="rca-action-btn" title="Reassign Work Order"
-                                onClick={() => {
-                                    if (row.status === "Completed") {
-                                        toast.error("Submitted Tasks Cannot be reassigned", {
-                                            closeButton: false,
-                                            autoClose: 2000,
-                                            style: { textAlign: 'center' }
-                                        });
-                                        return;
-                                    }
-                                    setReassignWorkOrderPopup({ open: true, task: row });
-                                }}>
-                                <FontAwesomeIcon icon={faEdit} style={{ fontSize: "14px", marginLeft: "5px" }} />
-                            </button>
-                        </>
-                    ) : (
-                        <>
-                            {false && (<button
-                                type="button"
-                                className="rca-action-btn"
-                                title={
-                                    row.acceptanceStatus !== "Accepted"
-                                        ? "You must accept this work order before editing"
-                                        : "Modify Work Order Progress"
-                                }
-                                style={{
-                                    opacity: row.acceptanceStatus !== "Accepted" ? 0.4 : 1,
-                                    cursor: row.acceptanceStatus !== "Accepted" ? "not-allowed" : "pointer",
-                                }}
-                                onClick={() => {
-                                    if (row.acceptanceStatus !== "Accepted") {
-                                        toast.warn("You must accept this task before editing.", { autoClose: 3000, closeButton: false });
-                                        return;
-                                    }
-                                    handleOpenModifyPopup({ ...row, attachments: row._rawAttachments });
-                                }}
-                            >
-                                <FontAwesomeIcon icon={faEdit} style={{ fontSize: "14px", marginLeft: "5px" }} />
-                            </button>
-                            )}
-                        </>
-                    )}
                 </td>;
 
             case "uniqueID":
@@ -1817,6 +1773,20 @@ const WorkManagement = () => {
                     <td key="action" className="risk-control-attributes-action-cell">
                         {view === "allocator" ? (
                             <>
+                                <button type="button" className="rca-action-btn" title="Reassign Work Order"
+                                    onClick={() => {
+                                        if (row.status === "Completed") {
+                                            toast.error("Submitted Tasks Cannot be reassigned", {
+                                                closeButton: false,
+                                                autoClose: 2000,
+                                                style: { textAlign: 'center' }
+                                            });
+                                            return;
+                                        }
+                                        setReassignWorkOrderPopup({ open: true, task: row });
+                                    }}>
+                                    <FontAwesomeIcon icon={faEdit} style={{ fontSize: "14px" }} />
+                                </button>
                                 {false && !row.isTagged && (
                                     <button
                                         type="button"
@@ -2014,7 +1984,7 @@ const WorkManagement = () => {
                         <FontAwesomeIcon onClick={() => navigate(-1)} icon={faArrowLeft} title="Back" />
                     </div>
 
-                    {view === "allocator" && canIn(access, "CTS", ["systemAdmin", "contributor"]) && (
+                    {canIn(access, "CTS", ["systemAdmin", "contributor"]) && (
                         <div className="burger-menu-icon-um">
                             <FontAwesomeIcon icon={faCirclePlus} title="Allocate Work Order" onClick={() => setShowAddTaskPopup(true)} />
                         </div>
@@ -2149,6 +2119,16 @@ const WorkManagement = () => {
                                 </div>
                             </div>
                         )}
+                    </div>
+
+                    <div className="control-analysis-labels" style={{ marginLeft: "5px" }}>
+                        <label className="control-analysis-label">
+                            {view === "allocator"
+                                ? "Work Orders you have assigned to other users."
+                                : view === "closedOut"
+                                    ? "Work Orders that have been completed and closed."
+                                    : "Work Orders assigned to you by other users."}
+                        </label>
                     </div>
 
                     {/* Table */}

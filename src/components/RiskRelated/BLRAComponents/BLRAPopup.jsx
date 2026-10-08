@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import '../IBRAPopup.css';
 import { jwtDecode } from "jwt-decode";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faFlag } from '@fortawesome/free-solid-svg-icons';
+import { faSpinner, faTrashAlt, faPlus, faInfoCircle, faCirclePlus, faFlag, faTriangleExclamation } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import FunctionalOwnership from '../RiskInfo/FunctionalOwnership';
@@ -23,7 +23,17 @@ import DatePicker from "react-multi-date-picker";
 import { faCalendarDays, faX } from '@fortawesome/free-solid-svg-icons';
 import ClosePopupConfirmation from '../ClosePopupConfirmation';
 
-const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availableControls }) => {
+// ---------------------------------------------------------------------------
+// Critical Control UI configuration
+// Controls how a user marks a control (in the Current Controls table) as critical.
+// Change this single value to switch styles - no other code needs to change.
+//   'checkbox' - a checkbox + "Critical Control" label placed before the textarea
+//   'icon'     - a warning-triangle icon button next to the info button that turns red
+//   'pill'     - a pill button whose text itself reads "Mark as Critical" / "Critical Control \u2713"
+const CRITICAL_CONTROL_UI = 'icon';
+// ---------------------------------------------------------------------------
+
+const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availableControls, cea = [] }) => {
     const [mainFlag, setMainFlag] = useState("");
     const [subFlag, setSubFlag] = useState("");
     const [ownerFlag, setOwnerFlag] = useState("");
@@ -118,6 +128,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
 
         hazards: hazardRows.map(row => row.value || ''),
         controls: controlRows.map(row => row.value || ''),
+        criticalControls: controlRows.filter(row => row.critical).map(row => row.value || ''),
 
         riskRanks: riskRankRows.map(row => ({
             label: row.label,
@@ -549,12 +560,18 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                 );
             }
 
-            // Set control rows
+            // Set control rows (unchanged shape: data.controls stays a plain string array).
+            // The separate data.criticalControls collection (also plain strings) is used only
+            // to flip on the local, UI-only `critical` flag for matching rows.
             if (data.controls && Array.isArray(data.controls) && data.controls.length) {
+                const criticalSet = new Set(
+                    Array.isArray(data.criticalControls) ? data.criticalControls : []
+                );
                 setControlRows(
                     data.controls.map((control, index) => ({
                         id: index + 1,
                         value: control,
+                        critical: criticalSet.has(control),
                     }))
                 );
             }
@@ -649,6 +666,8 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
             controls: (data.controls && Array.isArray(data.controls) && data.controls.length)
                 ? data.controls.map(c => c || '')
                 : [''],
+
+            criticalControls: Array.isArray(data.criticalControls) ? data.criticalControls : [],
 
             riskRanks: [
                 { label: 'S', value: data['S'] || '-' },
@@ -885,6 +904,81 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
         setControlRows(updatedRows);
     };
 
+    // Toggles the local `critical` flag on a single control row.
+    const handleControlCriticalToggle = (id) => {
+        setControlRows(prev =>
+            prev.map(row =>
+                row.id === id ? { ...row, critical: !row.critical } : row
+            )
+        );
+    };
+
+    // Renders the "mark as critical" control for a row, based on CRITICAL_CONTROL_UI.
+    // Only one of these is ever active - swap the flag at the top of the file to change styles.
+    const renderCriticalCheckbox = (row) => (
+        <label
+            title="Mark this control as a critical control"
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                marginRight: "8px",
+                fontSize: "13px",
+                fontWeight: row.critical ? 700 : 400,
+                color: row.critical ? "#CB6F6F" : "#333",
+                cursor: readOnly ? "default" : "pointer",
+                whiteSpace: "nowrap"
+            }}
+        >
+            <input
+                type="checkbox"
+                checked={!!row.critical}
+                disabled={readOnly}
+                onChange={() => handleControlCriticalToggle(row.id)}
+            />
+            Critical Control
+        </label>
+    );
+
+    const renderCriticalIcon = (row) => (
+        <button
+            type="button"
+            className="ibra-popup-page-action-button"
+            onClick={() => handleControlCriticalToggle(row.id)}
+            disabled={readOnly}
+            title={row.critical ? "Marked as Critical Control — click to unmark" : "Mark as Critical Control"}
+            style={{
+                color: row.critical ? "#CB6F6F" : undefined,
+                background: row.critical ? "#fce5e5" : undefined,
+            }}
+        >
+            <FontAwesomeIcon style={{ cursor: readOnly ? 'default' : 'pointer' }} icon={faTriangleExclamation} />
+        </button>
+    );
+
+    const renderCriticalPill = (row) => (
+        <button
+            type="button"
+            onClick={() => handleControlCriticalToggle(row.id)}
+            disabled={readOnly}
+            title={row.critical ? "This control is marked critical — click to unmark" : "Click to mark this control as critical"}
+            style={{
+                marginLeft: "8px",
+                padding: "4px 10px",
+                borderRadius: "12px",
+                border: row.critical ? "1px solid #CB6F6F" : "1px solid #ccc",
+                background: row.critical ? "#CB6F6F" : "#f2f2f2",
+                color: row.critical ? "#fff" : "#333",
+                fontSize: "12px",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                cursor: readOnly ? "default" : "pointer"
+            }}
+        >
+            {row.critical ? "Critical Control ✓" : "Mark as Critical"}
+        </button>
+    );
+
     const addControlRow = () => {
         const newId = controlRows.length > 0 ? Math.max(...controlRows.map(row => row.id)) + 1 : 1;
         setControlRows([...controlRows, { id: newId, value: '' }]);
@@ -950,7 +1044,8 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
             additional: additionalComments,
             source: riskSource,
             hazards: hazardRows.map(row => row.value),  // Collecting all hazard row values
-            controls: controlRows.map(row => row.value), // Collecting all control row values
+            controls: controlRows.map(row => row.value), // Collecting all control row values (unchanged shape)
+            criticalControls: controlRows.filter(row => row.critical).map(row => row.value), // Separate collection - just the values of rows marked critical
 
 
             possible: [
@@ -1218,15 +1313,37 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
         }
     };
 
+    // Called when the user PICKS a control from the dropdown (as opposed to
+    // typing it in freehand via handleControlInput). In this case only, we
+    // check the CEA table for this control - if the CEA table already has it
+    // marked as a Critical Control ("Yes"), we auto-check the local
+    // "Critical Control" flag on this row to match.
+    //
+    // This is a one-way, one-time sync: it only fires at the moment of
+    // selection. If the user subsequently unchecks the critical flag on this
+    // row in the BLRA popup, that's a local-only change and must NOT be
+    // written back to the CEA table (critical remains local/UI-only here -
+    // see the note near the `controlRows` state declaration).
     const selectControlSuggestion = (id, controlText) => {
-        handleControlChange(id, controlText);
+        const ceaMatch = (cea || []).find(
+            r => (r?.control || '').trim().toLowerCase() === (controlText || '').trim().toLowerCase()
+        );
+        const isCriticalInCEA = !!ceaMatch && String(ceaMatch.critical || '').trim().toLowerCase() === 'yes';
+
+        setControlRows(prev =>
+            prev.map(row =>
+                row.id === id
+                    ? { ...row, value: controlText, critical: isCriticalInCEA }
+                    : row
+            )
+        );
         setShowDropdown(null);
     };
 
     const insertControlRowAfter = (rowIndex) => {
         setControlRows(prev => {
             const newId = prev.length > 0 ? Math.max(...prev.map(r => r.id)) + 1 : 1;
-            const newRow = { id: newId, value: '' };
+            const newRow = { id: newId, value: '', critical: false };
 
             const next = [...prev];
             // insert AFTER the current row index
@@ -1512,9 +1629,11 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                                             <table className="ibra-popup-page-table">
                                                 <tbody>
                                                     {controlRows.map((row, index) => (
-                                                        <tr key={row.id} style={{ background: controlFlag ? "#FFFF89" : "" }}>
+                                                        <tr key={row.id} style={{ background: row.critical ? "#ffe6e6" : (controlFlag ? "#FFFF89" : "") }}>
                                                             <td>
                                                                 <div className="ibra-popup-page-row-actions">
+                                                                    {CRITICAL_CONTROL_UI === 'checkbox' && renderCriticalCheckbox(row)}
+
                                                                     <div className="ibra-popup-page-select-container">
                                                                         <textarea
                                                                             type="text"
@@ -1535,6 +1654,9 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                                                                     >
                                                                         <FontAwesomeIcon style={{ cursor: 'pointer' }} icon={faInfoCircle} />
                                                                     </button>
+
+                                                                    {CRITICAL_CONTROL_UI === 'icon' && renderCriticalIcon(row)}
+                                                                    {CRITICAL_CONTROL_UI === 'pill' && renderCriticalPill(row)}
 
                                                                     {!readOnly && (
                                                                         <>
@@ -1717,7 +1839,7 @@ const BLRAPopup = ({ onClose, onSave, data, rowsData, readOnly = false, availabl
                                                             value={row.responsible}
                                                             onChange={(e) => handleResponsibleInput(row.id, e.target.value)}
                                                             onFocus={() => handleResponsibleFocus(row.id)}
-                                                            placeholder="Insert Responsible Person"
+                                                            placeholder="Insert Accountable Person"
                                                             readOnly={readOnly}
                                                             autoComplete="off"
                                                         />

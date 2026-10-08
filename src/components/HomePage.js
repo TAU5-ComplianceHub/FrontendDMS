@@ -24,6 +24,38 @@ const HomePage = () => {
   const [startIndex, setStartIndex] = useState(0);
   const [animDir, setAnimDir] = useState(null);
   const [isInfoMenuOpen, setIsInfoMenuOpen] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Guard: bounce back to login immediately if there's no valid, unexpired
+  // token. This runs on every mount of HomePage (including a back-button
+  // triggered remount) so a stale/logged-out session can't render this page.
+  useEffect(() => {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+
+    if (!token) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    try {
+      const decoded = jwtDecode(token);
+      const isExpired = decoded.exp && decoded.exp * 1000 < Date.now();
+
+      if (isExpired) {
+        localStorage.removeItem("token");
+        sessionStorage.removeItem("token");
+        navigate("/FrontendDMS/", { replace: true });
+        return;
+      }
+
+      setAuthChecked(true);
+    } catch (err) {
+      // Malformed/unreadable token — treat as invalid
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
+      navigate("/FrontendDMS/", { replace: true });
+    }
+  }, [navigate]);
 
   useEffect(() => {
     // Load from sessionStorage on mount
@@ -50,8 +82,10 @@ const HomePage = () => {
   };
 
   useEffect(() => {
-    fetchNotificationCount();
-  }, []);
+    if (authChecked) {
+      fetchNotificationCount();
+    }
+  }, [authChecked]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -114,6 +148,11 @@ const HomePage = () => {
 
   const canGoLeft = startIndex > 0;
   const canGoRight = startIndex + 5 < menuItems.length;
+
+  // Don't render the authenticated page until we've confirmed the token is valid.
+  if (!authChecked) {
+    return null;
+  }
 
   return (
     <div className="homepage-container" style={{ userSelect: "none" }}>

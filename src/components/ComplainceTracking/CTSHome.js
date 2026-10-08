@@ -86,6 +86,14 @@ const CTSHome = () => {
                             <h3 className="document-title-dc-home">Work Order Management</h3>
                         </>
                     </div>
+                    {false && (<div className={`document-card-dc-home`} onClick={() => navigate("/controlEvals")}>
+                        <>
+                            <div className="icon-dc">
+                                <img src={"/WOM2.svg"} className={"icon-dc"} />
+                            </div>
+                            <h3 className="document-title-dc-home">Control Evaluation Management</h3>
+                        </>
+                    </div>)}
                 </div>
             </div>
             <ToastContainer />

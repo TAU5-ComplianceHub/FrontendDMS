@@ -23,6 +23,9 @@ const AddControlPopup = ({ onClose }) => {
     const [quality, setQuality] = useState("");
     const [description, setDescription] = useState("");
     const [performance, setPerformance] = useState("");
+    const [frontlineWorkerRows, setFrontlineWorkerRows] = useState([]);
+    const [supervisorRows, setSupervisorRows] = useState([]);
+    const [managerRows, setManagerRows] = useState([]);
     const [helpCT, setHelpCT] = useState(false);
     const [helpCA, setHelpCA] = useState(false);
     const [helpQuality, setHelpQuality] = useState(false);
@@ -94,6 +97,82 @@ const AddControlPopup = ({ onClose }) => {
         setHelpHier(false);
     }
 
+    // --- Generic row handling for the Critical Control verification fields ---
+    // (Verification Method / Frequency / Responsible Person), each supporting
+    // add-another-row / remove-row, mirroring the Current Controls table in IBRAPopup.
+    const critRowIdCounter = useRef(0);
+    const newCritRowId = (prefix) => `${prefix}-${++critRowIdCounter.current}`;
+
+    const createRowHandlers = (setRows, prefix) => ({
+        add: (index) => {
+            setRows(prev => {
+                const updated = [...prev];
+                updated.splice(index + 1, 0, { id: newCritRowId(prefix), value: "" });
+                return updated;
+            });
+        },
+        remove: (id) => {
+            setRows(prev => prev.filter(row => row.id !== id));
+        },
+        update: (id, value) => {
+            setRows(prev => prev.map(row => (row.id === id ? { ...row, value } : row)));
+        }
+    });
+
+    const frontlineWorkerHandlers = createRowHandlers(setFrontlineWorkerRows, "fw");
+    const supervisorHandlers = createRowHandlers(setSupervisorRows, "sup");
+    const managerHandlers = createRowHandlers(setManagerRows, "mgr");
+
+    const hasRowContent = (rows) => rows.some(row => row.value.trim());
+
+    const renderCritRows = (rows, handlers, placeholder) => (
+        rows.length === 0 ? (
+            <button
+                type="button"
+                className="ibra-popup-page-upload-button"
+                onClick={() => handlers.add(-1)}
+                title="Add question"
+                style={{ display: "block", margin: "0 auto" }}
+            >
+                Add question
+            </button>
+        ) : (
+            rows.map((row, index) => (
+                <div
+                    key={row.id}
+                    className="ibra-popup-page-row-actions"
+                    style={{ marginBottom: index === rows.length - 1 ? "0" : "10px" }}
+                >
+                    <textarea
+                        value={row.value}
+                        onChange={(e) => handlers.update(row.id, e.target.value)}
+                        className="ibra-popup-page-input-table-controls-text-areas ibra-popup-page-row-input"
+                        placeholder={placeholder}
+                        style={{ resize: "none", fontFamily: "Arial" }}
+                    ></textarea>
+
+                    <button
+                        type="button"
+                        className="ibra-popup-page-action-button"
+                        onClick={() => handlers.remove(row.id)}
+                        title="Remove Question"
+                    >
+                        <FontAwesomeIcon icon={faTrashAlt} />
+                    </button>
+
+                    <button
+                        type="button"
+                        className="ibra-popup-page-action-button-add-hazard"
+                        onClick={() => handlers.add(index)}
+                        title="Add question"
+                    >
+                        <FontAwesomeIcon icon={faCirclePlus} />
+                    </button>
+                </div>
+            ))
+        )
+    );
+
     const fetchCategories = async () => {
         const route = `/api/riskInfo/getCategories`;
         try {
@@ -144,6 +223,19 @@ const AddControlPopup = ({ onClose }) => {
             toast.warn(`Please specify the Specific Consequence that the control aims to address.`, { autoClose: 1200, closeButton: false });
             return;
         }
+        if (criticalControl.trim() === "Yes" && !performance.trim()) {
+            toast.warn(`Please complete the Performance Requirements and Verification field, as this is a Critical Control.`, { autoClose: 1200, closeButton: false });
+            return;
+        }
+        if (
+            criticalControl.trim() === "Yes" &&
+            !hasRowContent(frontlineWorkerRows) &&
+            !hasRowContent(supervisorRows) &&
+            !hasRowContent(managerRows)
+        ) {
+            toast.warn(`Please enter at least one Control Evaluation Question (Frontline Worker, Supervisor, or Manager), as this is a Critical Control.`, { autoClose: 1200, closeButton: false });
+            return;
+        }
 
         setLoading(true);
 
@@ -161,6 +253,9 @@ const AddControlPopup = ({ onClose }) => {
                     quality: quality.trim(),
                     description: description.trim(),
                     performance: performance.trim(),
+                    frontlineWorkerQuestions: frontlineWorkerRows.map(row => row.value.trim()).filter(Boolean),
+                    supervisorQuestions: supervisorRows.map(row => row.value.trim()).filter(Boolean),
+                    managerQuestions: managerRows.map(row => row.value.trim()).filter(Boolean),
                     category: category.trim()
                 },
                 {
@@ -182,6 +277,9 @@ const AddControlPopup = ({ onClose }) => {
             setDescription("");
             setHierarchy("");
             setPerformance("");
+            setFrontlineWorkerRows([]);
+            setSupervisorRows([]);
+            setManagerRows([]);
             setQuality("");
 
             onClose();
@@ -416,6 +514,7 @@ const AddControlPopup = ({ onClose }) => {
                             <div className="ibra-popup-page-component-wrapper">
                                 <div className="ibra-popup-page-form-group">
                                     <label style={{ fontSize: "15px" }}>Performance Requirements and Verification
+                                        {criticalControl.trim() === "Yes" && <span className="required-field"> *</span>}
                                     </label>
                                     <textarea
                                         value={performance}
@@ -426,6 +525,32 @@ const AddControlPopup = ({ onClose }) => {
                                     ></textarea>
                                 </div>
                             </div>
+
+                            {criticalControl.trim() === "Yes" && (
+                                <div className="ibra-popup-page-form-group-main-container-2" style={{ overflow: "visible", backgroundColor: "#ffffff" }}>
+                                    <label style={{ fontWeight: 700, color: "#444", marginBottom: "10px", display: "block", fontSize: "15px", textAlign: "center" }}>
+                                        Control Evaluation Questions <span className="required-field">*</span>
+                                    </label>
+                                    <div className="ibra-popup-page-component-wrapper">
+                                        <div className="ibra-popup-page-form-group">
+                                            <label style={{ fontSize: "15px", marginBottom: "15px" }}>Frontline Worker</label>
+                                            {renderCritRows(frontlineWorkerRows, frontlineWorkerHandlers, "Enter question")}
+                                        </div>
+                                    </div>
+                                    <div className="ibra-popup-page-component-wrapper">
+                                        <div className="ibra-popup-page-form-group">
+                                            <label style={{ fontSize: "15px", marginBottom: "15px" }}>Supervisor</label>
+                                            {renderCritRows(supervisorRows, supervisorHandlers, "Enter question")}
+                                        </div>
+                                    </div>
+                                    <div className="ibra-popup-page-component-wrapper">
+                                        <div className="ibra-popup-page-form-group">
+                                            <label style={{ fontSize: "15px", marginBottom: "15px" }}>Manager</label>
+                                            {renderCritRows(managerRows, managerHandlers, "Enter question")}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 

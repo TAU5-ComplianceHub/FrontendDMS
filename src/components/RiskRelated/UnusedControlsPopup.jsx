@@ -8,7 +8,7 @@ const UnusedControlsPopup = ({ closeModal, generate, cancel }) => {
                 </div>
 
                 <div className="generate-incompletedraft-group">
-                    <div className="generate-incompletedraft-text">{`Not all controls selected on the Applicable Controls Table was used. Do you want to generate the draft in its current state?`}</div>
+                    <div className="generate-incompletedraft-text">{`Not all controls selected on the Control Effectiveness Analysis Table was used. Do you want to generate the draft in its current state?`}</div>
                 </div>
 
                 <div className="generate-incompletedraft-buttons">

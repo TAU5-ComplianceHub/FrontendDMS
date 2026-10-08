@@ -14,7 +14,7 @@ const TemplateSuggestionPopup = ({ isOpen, onClose, controlData, onSuccess }) =>
             try {
                 // Fetching system admins/DDS as potential approvers
                 const response = await fetch(
-                    `${process.env.REACT_APP_URL}/api/user/getSystemAdmins/CMS`,
+                    `${process.env.REACT_APP_URL}/api/user/getSystemAdmins/CTS`,
                     {
                         headers: {
                             Authorization: `Bearer ${localStorage.getItem("token")}`,

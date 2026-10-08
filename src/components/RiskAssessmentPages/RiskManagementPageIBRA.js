@@ -51,6 +51,7 @@ import { useTauriCloseGuard } from "../../utils/useTauriCloseGuard";
 import ReshareDraftPopup from "../Popups/ReshareDraftPopup";
 import RejectReason from "../Popups/RejectReason";
 import RejectReasonView from "../Popups/RejectReasonView";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 
 const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = false }) => {
     const navigate = useNavigate();
@@ -129,6 +130,7 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
     const [rejecting, setRejecting] = useState(false);
     const [isRejected, setIsRejected] = useState(false);
     const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+    const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
     const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
     const SHARE_ROLES = ["collaborator", "viewer", "publisher"];
@@ -732,6 +734,7 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
             if (result.id) {
                 setLoadedID(result.id);
                 loadedIDRef.current = result.id;
+                setOwner(true);
             }
 
             if (result.formData) {
@@ -914,12 +917,21 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
                 }
             });
         } else {
-            setIsPublishing(true);
-            try {
-                await handlePublishApprovalFlow();
-            } finally {
-                setIsPublishing(false);
-            }
+            setIsConfirmPublishOpen(true);
+        }
+    };
+
+    const closeConfirmPublish = () => {
+        setIsConfirmPublishOpen(false);
+    };
+
+    const handleConfirmPublish = async () => {
+        setIsConfirmPublishOpen(false);
+        setIsPublishing(true);
+        try {
+            await handlePublishApprovalFlow();
+        } finally {
+            setIsPublishing(false);
         }
     };
 
@@ -2230,6 +2242,7 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
         // Grab the control text we're about to delete
         const removedRow = formData.cea.find(row => row.id === idToRemove);
         const removedControl = removedRow?.control;
+        const normLower = (s) => (s ?? "").toString().trim().toLowerCase();
 
         // Remove that row from CEA
         const updatedRows = formData.cea.filter(row => row.id !== idToRemove);
@@ -2251,15 +2264,141 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
         // Also purge this control from every IBRA row
         const updatedIBRA = formData.ibra.map(ibraRow => ({
             ...ibraRow,
-            controls: ibraRow.controls.filter(ctrl => ctrl !== removedControl)
+            controls: (ibraRow.controls || []).filter(ctrl => {
+                const name = typeof ctrl === "string" ? ctrl : ctrl?.control;
+                return normLower(name) !== normLower(removedControl);
+            })
         }));
 
-        // Push both new arrays into state at once
+        // ✅ Also purge this control from the Applicable Controls list (relevantControls),
+        // since the CEA table is now the source of truth for adding/removing controls.
+        const updatedRelevantControls = (formData.relevantControls || []).filter(
+            rc => normLower(rc.control) !== normLower(removedControl)
+        );
+
+        // Push all updated arrays into state at once
         setFormData(prev => ({
             ...prev,
             cea: reNumberedCEA,
-            ibra: updatedIBRA
+            ibra: updatedIBRA,
+            relevantControls: updatedRelevantControls
         }));
+    };
+
+    // ✅ Handles adding/removing controls directly from the CEA table's own
+    // "+" popup (mirrors the old RelevantControlsTable.handleSaveControls flow,
+    // but drives it from the CEA side). Keeps the (now-hidden) Applicable
+    // Controls list, the IBRA table, and the CEA table all in sync.
+    const handleSaveControlsFromCEA = (selectedControlObjects) => {
+        const normLower = (s) => (s ?? "").toString().trim().toLowerCase();
+
+        setFormData(prev => {
+            const selectedNames = new Set(
+                (selectedControlObjects || [])
+                    .map(o => (o?.control || "").trim())
+                    .filter(Boolean)
+            );
+
+            // Preserve existing relevantControls entries (ids/descriptions) where possible
+            const byName = new Map((prev.relevantControls || []).map(rc => [rc.control, rc]));
+
+            const updatedRelevantControls = Array.from(selectedNames).map(name => {
+                const existing = byName.get(name);
+                const fromPopup = (selectedControlObjects || []).find(o => o.control === name);
+
+                if (existing) {
+                    return {
+                        ...existing,
+                        category: (existing?.category || fromPopup?.category || "").toString().trim(),
+                        performance: existing?.performance || fromPopup?.performance || "",
+                    };
+                }
+
+                const fromPopupDetails = fromPopup?.details || null;
+
+                return {
+                    id: uuidv4(),
+                    control: name,
+                    description: fromPopup?.description || "",
+                    category: (fromPopup?.category ?? "").toString().trim(),
+                    performance: fromPopup?.performance || "",
+                    ...(fromPopupDetails
+                        ? {
+                            critical: fromPopupDetails.criticalControl || "",
+                            act: fromPopupDetails.controlType || "",
+                            activation: fromPopupDetails.controlActivation || "",
+                            hierarchy: fromPopupDetails.hierarchy || "",
+                            cons: fromPopupDetails.controlAim || "",
+                            quality: fromPopupDetails.quality || "",
+                        }
+                        : {}),
+                };
+            });
+
+            // Work out what was added and what was removed
+            const prevNamesNorm = new Set((prev.relevantControls || []).map(rc => normLower(rc.control)));
+            const nextNamesNorm = new Set(updatedRelevantControls.map(rc => normLower(rc.control)));
+
+            const removedNamesNorm = Array.from(prevNamesNorm).filter(n => !nextNamesNorm.has(n));
+            const addedNamesNorm = Array.from(nextNamesNorm).filter(n => !prevNamesNorm.has(n));
+            const removedSet = new Set(removedNamesNorm);
+
+            // Purge removed controls from IBRA
+            const nextIBRA = (prev.ibra || []).map(r => ({
+                ...r,
+                controls: (r.controls || []).filter(c => {
+                    const name = typeof c === "string" ? c : c?.control;
+                    return !removedSet.has(normLower(name));
+                })
+            }));
+
+            // Purge removed controls from CEA
+            let nextCEA = (prev.cea || []).filter(r => !removedSet.has(normLower(r.control)));
+
+            // Add a fresh CEA row for any newly-selected control that doesn't already have one
+            const existingCEANames = new Set(nextCEA.map(r => normLower(r.control)));
+            const findSystemId = (name) => {
+                const match = (allSystemControls || []).find(sc => normLower(sc.control) === normLower(name));
+                return match ? match._id : null;
+            };
+
+            const newCEARows = addedNamesNorm
+                .filter(n => !existingCEANames.has(n))
+                .map(n => {
+                    const relObj = updatedRelevantControls.find(rc => normLower(rc.control) === n);
+                    const fromPopup = (selectedControlObjects || []).find(o => normLower(o.control) === n);
+                    const details = fromPopup?.details || null;
+                    return {
+                        id: uuidv4(),
+                        control: relObj?.control || n,
+                        uniqueId: findSystemId(relObj?.control || n),
+                        nr: 0,
+                        description: relObj?.description || details?.description || "",
+                        critical: relObj?.critical || details?.criticalControl || "",
+                        act: relObj?.act || details?.controlType || "",
+                        activation: relObj?.activation || details?.controlActivation || "",
+                        hierarchy: relObj?.hierarchy || details?.hierarchy || "",
+                        cons: relObj?.cons || details?.controlAim || "",
+                        quality: relObj?.quality || details?.quality || "",
+                        cer: "",
+                        notes: "",
+                        performance: relObj?.performance || details?.performance || "",
+                        dueDate: "",
+                        responsible: "",
+                        action: "",
+                        category: (relObj?.category ?? "").toString().trim(),
+                    };
+                });
+
+            nextCEA = [...nextCEA, ...newCEARows].map((r, i) => ({ ...r, nr: i + 1 }));
+
+            return {
+                ...prev,
+                relevantControls: updatedRelevantControls,
+                ibra: nextIBRA,
+                cea: nextCEA,
+            };
+        });
     };
 
     const removeAttendanceRow = (indexToRemove) => {
@@ -2901,7 +3040,15 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
 
     useEffect(() => {
         const syncCEAFromIBRA = async () => {
-            const usedControls = getUsedControlsFromIBRA(formData.ibra);
+            // ✅ "Used" controls now means: used in an IBRA row OR present in the
+            // Applicable Controls list (relevantControls). This matters because
+            // controls can now be added straight to the CEA table (via its own
+            // "+" popup) before they're ever assigned to an IBRA row - those
+            // must not get purged here just because no IBRA row references them yet.
+            const usedControls = Array.from(new Set([
+                ...getUsedControlsFromIBRA(formData.ibra),
+                ...(formData.relevantControls || []).map(rc => norm(rc.control)).filter(Boolean)
+            ]));
 
             const currentCEA = formData.cea || [];
 
@@ -3013,7 +3160,7 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
 
         syncCEAFromIBRA();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [formData.ibra]);
+    }, [formData.ibra, formData.relevantControls]);
 
     useEffect(() => {
         if (!Array.isArray(allSystemControls) || allSystemControls.length === 0) return;
@@ -4465,6 +4612,12 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
                             <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
                         </div>
 
+                        {!readOnly && (
+                            <div className="burger-menu-icon-risk-create-page-1">
+                                <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
+                            </div>
+                        )}
+
                         {!versionPreview && !readOnly && userIDs.length > 1 && (
                             <div className="burger-menu-icon-risk-create-page-1">
                                 {isSavingVersion ? (
@@ -4481,12 +4634,6 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
                                         />
                                     </span>
                                 )}
-                            </div>
-                        )}
-
-                        {!readOnly && (
-                            <div className="burger-menu-icon-risk-create-page-1">
-                                <FontAwesomeIcon icon={faFloppyDisk} title="Save" onClick={handleSave} />
                             </div>
                         )}
 
@@ -4514,7 +4661,7 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
                             </div>
                         )}
 
-                        {!readOnly && !inReview && !inApproval && (isPublisher || owner) && canIn(access, "DDS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
+                        {!readOnly && !inReview && !inApproval && (isPublisher || owner) && canIn(access, "RMS", ["systemAdmin", "contributor"]) && (<div className="burger-menu-icon-risk-create-page-1">
                             <FontAwesomeIcon icon={faUpload} className={`${(!loadedID) ? "disabled-share" : ""}`} onClick={handlePubClick} title="Publish" />
                         </div>)}
 
@@ -4745,22 +4892,27 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
                         collapsible={true}
                     />
 
-                    <RelevantControlsTable
-                        ref={relevantControlsRef}
-                        relevantControls={formData.relevantControls}
-                        setFormData={setFormData}
-                        readOnly={readOnly}
-                        globalControls={allSystemControls}
-                        onControlRename={handleControlRename}
-                        isCollapsed={formData.isRelevantControlsCollapsed}
-                        highlightedControlNames={unusedRelevantControlsHighlight}
-                    />
+                    {/* ✅ Applicable Controls table is kept mounted (so its sync logic / refs
+                        keep working for the IBRA table) but is no longer shown, since adding
+                        and removing controls now happens from the CEA table below. */}
+                    {false && (
+                        <RelevantControlsTable
+                            ref={relevantControlsRef}
+                            relevantControls={formData.relevantControls}
+                            setFormData={setFormData}
+                            readOnly={readOnly}
+                            globalControls={allSystemControls}
+                            onControlRename={handleControlRename}
+                            isCollapsed={formData.isRelevantControlsCollapsed}
+                            highlightedControlNames={unusedRelevantControlsHighlight}
+                        />
+                    )}
 
                     <AbbreviationTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedAbbrCodes={usedAbbrCodes} setUsedAbbrCodes={setUsedAbbrCodes} error={errors.abbrs} userID={userID} setError={setErrors} />
                     <TermTableRisk collapsible={true} readOnly={readOnly} risk={true} formData={formData} setFormData={setFormData} usedTermCodes={usedTermCodes} setUsedTermCodes={setUsedTermCodes} error={errors.terms} userID={userID} setError={setErrors} />
                     <AttendanceTable collapsible={true} title={formData.title} documentType={formData.documentType} readOnly={readOnly} rows={formData.attendance} addRow={addAttendanceRow} error={errors.attend} removeRow={removeAttendanceRow} updateRows={updateAttendanceRows} userID={userID} generateAR={handleClick} setErrors={setErrors} />
-                    {formData.documentType === "IBRA" && (<IBRATable collapsible={true} relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} />)}
-                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable collapsible={true} readOnly={readOnly} error={errors.cea} rows={formData.cea} highlightedRows={highlightedRows} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} />)}
+                    {formData.documentType === "IBRA" && (<IBRATable collapsible={true} relevantControls={formData.relevantControls} readOnly={readOnly} rows={formData.ibra} error={errors.ibra} updateRows={updateIbraRows} updateRow={updateIBRARows} addRow={addIBRARow} removeRow={removeIBRARow} generate={handleClick2} isSidebarVisible={isSidebarVisible} setErrors={setErrors} cea={formData.cea} />)}
+                    {(["IBRA"].includes(formData.documentType)) && (<ControlAnalysisTable typeRA={"IBRA"} collapsible={true} readOnly={readOnly} error={errors.cea} rows={formData.cea} highlightedRows={highlightedRows} ibra={formData.ibra} updateRows={updateCEARows} onControlRename={handleControlRename} addRow={addCEARow} updateRow={updateCeaRows} removeRow={removeCEARow} title={formData.title} isSidebarVisible={isSidebarVisible} relevantControls={formData.relevantControls} globalControls={allSystemControls} onSaveControls={handleSaveControlsFromCEA} />)}
 
                     <ExecutiveSummary
                         collapsible={true}
@@ -4844,6 +4996,7 @@ const RiskManagementPageIBRA = ({ versionPreview = false, signedOffPreview = fal
                 />
             )}
             {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
+            {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
             {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
             {isSaveConfirmOpen && (
                 <SaveConfirmationPopup

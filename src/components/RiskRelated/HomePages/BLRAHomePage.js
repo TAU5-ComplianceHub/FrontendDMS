@@ -4,20 +4,48 @@ import { jwtDecode } from "jwt-decode";
 import { toast, ToastContainer } from 'react-toastify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faScaleBalanced, faCertificate, faListOl, faChevronLeft, faChevronRight, faArrowLeft, faCaretLeft, faCaretRight, faCircle, faFileAlt, faBars } from '@fortawesome/free-solid-svg-icons';
-import { canIn, getCurrentUser } from "../../../utils/auth";
+import { canIn, getCurrentUser, isAdmin } from "../../../utils/auth";
 import TopBarDD from "../../Notifications/TopBarDD";
 
 const BLRAHomePage = () => {
     const navigate = useNavigate();
     const [isSidebarVisible, setIsSidebarVisible] = useState(false);
     const access = getCurrentUser();
+    const isSystemAdmin = isAdmin(access) || canIn(access, "RMS", ["systemAdmin"]);
+
+    const [userID, setUserID] = useState("");
+    const [counts, setCounts] = useState({ drafts: 0, reviewApproval: 0, underRevision: 0, pendingSignOff: 0, controlled: 0 });
 
     useEffect(() => {
         const storedToken = localStorage.getItem("token");
         if (storedToken) {
             const decodedToken = jwtDecode(storedToken);
+            setUserID(decodedToken.userId);
         }
     }, [navigate]);
+
+    useEffect(() => {
+        if (!userID) return;
+
+        const fetchCounts = async () => {
+            const token = localStorage.getItem("token");
+            const route = isSystemAdmin
+                ? `${process.env.REACT_APP_URL}/api/riskDraft/blra/counts/${userID}?isAdmin=true`
+                : `${process.env.REACT_APP_URL}/api/riskDraft/blra/counts/${userID}`;
+            try {
+                const response = await fetch(route, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!response.ok) throw new Error("Failed to fetch BLRA counts");
+                const data = await response.json();
+                setCounts(data);
+            } catch (error) {
+                console.error("Failed to fetch BLRA counts:", error);
+            }
+        };
+
+        fetchCounts();
+    }, [userID, isSystemAdmin]);
 
     return (
         <div className="dc-info-container">
@@ -73,6 +101,7 @@ const BLRAHomePage = () => {
                                 <img src={`${process.env.PUBLIC_URL}/tmsSavedDrafts.svg`} className={"icon-dc"} />
                             </div>
                             <h3 className="document-title-dc-home">Saved Drafts</h3>
+                            <p className="document-info-fi-home">Documents: {counts.drafts}</p>
                         </>
                     </div>
                     <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/riskManagementApprovals/blra")}>
@@ -81,6 +110,7 @@ const BLRAHomePage = () => {
                                 <img src={`${process.env.PUBLIC_URL}/tmsPublished.svg`} className={"icon-dc"} />
                             </div>
                             <h3 className="document-title-dc-home">Review & Approval BLRAs</h3>
+                            <p className="document-info-fi-home">Documents: {counts.reviewApproval}</p>
                         </>
                     </div>
                     <div className={`document-card-dc-home`} onClick={() => navigate("/FrontendDMS/generatedBLRADocs")}>
@@ -89,6 +119,7 @@ const BLRAHomePage = () => {
                                 <img src={`${process.env.PUBLIC_URL}/tmsPublished.svg`} className={"icon-dc"} />
                             </div>
                             <h3 className="document-title-dc-home">Pending Sign Off BLRAs</h3>
+                            <p className="document-info-fi-home">Documents: {counts.pendingSignOff}</p>
                         </>
                     </div>
                     <div className={`document-card-risk-home`} onClick={() => navigate("/FrontendDMS/signedOffBLRA")}>
@@ -97,6 +128,7 @@ const BLRAHomePage = () => {
                                 <img src={`${process.env.PUBLIC_URL}/tmsPublished.svg`} alt="Control Attributes" className="icon-risk" />
                             </div>
                             <h3 className="document-title-risk-home">Controlled BLRAs<br /></h3>
+                            <p className="document-info-fi-home">Documents: {counts.controlled}</p>
                         </>
                     </div>
                     <div className={`document-card-risk-home`} onClick={() => navigate("/FrontendDMS/riskManagementRevisions/blra")}>
@@ -105,6 +137,7 @@ const BLRAHomePage = () => {
                                 <img src={`${process.env.PUBLIC_URL}/tmsPublished.svg`} alt="Control Attributes" className="icon-risk" />
                             </div>
                             <h3 className="document-title-risk-home">Under Revision BLRAs<br /></h3>
+                            <p className="document-info-fi-home">Documents: {counts.underRevision}</p>
                         </>
                     </div>
                 </div>

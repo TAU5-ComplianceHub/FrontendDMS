@@ -164,6 +164,16 @@ const ControlAttributes = () => {
         return 'cea-table-page-quality-excellent';
     };
 
+    const isCriticalMissingQuestions = (row) => {
+        if (row?.critical !== "Yes") return false;
+
+        const fw = Array.isArray(row?.frontlineWorkerQuestions) ? row.frontlineWorkerQuestions : [];
+        const sup = Array.isArray(row?.supervisorQuestions) ? row.supervisorQuestions : [];
+        const mgr = Array.isArray(row?.managerQuestions) ? row.managerQuestions : [];
+
+        return fw.length === 0 && sup.length === 0 && mgr.length === 0;
+    };
+
     const handleControlRowClick = (row) => (e) => {
         if (drag.current.moved) return;
 
@@ -907,7 +917,10 @@ const ControlAttributes = () => {
     const resizeStartXRef = useRef(0);
     const resizeStartWidthRef = useRef(0);
 
-    const getDisplayColumns = () => showColumns;
+    const isAdmin = canIn(access, "RMS", ["systemAdmin"]);
+
+    const getDisplayColumns = () =>
+        isAdmin ? showColumns : showColumns.filter(id => id !== "action");
 
     const startColumnResize = (e, columnId) => {
         e.preventDefault();
@@ -1270,7 +1283,7 @@ const ControlAttributes = () => {
                     </div>
                     <div className="button-container-create">
 
-                        {canIn(access, "RMS", ["systemAdmin", "contributor"]) && (
+                        {canIn(access, "RMS", ["systemAdmin"]) && (
                             <>
                                 {false && (<button className="but-um" onClick={openAddControl}>
                                     <div className="button-content">
@@ -1497,7 +1510,7 @@ const ControlAttributes = () => {
                                         }}
                                     />
                                 )}
-                                {showColumns.includes("action") && (
+                                {isAdmin && showColumns.includes("action") && (
                                     <col
                                         key="action"
                                         style={{
@@ -1553,7 +1566,7 @@ const ControlAttributes = () => {
                                         </th>
                                     )}
 
-                                    {showColumns.includes("action") && (
+                                    {isAdmin && showColumns.includes("action") && (
                                         <th
                                             className="risk-control-attributes-action"
                                             rowSpan={2}
@@ -1652,9 +1665,12 @@ const ControlAttributes = () => {
                                         (Date.now() - new Date(row.updatedAt).getTime()) <
                                         30 * 24 * 60 * 60 * 1000;
 
+                                    const missingCriticalQuestions = isCriticalMissingQuestions(row);
+
                                     return (
                                         <tr
-                                            className={`table-scroll-wrapper-attributes-controls ${isRecent ? "recent-control-row" : ""}`}
+                                            className={`table-scroll-wrapper-attributes-controls ${isRecent ? "recent-control-row" : ""} ${missingCriticalQuestions ? "critical-control-missing-questions-row" : ""}`}
+                                            style={missingCriticalQuestions ? { backgroundColor: "#fdecea" } : undefined}
                                             key={row._id ?? index}
                                             onClick={handleControlRowClick(row)}
                                         >
@@ -1694,7 +1710,7 @@ const ControlAttributes = () => {
                                             {showColumns.includes("critical") && (
                                                 <td
                                                     className={`${row.critical === "Yes"
-                                                        ? "procCent"
+                                                        ? "procCent cea-table-page-critical"
                                                         : "procCent"
                                                         }`}
                                                     style={{ fontSize: "14px" }}
@@ -1782,7 +1798,7 @@ const ControlAttributes = () => {
                                                 </td>
                                             )}
 
-                                            {showColumns.includes("action") && (
+                                            {isAdmin && showColumns.includes("action") && (
                                                 <td className="risk-control-attributes-action-cell">
                                                     <button
                                                         type="button"

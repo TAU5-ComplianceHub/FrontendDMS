@@ -1,6 +1,6 @@
 import "./DeleteControlPopup.css";
 
-const DeleteControlPopup = ({ closeModal, deleteControl, controlName }) => {
+const DeleteControlPopup = ({ closeModal, deleteControl, controlName, type }) => {
     return (
         <div className="delete-popup-overlay">
             <div className="delete-popup-content">
@@ -10,7 +10,7 @@ const DeleteControlPopup = ({ closeModal, deleteControl, controlName }) => {
                 </div>
 
                 <div className="delete-control-group">
-                    <div className="delete-control-text">Are you sure you want to remove this Control?<br /><strong>Note: </strong><span style={{ fontSize: "16px", fontWeight: "normal" }}>The control will also be removed from the IBRA Table.</span></div>
+                    <div className="delete-control-text">Are you sure you want to remove this Control?<br /><strong>Note: </strong><span style={{ fontSize: "16px", fontWeight: "normal" }}>{`The control will also be removed from the ${type} Table.`}</span></div>
                     <div style={{ fontSize: "14px", fontWeight: "normal" }}>{controlName}</div>
                 </div>
 

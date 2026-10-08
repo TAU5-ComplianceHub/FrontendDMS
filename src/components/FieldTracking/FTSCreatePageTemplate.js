@@ -61,6 +61,7 @@ import WorkOrderActionFields from "./WorkOrderActionFields";
 import "./WorkOrderActionFields.css";
 import SupportingDocumentTableFTS from "./SupportingDocumentTableFTS";
 import PPETable from "../CreatePage/PPETable";
+import WorkOrderDescriptorsTable from "./WorkOrderDescriptorsTable";
 import HandToolTable from "../CreatePage/HandToolsTable";
 import MaterialsTable from "../CreatePage/MaterialsTable";
 import HazardsControlsTable from "../CreatePage/HazardsControlsTable";
@@ -68,6 +69,7 @@ import HazardsControlsTableFTS from "./HazardsControlsTableFTS";
 import ReshareDraftPopup from "../Popups/ReshareDraftPopup";
 import RejectReason from "../Popups/RejectReason";
 import RejectReasonView from "../Popups/RejectReasonView";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 import InfoJRAImportFTS from "./InfoJRAImportFTS";
 
 // Backend dedup (see fieldTemplateDrafts.mjs) may append a " (n)" counter to
@@ -182,6 +184,7 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
   const [rejecting, setRejecting] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
   const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
@@ -697,6 +700,7 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
       if (result.id) {
         setLoadedID(result.id);
         loadedIDRef.current = result.id;
+        setOwner(true);
       }
 
       if (result.formData) {
@@ -835,12 +839,21 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
         }
       });
     } else {
-      setIsPublishing(true);
-      try {
-        await handlePublishApprovalFlow();
-      } finally {
-        setIsPublishing(false);
-      }
+      setIsConfirmPublishOpen(true);
+    }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    setIsConfirmPublishOpen(false);
+    setIsPublishing(true);
+    try {
+      await handlePublishApprovalFlow();
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -1070,6 +1083,7 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
     workOrderSubInformation: "",
     workOrderRACIInformation: "",
     actionFields: [],
+    workOrderDescriptors: [],
     PPEItems: [],
     HandTools: [],
     Materials: [],
@@ -1986,10 +2000,26 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
         body: JSON.stringify(dataToStore),
       });
 
-      if (!response.ok) throw new Error("Failed to generate document");
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+
+        if (errData.error === "DUPLICATE_TITLE") {
+          toast.error(errData.message || "A template with this name has already been published.", {
+            closeButton: true,
+            autoClose: 3500,
+            style: {
+              textAlign: 'center'
+            }
+          });
+          setLoading(false);
+          return;
+        }
+
+        throw new Error(errData.message || "Failed to generate document");
+      }
       const data = await response.json();
 
-      toast.success(`Tempalte Publishing Approval Started.`, {
+      toast.success(`Template Publishing Approval Started.`, {
         closeButton: true,
         autoClose: 2000, // 1.5 seconds
         style: {
@@ -2418,6 +2448,10 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
               <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
             </div>
 
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
+            </div>)}
+
             {!versionPreview && !readOnly && userIDs.length > 1 && (
               <div className="burger-menu-icon-risk-create-page-1">
                 {isSavingVersion ? (
@@ -2434,10 +2468,6 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
                 )}
               </div>
             )}
-
-            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
-            </div>)}
 
             {(
               <div className="burger-menu-icon-risk-create-page-1">
@@ -2528,6 +2558,7 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
 
           <TemplateTitleField
             value={formData.templateTitle}
+            descriptors={formData.workOrderDescriptors}
             frequency={formData.frequency}
             workOrderBasis={formData.workOrderBases}
             assetType={formData.assetType}
@@ -2538,6 +2569,8 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
             readOnly={readOnly}
             showUI={true}
           />
+
+          <WorkOrderDescriptorsTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
 
           <WorkOrderTable
             workOrderType={formData.workOrderType}
@@ -2731,6 +2764,7 @@ const FTSCreatePageTemplate = ({ versionPreview = false }) => {
       </div>
       <ToastContainer />
       {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
+      {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
       {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
       {isSaveConfirmOpen && (
         <SaveConfirmationPopup

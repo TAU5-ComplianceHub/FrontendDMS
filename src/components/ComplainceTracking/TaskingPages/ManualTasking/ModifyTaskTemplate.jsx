@@ -9,14 +9,6 @@ import TimePicker from "react-multi-date-picker/plugins/time_picker";
 import { toast } from 'react-toastify';
 import './AddTaskPopup.css';
 
-const AREAS = [
-    "All Areas",
-    "Offices",
-    "Plant",
-    "Surface",
-    "Underground",
-];
-
 const ModifyTaskTemplate = ({ onClose, onTaskAdded, data }) => {
     const [taskTitle, setTaskTitle] = useState("");
     const [taskPriority, setTaskPriority] = useState("");
@@ -26,6 +18,7 @@ const ModifyTaskTemplate = ({ onClose, onTaskAdded, data }) => {
     const [loading, setLoading] = useState(false);
     const [taskId, setTaskID] = useState("");
     const [area, setArea] = useState("");
+    const [areaOptions, setAreaOptions] = useState([]);
     const [discipline, setDiscipline] = useState("");
     const [disciplineOptions, setDisciplineOptions] = useState([]);
 
@@ -73,8 +66,35 @@ const ModifyTaskTemplate = ({ onClose, onTaskAdded, data }) => {
         }
     };
 
+    const fetchAreaOptions = async () => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/getValues`);
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch area options");
+            }
+
+            const data = await response.json();
+            const areaLookup = {};
+
+            (Array.isArray(data.areas) ? data.areas : []).forEach(({ mainArea, subAreas }) => {
+                if (mainArea) areaLookup[mainArea] = subAreas;
+            });
+
+            setAreaOptions(
+                Object.keys(areaLookup).sort((a, b) =>
+                    String(a).localeCompare(String(b), undefined, { sensitivity: "base" })
+                )
+            );
+        } catch (error) {
+            console.error("Failed to fetch area options:", error);
+            setAreaOptions([]);
+        }
+    };
+
     useEffect(() => {
         fetchDepartments();
+        fetchAreaOptions();
     }, []);
 
     const handleSubmit = async (e) => {
@@ -246,7 +266,7 @@ const ModifyTaskTemplate = ({ onClose, onTaskAdded, data }) => {
                                                     }}
                                                 >
                                                     <option value="">Select Area</option>
-                                                    {AREAS.map((a) => (
+                                                    {areaOptions.map((a) => (
                                                         <option key={a} value={a}>{a}</option>
                                                     ))}
                                                 </select>

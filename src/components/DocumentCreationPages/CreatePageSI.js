@@ -21,6 +21,7 @@ import DocumentSignaturesTableSI from "../CreatePage/DocumentSignaturesTableSI";
 import AbbreviationTableSI from "../CreatePage/AbbreviationTableSI";
 import TermTableSI from "../CreatePage/TermTableSI";
 import GenerateDraftPopup from "../Popups/GenerateDraftPopup";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 import DraftPopup from "../Popups/DraftPopup";
 import DocumentWorkflow from "../Popups/DocumentWorkflow";
 import { getCurrentUser, can, canIn, isAdmin } from "../../utils/auth";
@@ -83,6 +84,7 @@ const CreatePageSI = ({ versionPreview = false, signedOffPreview = false }) => {
   const [isPublisher, setIsPublisher] = useState(false);
   const [isSaving, setIsSaving] = useState(false); // spinner state for the top "Save" icon
   const [isPublishing, setIsPublishing] = useState(false); // spinner state for the top "Publish" icon
+  const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
   const [isApproving, setIsApproving] = useState(false); // spinner state for the top "Approve" icon
   const [isSavingVersion, setIsSavingVersion] = useState(false);
   const [versionInfo, setVersionInfo] = useState(null);
@@ -1110,6 +1112,7 @@ const CreatePageSI = ({ versionPreview = false, signedOffPreview = false }) => {
       if (result.id) {
         setLoadedID(result.id);
         loadedIDRef.current = result.id;
+        setOwner(true);
       }
 
       // Mark this as the latest persisted state so a follow-up
@@ -1225,12 +1228,21 @@ const CreatePageSI = ({ versionPreview = false, signedOffPreview = false }) => {
         }
       });
     } else {
-      setIsPublishing(true);
-      try {
-        await handlePublish();
-      } finally {
-        setIsPublishing(false);
-      }
+      setIsConfirmPublishOpen(true);
+    }
+  };
+
+  const closeConfirmPublish = () => {
+    setIsConfirmPublishOpen(false);
+  };
+
+  const handleConfirmPublish = async () => {
+    setIsConfirmPublishOpen(false);
+    setIsPublishing(true);
+    try {
+      await handlePublish();
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -2183,6 +2195,10 @@ const CreatePageSI = ({ versionPreview = false, signedOffPreview = false }) => {
               <FontAwesomeIcon icon={faArrowLeft} onClick={handleBack} title="Back" />
             </div>
 
+            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
+              <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
+            </div>)}
+
             {!versionPreview && !readOnly && userIDs.length > 1 && (
               <div className="burger-menu-icon-risk-create-page-1">
                 {isSavingVersion ? (
@@ -2201,10 +2217,6 @@ const CreatePageSI = ({ versionPreview = false, signedOffPreview = false }) => {
                 )}
               </div>
             )}
-
-            {!readOnly && (<div className="burger-menu-icon-risk-create-page-1">
-              <FontAwesomeIcon icon={faFloppyDisk} onClick={handleSave} title="Save" />
-            </div>)}
 
             {(
               <div className="burger-menu-icon-risk-create-page-1">
@@ -2568,6 +2580,7 @@ const CreatePageSI = ({ versionPreview = false, signedOffPreview = false }) => {
       {draftNote && (<DraftPopup closeModal={closeDraftNote} />)}
       {showWorkflow && (<DocumentWorkflow setClose={closeWorkflow} />)}
       {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
+      {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
       {isDuplicateName && (<DuplicateName current={formDataRef.current.title} saveAs={saveDraftName} />)}
       <ToastContainer />
       {isSaveConfirmOpen && (

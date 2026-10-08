@@ -14,7 +14,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import RiskAssessmentDeletePopup from "../RiskAssessmentDeletePopup";
 
-const BLRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false, relevantControls = [] }) => {
+const BLRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, generate, updateRow, isSidebarVisible, error, setErrors, readOnly = false, relevantControls = [], cea = [] }) => {
     const [collapsed, setCollapsed] = useState(false);
     const syncGroups = useRef({});
     const isCollapsed = collapsible ? collapsed : false;
@@ -593,7 +593,7 @@ const BLRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
             children: ["actions", "responsible", "dueDate"]
         },
         { id: "actions", title: "Required Action", className: "ibraCent ibraPI" },
-        { id: "responsible", title: "Responsible Person", className: "ibraCent ibraRA" },
+        { id: "responsible", title: "Accountable Person", className: "ibraCent ibraRA" },
         { id: "dueDate", title: "Due Date", className: "ibraCent ibraDD" },
         { id: "additional", title: "Notes Regarding the UE", className: "ibraCent ibraAdditional", icon: null },
         ...(readOnly ? [] : [{ id: "action", title: "Action", className: "ibraCent ibraAct", icon: null }]),
@@ -2335,7 +2335,7 @@ const BLRATable = ({ collapsible = false, rows, updateRows, addRow, removeRow, g
             )}
 
             {showNote && (<IbraNote setClose={closeNote} text={noteText} />)}
-            {ibraPopup && (<BLRAPopup onClose={closePopup} data={selectedRowData} onSave={handleSaveWithRiskTreatment} rowsData={rows} readOnly={readOnly} availableControls={relevantControls} />)}
+            {ibraPopup && (<BLRAPopup onClose={closePopup} data={selectedRowData} onSave={handleSaveWithRiskTreatment} rowsData={rows} readOnly={readOnly} availableControls={relevantControls} cea={cea} />)}
 
             {showExeDropdown && filteredExe.length > 0 && (
                 <ul

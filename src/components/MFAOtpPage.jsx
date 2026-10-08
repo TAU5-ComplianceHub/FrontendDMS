@@ -5,7 +5,7 @@ import { faLock, faUser, faEye, faEyeSlash, faWifi, faIdBadge } from '@fortaweso
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { ToastContainer, toast } from 'react-toastify';
 
-const MFAOtpPage = ({ username, deviceId, setOtpCompleted, resendOTP }) => {
+const MFAOtpPage = ({ username, deviceId, setOtpCompleted, resendOTP, onBack }) => {
     const [id, setId] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
@@ -34,6 +34,8 @@ const MFAOtpPage = ({ username, deviceId, setOtpCompleted, resendOTP }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (loading) return;
+
         setError('');
         setLoading(true);
 
@@ -80,13 +82,13 @@ const MFAOtpPage = ({ username, deviceId, setOtpCompleted, resendOTP }) => {
         <div className='type-selector-overlay'>
             <div className="nl-login-container-otp">
                 <div className="nl-login-card">
-                    <img src={`${process.env.PUBLIC_URL}/CH_Logo.svg`} className='nl-logo-img' />
+                    <img src='CH_Logo.svg' className='nl-logo-img' />
                     <div className="nl-login-title" style={{ marginBottom: "20px" }}>ComplianceHub{"\u2122"}</div>
                     <label
                         className="forgot-password-label"
                         style={{
                             display: "flex",
-                            justifyContent: "space-between",
+                            justifyContent: "center",
                             alignItems: "center",
                             textAlign: "center",
                             marginBottom: "30px",
@@ -95,8 +97,7 @@ const MFAOtpPage = ({ username, deviceId, setOtpCompleted, resendOTP }) => {
                             color: "white"
                         }}
                     >
-                        An code has been sent to your registered email address.
-                        <br />Please insert it below to ensure this device is treated as a trusted device.
+                        We sent a one-time verification code to your registered email address. Enter the code below to continue.
                     </label>
                     <form onSubmit={handleSubmit}>
                         <div className="nl-form-group">
@@ -133,12 +134,13 @@ const MFAOtpPage = ({ username, deviceId, setOtpCompleted, resendOTP }) => {
                         <div className="nl-login-error">{error}</div>
 
                         <div className="nl-login-button-container">
-                            <button type="submit" className="nl-login-button">{loading ? <FontAwesomeIcon icon={faSpinner} className="spin-animation" /> : 'Submit'}</button>
+                            <button type="submit" className="nl-login-button" disabled={loading}>{loading ? <FontAwesomeIcon icon={faSpinner} className="spin-animation" /> : 'Submit'}</button>
+                            <button type="button" className="nl-login-button" onClick={onBack} disabled={loading}>Back</button>
                         </div>
                     </form>
 
                     <div className="nl-logo-bottom-container">
-                        <img className="nl-logo-bottom" src={`${process.env.PUBLIC_URL}/logo.webp`} alt="Bottom Logo" />
+                        <img className="nl-logo-bottom" src="logo.webp" alt="Bottom Logo" />
                         <p className="nl-logo-bottom-text">A TAU5 PRODUCT</p>
                     </div>
 

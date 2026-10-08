@@ -26,6 +26,11 @@ import InfoPopupTemplateTitleField from "./InfoPopupTemplateTitleField";
 // When showUI is false (the default usage on the main page), this component
 // renders nothing - it only runs the effect that keeps templateTitle in
 // sync. Set showUI to true if you ever want to display the computed value.
+//
+// descriptors is optional and defaults to []: pass an array of strings (or
+// { descriptor } rows) to have them inserted right before the "Work Order
+// Template" suffix. Callers that don't pass it get the exact same title as
+// before.
 const PERFORM_PREFIX = "Perform";
 const TEMPLATE_SUFFIX = "Work Order Template";
 
@@ -47,6 +52,7 @@ const getBasisDrivenValue = (workOrderBasis, assetType, mainArea, department) =>
 
 const TemplateTitleField = ({
     value,
+    descriptors = [],
     frequency = "",
     workOrderBasis = "",
     assetType = "",
@@ -68,12 +74,24 @@ const TemplateTitleField = ({
 
         if (!allFilled) return;
 
-        const generatedTitle = `${PERFORM_PREFIX} ${frequency} ${basisValue} ${workOrderType} ${TEMPLATE_SUFFIX}`;
+        // Optional Work Order Descriptors (see WorkOrderDescriptorsTable),
+        // passed in as an array of either plain strings or { descriptor }
+        // rows so callers don't have to normalize their own formData shape
+        // first. They go right before the "Work Order Template" suffix.
+        const descriptorSegment = (descriptors || [])
+            .map((d) => (typeof d === "string" ? d : (d && d.descriptor) || ""))
+            .map((d) => d.trim())
+            .filter(Boolean)
+            .join(" ");
+
+        const generatedTitle = [PERFORM_PREFIX, frequency, basisValue, workOrderType, descriptorSegment, TEMPLATE_SUFFIX]
+            .filter(Boolean)
+            .join(" ");
 
         if (generatedTitle !== value) {
             onChange && onChange(generatedTitle);
         }
-    }, [frequency, workOrderBasis, assetType, mainArea, department, workOrderType]);
+    }, [frequency, workOrderBasis, assetType, mainArea, department, workOrderType, descriptors]);
 
     if (!showUI) {
         return null;

@@ -1239,7 +1239,7 @@ const FileInfo = () => {
                       </td>
                       {!isTrashView && (<td className="col-fi">{formatDate(file.uploadDate)}</td>)}
                       {isTrashView && (<td className="col-fi">{formatDate(file.dateDeleted)}</td>)}
-                      {!isSelectMode && canIn(access, "DMS", ["systemAdmin"]) && (
+                      {!isSelectMode && canIn(access, "DMS", ["systemAdmin", "contributor"]) && (
                         <td className={isTrashView ? "col-act trashed" : "col-act"}>
 
                           {(!isTrashView) && (

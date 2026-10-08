@@ -480,6 +480,11 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
             return;
         }
 
+        if ((criticalControl ?? "").toString().trim() === "Yes" && !(performance ?? "").toString().trim()) {
+            toast.warn("Please complete the Performance Requirements and Verification field, as this is a Critical Control.", { closeButton: false, autoClose: 2000 });
+            return;
+        }
+
         const nameChanged = newNorm !== oldNorm;
 
         if (nameChanged) {
@@ -557,6 +562,36 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                 autoClose: 2000,
                 closeButton: false,
             });
+            return;
+        }
+
+        if (!(criticalControl ?? "").toString().trim()) {
+            toast.warn("Please select an option for Critical Control before suggesting.", { autoClose: 2000, closeButton: false });
+            return;
+        }
+
+        if (!(controlType ?? "").toString().trim()) {
+            toast.warn("Please specify if the control is an Act, Object or System before suggesting.", { autoClose: 2000, closeButton: false });
+            return;
+        }
+
+        if (!(controlActivation ?? "").toString().trim()) {
+            toast.warn("Please specify the Control Activation before suggesting.", { autoClose: 2000, closeButton: false });
+            return;
+        }
+
+        if (!(hierarchy ?? "").toString().trim()) {
+            toast.warn("Please specify the Hierarchy of Controls before suggesting.", { autoClose: 2000, closeButton: false });
+            return;
+        }
+
+        if (!(controlAim ?? "").toString().trim()) {
+            toast.warn("Please specify the Specific Consequence that the control aims to address before suggesting.", { autoClose: 2000, closeButton: false });
+            return;
+        }
+
+        if ((criticalControl ?? "").toString().trim() === "Yes" && !(performance ?? "").toString().trim()) {
+            toast.warn("Please complete the Performance Requirements and Verification field, as this is a Critical Control, before suggesting.", { autoClose: 2000, closeButton: false });
             return;
         }
 
@@ -834,6 +869,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                             <div className="ibra-popup-page-component-wrapper">
                                 <div className="ibra-popup-page-form-group">
                                     <label style={{ fontSize: "15px" }}>Performance Requirements and Verification
+                                        {criticalControl.trim() === "Yes" && <span className="required-field"> *</span>}
                                     </label>
                                     <textarea
                                         value={performance}
@@ -974,7 +1010,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                 className="ibra-popup-page-upload-button"
                                 onClick={handleSubmit}
                             >
-                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (readOnly ? `Close Popup` : `Submit`)}
+                                {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (readOnly ? `Close Popup` : `Submit Locally`)}
                             </button>
 
                             {!readOnly && (
@@ -985,7 +1021,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                                     title={isSystemControlName ? "This control already exists in the system" : "Suggest this control to the system"}
                                     disabled={isSystemControlName || !controlName.trim()}
                                 >
-                                    {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Suggest Control`)}
+                                    {loading ? <FontAwesomeIcon icon={faSpinner} spin /> : (`Submit and Suggest Globally`)}
                                 </button>
                             )}
                         </div>
@@ -998,6 +1034,7 @@ const ControlEAPopup = ({ onClose, onSave, data, onControlRename, readOnly, exis
                     isOpen={showSuggestionPopup}
                     onClose={() => setShowSuggestionPopup(false)}
                     controlData={getControlDataForSuggestion()}
+                    onSuccess={handleSubmit}
                 />
             )}
 

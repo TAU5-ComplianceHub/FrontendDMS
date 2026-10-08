@@ -50,7 +50,12 @@ const RelevantControlsSelectionPopup = ({
         closePopup();
     };
 
-    const mergedControls = (() => {
+    // Builds the full merged control list (backend + current + extra/pseudo) given
+    // an explicit `extra` list. Pulled out into a function (rather than an inline
+    // IIFE tied to the `extraControls` state) so it can also be used to commit a
+    // selection immediately after adding new controls, without waiting on a
+    // re-render.
+    const buildMergedControls = (extra) => {
         const map = new Map();
 
         // 1) backend controls
@@ -70,29 +75,25 @@ const RelevantControlsSelectionPopup = ({
                     description: c.description || "",
                     category: (c.category ?? "").toString().trim(),
                     performance: c.performance || "",
-                    __pseudo: true
+                    __pseudo: true,
+                    ...(c.details ? { details: c.details } : {}),
                 });
             }
         });
 
-        // 3) controls added via SuggestMultipleControls (starred)
-        (extraControls || []).forEach(c => {
+        // 3) controls added via SuggestMultipleControls (starred / detailed)
+        (extra || []).forEach(c => {
             if (!c?.control?.trim()) return;
             const k = key(c.control);
             if (!map.has(k)) {
-                map.set(k, {
-                    _id: `pseudo-${k}`,
-                    control: c.control,
-                    description: c.description || "",
-                    category: (c.category ?? "").toString().trim(),
-                    performance: c.performance || "",
-                    __pseudo: true
-                });
+                map.set(k, c);
             }
         });
 
         return Array.from(map.values());
-    })();
+    };
+
+    const mergedControls = buildMergedControls(extraControls);
 
     const filteredControls = mergedControls
         .filter(c => (c.control || "").toLowerCase().includes(searchTerm.toLowerCase()))
@@ -113,41 +114,73 @@ const RelevantControlsSelectionPopup = ({
             (a.control || "").localeCompare(b.control || "", undefined, { sensitivity: "base" })
         );
 
-    const toPseudoControl = (name) => ({
+    // `details` (when present) comes from the Add Control Details popup inside
+    // SuggestMultipleControls and carries the full set of control values, not just
+    // the name - these get pulled through so the CEA table is pre-populated.
+    const toPseudoControl = (name, details = null) => ({
         _id: `pseudo-${key(name)}`,
         control: name,
-        description: "",
-        category: "",
-        performance: "",
+        description: details?.description || "",
+        category: (details?.category ?? "").toString().trim(),
+        performance: details?.performance || "",
         __pseudo: true,
+        ...(details ? { details } : {}),
     });
 
-    const mergePseudoControls = (prev, names) => {
+    // `entries` is an array of either plain strings (legacy/quick-add) or
+    // { control, details } objects (from the Detailed Add flow).
+    const mergePseudoControls = (prev, entries) => {
         const map = new Map(prev.map(c => [key(c.control), c]));
-        names.forEach(n => {
-            const k = key(n);
-            if (!map.has(k)) map.set(k, toPseudoControl(n));
+        entries.forEach(entry => {
+            const name = typeof entry === "string" ? entry : entry?.control;
+            const details = typeof entry === "string" ? null : (entry?.details || null);
+            if (!name) return;
+
+            const k = key(name);
+            if (!map.has(k)) {
+                map.set(k, toPseudoControl(name, details));
+            } else if (details) {
+                // Row already existed as a bare pseudo control - enrich it now that
+                // details are available.
+                map.set(k, toPseudoControl(name, details));
+            }
         });
         return Array.from(map.values());
     };
 
-    const mergeSelectedNames = (prev, names) => {
+    const mergeSelectedNames = (prev, entries) => {
         const set = new Set(prev);
-        names.forEach(n => set.add(n));
+        entries.forEach(entry => {
+            const name = typeof entry === "string" ? entry : entry?.control;
+            if (name) set.add(name);
+        });
         return Array.from(set);
     };
 
     const handleOpenSuggestPopup = () => setShowSuggestPopup(true);
     const handleCloseSuggestPopup = () => setShowSuggestPopup(false);
 
-    const handleSuggestSuccess = (starredControls) => {
+    const handleSuggestSuccess = (newControls) => {
+        // `newControls` is an array of { control, details } objects (details may be
+        // null for controls added via the original quick-add flow).
+
         // 1) make them visible (pseudo items)
-        setExtraControls(prev => mergePseudoControls(prev, starredControls));
+        const updatedExtra = mergePseudoControls(extraControls, newControls);
+        setExtraControls(updatedExtra);
 
         // 2) auto-select them
-        setSelectedControlNames(prev => mergeSelectedNames(prev, starredControls));
+        const updatedSelectedNames = mergeSelectedNames(selectedControlNames, newControls);
+        setSelectedControlNames(updatedSelectedNames);
 
-        // 3) close suggest popup
+        // 3) Commit straight away, so the newly added controls land on the
+        // Applicable Controls table without the user having to separately press
+        // "Update Selection" again. We deliberately do NOT close this popup here -
+        // the user may still be browsing/selecting other controls.
+        const updatedMerged = buildMergedControls(updatedExtra);
+        const selectedObjects = updatedMerged.filter(c => updatedSelectedNames.includes(c.control));
+        onSave(selectedObjects);
+
+        // 4) close the "add new controls" sub-popup
         handleCloseSuggestPopup();
     };
 
@@ -223,7 +256,7 @@ const RelevantControlsSelectionPopup = ({
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan="2" style={{ textAlign: "center", padding: "20px", fontFamily: "Arial" }}>
+                                            <td colSpan="3" style={{ textAlign: "center", padding: "20px", fontFamily: "Arial" }}>
                                                 No controls found matching "{searchTerm}"
                                             </td>
                                         </tr>

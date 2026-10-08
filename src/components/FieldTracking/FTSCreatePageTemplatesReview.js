@@ -61,6 +61,7 @@ import WorkOrderActionFields from "./WorkOrderActionFields";
 import "./WorkOrderActionFields.css";
 import SupportingDocumentTableFTS from "./SupportingDocumentTableFTS";
 import PPETable from "../CreatePage/PPETable";
+import WorkOrderDescriptorsTable from "./WorkOrderDescriptorsTable";
 import HandToolTable from "../CreatePage/HandToolsTable";
 import MaterialsTable from "../CreatePage/MaterialsTable";
 import HazardsControlsTable from "../CreatePage/HazardsControlsTable";
@@ -720,6 +721,7 @@ const FTSCreatePageTemplatesReview = () => {
       const normalizedForm = {
         ...rawForm,
         actionFields: rawForm.actionFields || [],
+        workOrderDescriptors: rawForm.workOrderDescriptors || [],
         PPEItems: rawForm.PPEItems || [],
         HandTools: rawForm.HandTools || [],
         Materials: rawForm.Materials || [],
@@ -822,6 +824,7 @@ const FTSCreatePageTemplatesReview = () => {
     workOrderSubInformation: "",
     workOrderRACIInformation: "",
     actionFields: [],
+    workOrderDescriptors: [],
     PPEItems: [],
     HandTools: [],
     Materials: [],
@@ -1545,7 +1548,7 @@ const FTSCreatePageTemplatesReview = () => {
       if (!response.ok) throw new Error("Failed to generate document");
       const data = await response.json();
 
-      toast.success(`Tempalte Publishing Approval Started.`, {
+      toast.success(`Template Publishing Approval Started.`, {
         closeButton: true,
         autoClose: 1500, // 1.5 seconds
         style: {
@@ -1809,13 +1812,14 @@ const FTSCreatePageTemplatesReview = () => {
           <div className="spacer"></div>
 
           {/* Container for right-aligned icons */}
-          <TopBarDD canIn={canIn} access={access} menu={"1"} create={true} onHome={handleHomeNav} refreshable={false} />
+          <TopBarDD refreshable={false} canIn={canIn} access={access} menu={"1"} create={true} onHome={handleHomeNav} />
 
         </div>
 
         <div className={`scrollable-box`} ref={scrollBoxRef}>
           <TemplateTitleField
             value={formData.templateTitle}
+            descriptors={formData.workOrderDescriptors}
             frequency={formData.frequency}
             workOrderBasis={formData.workOrderBases}
             assetType={formData.assetType}
@@ -1826,6 +1830,8 @@ const FTSCreatePageTemplatesReview = () => {
             readOnly={readOnly}
             showUI={true}
           />
+
+          <WorkOrderDescriptorsTable collapsible={true} formData={formData} setFormData={setFormData} readOnly={readOnly} />
 
           <WorkOrderTable
             workOrderType={formData.workOrderType}

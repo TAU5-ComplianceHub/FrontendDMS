@@ -523,6 +523,21 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
         return Array.from(new Set(matches)).sort();
     }
 
+    // Given an unwanted event's text, find the hazard it's associated with
+    // in the reference data, so picking a UE can drive the Hazard field.
+    function getHazardForUnwantedEvent(ue) {
+        if (!ue) return "";
+
+        for (const node of jraInfo) {
+            const match = node.hazards.find(h =>
+                h.unwantedEvents.some(e => e.unwantedEvent === ue)
+            );
+            if (match) return match.hazard;
+        }
+
+        return "";
+    }
+
     useEffect(() => {
         console.log("JRAPopup data:", data);
     }, [data]);
@@ -584,7 +599,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
     };
 
     // 2) Hazard name
-    const handleHazardChange = (stepIndex, hazardIndex, value) => {
+    const handleHazardChange = (stepIndex, hazardIndex, value, { clearUnwantedEvent = true } = {}) => {
         setJraData(prev => ({
             ...prev,
             jraBody: prev.jraBody.map((body, bIdx) => {
@@ -595,7 +610,19 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                         hIdx === hazardIndex
                             ? { ...h, hazard: value }
                             : h
-                    )
+                    ),
+                    // Whatever Unwanted Event was picked/typed for this row was
+                    // matched against the *previous* hazard, so it's no longer
+                    // guaranteed to be valid - clear it out for this row only.
+                    ...(clearUnwantedEvent
+                        ? {
+                            UE: body.UE.map((u, uIdx) =>
+                                uIdx === hazardIndex
+                                    ? { ...u, ue: "" }
+                                    : u
+                            )
+                        }
+                        : {})
                 };
             })
         }));
@@ -650,6 +677,15 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
     const selectUnwantedEventSuggestion = (suggestion) => {
         const { stepIndex, hazardIndex } = activeHazardCell;
         handleUnwantedEventChange(stepIndex, hazardIndex, suggestion);
+
+        // The unwanted-event list isn't always filtered by hazard (e.g. the
+        // user can search unwanted events before picking a hazard at all),
+        // so once they pick one, make sure the Hazard field reflects it.
+        const matchedHazard = getHazardForUnwantedEvent(suggestion);
+        if (matchedHazard) {
+            handleHazardChange(stepIndex, 0, matchedHazard, { clearUnwantedEvent: false });
+        }
+
         setShowUnwantedEventsDropdown(false);
     };
 
@@ -1202,7 +1238,7 @@ const JRAPopup = ({ onClose, data, onSubmit, nr, formData, readOnly = false }) =
                                                                         value={step.hazards[0]?.hazard}
                                                                         onChange={(e) => handleHazardChange(si, 0, e.target.value)}
                                                                     >
-                                                                        <option value="" hidden>Select Hazard</option>
+                                                                        <option value="">Select Hazard</option>
                                                                         <option value="Work Execution" hidden>Work Execution</option>
 
                                                                         {[...sourceData]

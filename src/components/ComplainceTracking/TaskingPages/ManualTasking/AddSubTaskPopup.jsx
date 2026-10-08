@@ -10,14 +10,6 @@ import { toast } from 'react-toastify';
 import './AddTaskPopup.css';
 import TemplateSuggestionPopup from './TemplateSuggestionPopup';
 
-const AREAS = [
-    "All Areas",
-    "Offices",
-    "Plant",
-    "Surface",
-    "Underground",
-];
-
 const AddSubTaskPopup = ({ onClose, onTaskAdded, parentTask }) => {
     const [taskTitle, setTaskTitle] = useState("");
     const [taskPriority, setTaskPriority] = useState("");
@@ -45,6 +37,7 @@ const AddSubTaskPopup = ({ onClose, onTaskAdded, parentTask }) => {
     const [pendingInsertAfterId, setPendingInsertAfterId] = useState(null);
     const [users, setUsers] = useState([]);
     const [area, setArea] = useState("");
+    const [areaOptions, setAreaOptions] = useState([]);
     const [discipline, setDiscipline] = useState("");
     const [disciplineOptions, setDisciplineOptions] = useState([]);
     const [showSuggestionPopup, setShowSuggestionPopup] = useState(false);
@@ -149,6 +142,32 @@ const AddSubTaskPopup = ({ onClose, onTaskAdded, parentTask }) => {
             setDisciplineOptions(sortedDepartments);
         } catch (error) {
             console.error("Failed to fetch departments:", error);
+        }
+    };
+
+    const fetchAreaOptions = async () => {
+        try {
+            const response = await fetch(`${process.env.REACT_APP_URL}/api/riskInfo/getValues`);
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch area options");
+            }
+
+            const data = await response.json();
+            const areaLookup = {};
+
+            (Array.isArray(data.areas) ? data.areas : []).forEach(({ mainArea, subAreas }) => {
+                if (mainArea) areaLookup[mainArea] = subAreas;
+            });
+
+            setAreaOptions(
+                Object.keys(areaLookup).sort((a, b) =>
+                    String(a).localeCompare(String(b), undefined, { sensitivity: "base" })
+                )
+            );
+        } catch (error) {
+            console.error("Failed to fetch area options:", error);
+            setAreaOptions([]);
         }
     };
 
@@ -458,6 +477,7 @@ const AddSubTaskPopup = ({ onClose, onTaskAdded, parentTask }) => {
         fetchUsers();
         fetchApprovedTaskTemplates();
         fetchDepartments();
+        fetchAreaOptions();
     }, []);
 
     useEffect(() => {
@@ -602,7 +622,7 @@ const AddSubTaskPopup = ({ onClose, onTaskAdded, parentTask }) => {
                                                     }}
                                                 >
                                                     <option value="">Select Area</option>
-                                                    {AREAS.map((a) => (
+                                                    {areaOptions.map((a) => (
                                                         <option key={a} value={a}>{a}</option>
                                                     ))}
                                                 </select>

@@ -42,6 +42,7 @@ import PublishingInProgress from "../DocumentCreationPages/PublishingInProgress"
 import RemoveFromApprovalPopup from "../Popups/RemoveFromApprovalPopup";
 import RejectReason from "../Popups/RejectReason";
 import RejectReasonView from "../Popups/RejectReasonView";
+import ConfirmPublish from "../Popups/ConfirmPublish";
 
 const RiskReviewPageJRA = () => {
     const navigate = useNavigate();
@@ -90,6 +91,7 @@ const RiskReviewPageJRA = () => {
     const [rejecting, setRejecting] = useState(false);
     const [isRejected, setIsRejected] = useState(false);
     const [showRejectReasonView, setShowRejectReasonView] = useState(false);
+    const [isConfirmPublishOpen, setIsConfirmPublishOpen] = useState(false);
     const [rejectionInfo, setRejectionInfo] = useState({ rejectorName: "", rejectDate: null, rejectionMessage: "" });
 
     const openApproval = () => {
@@ -374,14 +376,23 @@ const RiskReviewPageJRA = () => {
 
     const handleClick3 = async () => {
         try {
-            setIsPublishing(true);
-            try {
-                await handlePublishApprovalFlow();
-            } finally {
-                setIsPublishing(false);
-            }
+            setIsConfirmPublishOpen(true);
         } catch (err) {
             toast.error("Could not save draft, generation aborted." + err);
+        }
+    };
+
+    const closeConfirmPublish = () => {
+        setIsConfirmPublishOpen(false);
+    };
+
+    const handleConfirmPublish = async () => {
+        setIsConfirmPublishOpen(false);
+        setIsPublishing(true);
+        try {
+            await handlePublishApprovalFlow();
+        } finally {
+            setIsPublishing(false);
         }
     };
 
@@ -1753,6 +1764,7 @@ const RiskReviewPageJRA = () => {
 
             {approval && (<ApproversPopup closeModal={closeApproval} handleSubmit={handlePublishApprovalFlow} />)}
             {approveState && (<ApproveApprovalProcessPopup approveDraft={approveDraft} closeModal={closeApprovePopup} loading={loading} />)}
+            {isConfirmPublishOpen && (<ConfirmPublish closeModal={closeConfirmPublish} confirmPublish={handleConfirmPublish} draftName={formData.title} />)}
             {removeApprovalState && (
                 <RemoveFromApprovalPopup
                     closeModal={closeRemoveApproval}

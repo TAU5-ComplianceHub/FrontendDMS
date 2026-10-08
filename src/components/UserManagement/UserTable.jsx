@@ -7,6 +7,7 @@ import {
     faFilter,
     faKey
 } from '@fortawesome/free-solid-svg-icons';
+import PopupMenuUsers from './PopupMenuUsers';
 import './UserTable.css';
 
 const UserTable = ({
@@ -16,10 +17,13 @@ const UserTable = ({
     setIsDeleteModalOpen,
     formatRole,
     loggedInUserId,
-    openPasswordModal
+    openPasswordModal,
+    openAssignRolesModal
 }) => {
     const navigate = useNavigate();
     const excelPopupRef = useRef(null);
+    const excelAnchorElRef = useRef(null);
+    const [openMenuUserId, setOpenMenuUserId] = useState(null);
 
     const BLANK = "(Blanks)";
 
@@ -127,6 +131,8 @@ const UserTable = ({
         const allValues = getAvailableOptions(colId);
         const existing = filters[colId];
 
+        excelAnchorElRef.current = e.currentTarget;
+
         setExcelSelected(new Set(Array.isArray(existing) ? existing : allValues));
         setExcelSearch("");
         setExcelFilter({
@@ -144,24 +150,55 @@ const UserTable = ({
     useEffect(() => {
         if (!excelFilter.open) return;
 
-        const handleClickOutside = (e) => {
-            if (excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
-                setExcelFilter({
-                    open: false,
-                    colId: null,
-                    anchorRect: null,
-                    pos: { top: 0, left: 0, width: 0 }
-                });
-            }
-        };
-
-        const handleScroll = () => {
+        const closePopup = () => {
+            excelAnchorElRef.current = null;
             setExcelFilter({
                 open: false,
                 colId: null,
                 anchorRect: null,
                 pos: { top: 0, left: 0, width: 0 }
             });
+        };
+
+        const handleClickOutside = (e) => {
+            if (excelPopupRef.current && !excelPopupRef.current.contains(e.target)) {
+                closePopup();
+            }
+        };
+
+        // Scrolling the table body (or the page) moves the header cell the
+        // popup is anchored to. Re-measure that cell and follow it instead
+        // of just closing the popup - only close if the cell has actually
+        // scrolled out of view, so a normal scroll through the rows doesn't
+        // make the filter vanish.
+        const handleScroll = () => {
+            const anchorEl = excelAnchorElRef.current;
+            if (!anchorEl || !anchorEl.isConnected) {
+                closePopup();
+                return;
+            }
+
+            const rect = anchorEl.getBoundingClientRect();
+            const isVisible =
+                rect.bottom > 0 &&
+                rect.top < window.innerHeight &&
+                rect.right > 0 &&
+                rect.left < window.innerWidth;
+
+            if (!isVisible) {
+                closePopup();
+                return;
+            }
+
+            setExcelFilter(prev => ({
+                ...prev,
+                anchorRect: rect,
+                pos: {
+                    top: rect.bottom + window.scrollY + 4,
+                    left: rect.left + window.scrollX,
+                    width: Math.max(rect.width, 220)
+                }
+            }));
         };
 
         document.addEventListener("mousedown", handleClickOutside);
@@ -286,14 +323,31 @@ const UserTable = ({
 
                     <tbody>
                         {displayedUsers.map((user, index) => (
-                            <tr key={user._id}>
+                            <tr
+                                key={user._id}
+                                onClick={(e) => {
+                                    // Action column has its own buttons (password/edit/delete), and the
+                                    // popup menu has its own item clicks — don't let either of those
+                                    // also toggle the row popup.
+                                    if (e.target.closest('.inline-actions-um') || e.target.closest('.popup-menu-container-pub-files')) return;
+                                    setOpenMenuUserId(prev => (prev === user._id ? null : user._id));
+                                }}
+                                style={{ cursor: "pointer" }}
+                            >
                                 <td className="col-um">{index + 1}</td>
-                                <td
-                                    className="col-um"
-                                    onClick={() => navigate(`/userActivity/${user._id}`)}
-                                    style={{ cursor: "pointer" }}
-                                >
-                                    {user.username}
+                                <td className="col-um">
+                                    <div className="popup-anchor">
+                                        <span>{user.username}</span>
+                                        {openMenuUserId === user._id && (
+                                            <PopupMenuUsers
+                                                isOpen={true}
+                                                user={user}
+                                                isAdmin={user.isAdmin}
+                                                closeMenu={() => setOpenMenuUserId(null)}
+                                                openAssignRolesModal={openAssignRolesModal}
+                                            />
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="col-um">{user.email || ""}</td>
                                 <td className="col-um">{formatRole(user.role)}</td>
@@ -449,6 +503,7 @@ const UserTable = ({
                                     return next;
                                 });
 
+                                excelAnchorElRef.current = null;
                                 setExcelFilter({
                                     open: false,
                                     colId: null,
@@ -458,6 +513,7 @@ const UserTable = ({
                             };
 
                             const onCancel = () => {
+                                excelAnchorElRef.current = null;
                                 setExcelFilter({
                                     open: false,
                                     colId: null,
